@@ -342,15 +342,17 @@ struct AppDropDelegate: DropDelegate {
         // world can change in between (tab switch, catalog refresh, drag cancelled): re-validate
         // the id against the live state instead of trusting the pasteboard (bug 7).
         guard let provider = info.itemProviders(for: [.menuFoldAppID]).first else { return false }
-        let perform = perform
-        let isKnownApp = isKnownApp
+        // Read the closures out of `self` once (rather than shadowing the property names, which is
+        // ambiguous: a local named like a property is "captured before it is declared").
+        let apply: (String) -> Bool = perform
+        let isLiveApp: (String) -> Bool = isKnownApp
         provider.loadDataRepresentation(forTypeIdentifier: UTType.menuFoldAppID.identifier) { data, _ in
             guard let data, let id = String(data: data, encoding: .utf8) else { return }
             DispatchQueue.main.async {
                 // A newer MenuFold drag is in progress: this stale id must not be applied.
                 guard MainActor.assumeIsolated({ AppDragSession.shared.appID == nil }) else { return }
-                guard MainActor.assumeIsolated({ isKnownApp(id) }) else { return }
-                _ = perform(id)
+                guard MainActor.assumeIsolated({ isLiveApp(id) }) else { return }
+                _ = apply(id)
             }
         }
         return true

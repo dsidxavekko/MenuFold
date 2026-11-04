@@ -23,6 +23,17 @@ pkg="Packages/MenuFoldCore"
 echo "== building $pkg =="
 (cd "$pkg" && swift build 2>&1 | grep -E "error|Build complete" || true)
 
+# Where the built MenuFoldCore module lives. Ask SwiftPM instead of guessing the directory name
+# (it varies between Xcode and Command Line Tools toolchains and between host platforms).
+import_args=()
+while IFS= read -r dir; do
+    [[ -n "$dir" && -d "$dir" ]] && import_args+=(-I "$dir")
+done < <(cd "$pkg" && swift build --show-bin-path 2>/dev/null)
+if [[ ${#import_args[@]} -eq 0 ]]; then
+    echo "error: cannot locate the built MenuFoldCore module" >&2
+    exit 1
+fi
+
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
 trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
 log="$scratch/typecheck.log"
@@ -31,7 +42,7 @@ if [[ -x /Applications/Xcode.app/Contents/Developer/usr/bin/swiftc ]]; then
     echo "== typechecking App/ with Xcode =="
     DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
         xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 -target arm64-apple-macosx26.0 \
-        -I "$pkg/.build/debug" $(find App -name '*.swift') >"$log" 2>&1 || { cat "$log"; exit 1; }
+        "${import_args[@]}" $(find App -name '*.swift') >"$log" 2>&1 || { cat "$log"; exit 1; }
 else
     echo "== typechecking App/ without Xcode (scratch copy) =="
     mkdir -p "$scratch/App"
@@ -114,12 +125,8 @@ import SwiftUI
 }
 SWIFT
 
-    import_dirs=()
-    for d in "$pkg/.build/debug" "$pkg/.build/out/Products/Debug" "$pkg/.build/arm64-apple-macosx/debug"; do
-        [[ -d "$d" ]] && import_dirs+=(-I "$d")
-    done
     xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 -target arm64-apple-macosx26.0 \
-        "${import_dirs[@]}" "$scratch/StateShim.swift" $(find "$scratch/App" -name '*.swift') \
+        "${import_args[@]}" "$scratch/StateShim.swift" $(find "$scratch/App" -name '*.swift') \
         >"$log" 2>&1 || { cat "$log"; exit 1; }
 fi
 
