@@ -60,7 +60,7 @@ extension FolderColor {
 
 enum GridMetrics {
     static let iconSize: CGFloat = 64
-    static let tileWidth: CGFloat = 96
+    static let tileWidth: CGFloat = 108
     static let tileCorner: CGFloat = 15
     static let columns = 7
     static let folderColumns = 6

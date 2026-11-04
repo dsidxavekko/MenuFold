@@ -145,7 +145,7 @@ struct FolderOverlayView: View {
             // Mirrors a real folder on disk: the name is read-only.
             HStack(spacing: 8) {
                 Text(folder.name)
-                    .font(.title2.weight(.semibold))
+                    .font(Theme.headerFont)
                     .fontDesign(.rounded)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -170,7 +170,7 @@ struct FolderOverlayView: View {
         let showsCapsule = isTitleHovered || titleFocused
         // A hidden Text sizes the field to its contents so the capsule hugs the name.
         return Text(name.isEmpty ? "Назва папки" : name)
-            .font(.title2.weight(.semibold))
+            .font(Theme.headerFont)
             .fontDesign(.rounded)
             .lineLimit(1)
             .padding(.horizontal, 6)
@@ -178,7 +178,7 @@ struct FolderOverlayView: View {
             .overlay {
                 TextField("Назва папки", text: $name)
                     .textFieldStyle(.plain)
-                    .font(.title2.weight(.semibold))
+                    .font(Theme.headerFont)
                     .fontDesign(.rounded)
                     .multilineTextAlignment(.center)
                     .focused($titleFocused)

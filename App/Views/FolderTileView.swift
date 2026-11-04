@@ -94,12 +94,12 @@ struct FolderTileView: View {
                     }
                 }
                 Text(folder.name)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.labelFont)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.center)
-                    .frame(height: 28, alignment: .top)
+                    .frame(height: 34, alignment: .top)
                     .opacity(isOpen ? 0 : 1)
             }
             .padding(6)

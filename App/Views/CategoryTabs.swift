@@ -55,7 +55,7 @@ private struct TabCapsule: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .font(Theme.tabFont)
                 .padding(.horizontal, 12)
                 .frame(height: Theme.capsuleHeight - 4)
                 .foregroundStyle(isSelected ? Color.white : Color.primary)

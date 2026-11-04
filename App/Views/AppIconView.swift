@@ -29,12 +29,12 @@ struct AppIconView: View {
                     launchPulse: launchPulse
                 )
                 Text(app.name)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.labelFont)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.center)
-                    .frame(height: 28, alignment: .top)
+                    .frame(height: 34, alignment: .top)
             }
             .padding(6)
             .frame(width: GridMetrics.tileWidth)

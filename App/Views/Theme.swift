@@ -33,7 +33,12 @@ enum Theme {
     static let panelCorner: CGFloat = 26
     static let folderCorner: CGFloat = 30
     static let capsuleHeight: CGFloat = 30
-    static let searchHeight: CGFloat = 36
+    static let searchHeight: CGFloat = 46
+
+    // MARK: Type (measured from the system Apps launcher; all regular weight)
+    static let labelFont = Font.system(size: 13)
+    static let tabFont = Font.system(size: 15)
+    static let headerFont = Font.system(size: 26)
 
     // MARK: Folder overlay
     /// Blur radius of the grid behind an open folder.

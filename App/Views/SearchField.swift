@@ -18,12 +18,12 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 20))
                 .foregroundStyle(isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .accessibilityHidden(true)
             TextField("Пошук", text: $model.query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(Theme.headerFont)
                 .focused($isFocused)
                 .disabled(isDisabled || isDraggingApp)
                 .onSubmit(launchFirst)
@@ -32,7 +32,7 @@ struct SearchField: View {
                     model.query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: 18))
                         .foregroundStyle(.secondary)
                         .contentShape(Circle())
                 }

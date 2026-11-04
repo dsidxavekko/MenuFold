@@ -123,7 +123,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         glass.tintColor = NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
                 ? .clear
-                : NSColor.white.withAlphaComponent(0.55)
+                : NSColor.white.withAlphaComponent(0.2)
         }
         glass.cornerRadius = Theme.panelCorner
         glass.frame = container.bounds
