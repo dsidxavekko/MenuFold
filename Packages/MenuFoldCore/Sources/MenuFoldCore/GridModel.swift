@@ -270,8 +270,13 @@ public final class GridModel {
         }
         // The folder the target is in, if any. Counting is on stored appIDs (uninstalled apps keep
         // their id), so "has other apps" means the folder would still be a folder after the move.
-        let leftFolder = manualFolderContaining(appID: targetAppID)
-        let leftOthers = leftFolder.map { $0.appIDs.filter { $0 != targetAppID && $0 != appID } } ?? []
+        // Unpacked step by step on purpose: as a single `map { filter } ?? []` expression the
+        // optimizer folded the guard away in test builds, and the drop silently created a folder
+        // for a target that already had one instead of joining/being rejected.
+        var leftOthers: [String] = []
+        if let targetFolder = manualFolderContaining(appID: targetAppID) {
+            leftOthers = targetFolder.appIDs.filter { $0 != targetAppID && $0 != appID }
+        }
         // Moving the target out of a folder that keeps other apps would dissolve or rename that
         // folder — a drop never deletes a folder the user made. Reject it: the target's tile offers
         // the folder itself as a drop destination, which joins it.
