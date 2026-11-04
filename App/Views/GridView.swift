@@ -72,6 +72,16 @@ struct GridView: View {
                     .autoScrollsWhileDragging(isEnabled: model.openFolderID == nil)
                     .onChange(of: model.tab) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
                     .onChange(of: model.query) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
+                    // Every opening starts from the top: reset when the panel hides (so there is no
+                    // visible jump on the next open) and again when it is shown, without animation.
+                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
+                        guard note.object is NSPanel else { return }
+                        scrollToTopInstantly(proxy)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+                        guard note.object is NSPanel else { return }
+                        scrollToTopInstantly(proxy)
+                    }
                 }
             }
         }
@@ -87,6 +97,12 @@ struct GridView: View {
             withTransaction(hide) { isRevealed = false }
             reveal()
         }
+    }
+
+    private func scrollToTopInstantly(_ proxy: ScrollViewProxy) {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
     }
 
     private var itemTransition: AnyTransition {
