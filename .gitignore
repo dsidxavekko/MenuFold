@@ -6,13 +6,10 @@ DerivedData/
 xcuserdata/
 .swiftpm/
 
-# Screen recordings
-*.mov
-
-# Screen recordings / pasted screenshots (keep screenshot.png, it is used by the README)
+# Local screen recordings and pasted screenshots (not part of the project)
 *.tiff
 *.png
-!screenshot.png
+*.mov
 
 # Release artifacts (built by scripts/release.sh)
 dist/

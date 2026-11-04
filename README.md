@@ -12,8 +12,6 @@ Pinned directly in your Dock like a normal app, clicking MenuFold opens a border
 - **Finder folders integration**, automatically surfacing real subfolders of `/Applications` and `~/Applications` (such as Utilities).
 - **Liquid Glass aesthetics** leveraging modern macOS visual effects (`NSGlassEffectView`) with smooth scale and blur animations.
 
-![MenuFold](screenshot.png)
-
 MenuFold operates entirely independently without patching the Dock or any system process (no SIP changes required).
 
 ---
