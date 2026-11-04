@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: MenuFoldCore (build + tests)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: Packages/MenuFoldCore/.build
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/MenuFoldCore/Package.swift') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: Build and test
+        working-directory: Packages/MenuFoldCore
+        run: |
+          swift build
+          swift test --parallel
+
+  typecheck-app:
+    name: App typecheck (no Xcode needed)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: Packages/MenuFoldCore/.build
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/MenuFoldCore/Package.swift') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: Typecheck App/
+        run: ./scripts/typecheck-app.sh
+
+  build-app:
+    name: Build MenuFold.app
+    runs-on: macos-latest
+    timeout-minutes: 40
+    needs: [core]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the SDK supports macOS 26
+        id: sdk
+        run: |
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK in use: $sdk_version"
+          echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
+          if [[ "${sdk_version%%.*}" -lt 26 ]]; then
+            echo "::warning title=Build skipped::macOS SDK $sdk_version cannot target macOS 26; the app build needs Xcode 27 or newer."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install xcodegen
+        if: steps.sdk.outputs.ok == 'true'
+        run: brew install xcodegen
+
+      - name: Build
+        if: steps.sdk.outputs.ok == 'true'
+        run: ./scripts/build.sh
+
+      - name: Upload the app bundle
+        if: steps.sdk.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MenuFold-app
+          path: build/Build/Products/Debug/MenuFold.app
+          if-no-files-found: error
+          retention-days: 7
