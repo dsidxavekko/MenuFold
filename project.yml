@@ -1,0 +1,48 @@
+name: MenuFold
+options:
+  bundleIdPrefix: com.menufold
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  MenuFoldCore:
+    path: Packages/MenuFoldCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+targets:
+  MenuFold:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: App
+    dependencies:
+      - package: MenuFoldCore
+        product: MenuFoldCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.menufold.MenuFold
+        PRODUCT_NAME: MenuFold
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_PREVIEWS: YES
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        COMBINE_HIDPI_IMAGES: YES
+schemes:
+  MenuFold:
+    build:
+      targets:
+        MenuFold: all
+    run:
+      config: Debug
+    archive:
+      config: Release
