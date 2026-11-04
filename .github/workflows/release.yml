@@ -1,0 +1,162 @@
+name: Release
+
+# Publishes a MenuFold.app zip to GitHub Releases.
+#   - push a tag  v0.1.0   → builds that tag and creates release "MenuFold 0.1.0"
+#   - manual run           → Enter a version (e.g. 0.1.0) and, optionally, an existing tag to build
+# The build itself lives in scripts/release.sh, so CI and a local `scripts/release.sh` produce the
+# same archive (same name, same contents, same SHA256SUMS format).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, e.g. 0.1.0 (defaults to MARKETING_VERSION in project.yml)"
+        required: false
+        default: ""
+      tag:
+        description: "Existing tag to build (defaults to v<version> created at the selected branch)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      # Full history: the tag may need to be created at a commit, and `git describe`-style
+      # metadata is part of the release notes.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Work out the version and tag
+        id: vars
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          project_version="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"[:space:]]*\)"\{0,1\}$/\1/p' project.yml | head -1)"
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            version="${REF_NAME#v}"
+            tag="$REF_NAME"
+          else
+            version="${INPUT_VERSION:-$project_version}"
+            tag="${INPUT_TAG:-v$version}"
+          fi
+          if [[ "$version" != "$project_version" ]]; then
+            echo "::warning title=Version mismatch::Requested $version but project.yml has MARKETING_VERSION $project_version; the app bundle will report $project_version."
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Building version '$version' as tag '$tag' on $(git rev-parse --short=12 HEAD)"
+
+      - name: Check the SDK supports macOS 26
+        id: sdk
+        run: |
+          set -euo pipefail
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK in use: $sdk_version"
+          echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
+          if [[ "${sdk_version%%.*}" -lt 26 ]]; then
+            echo "::warning title=Release skipped::macOS SDK $sdk_version cannot target macOS 26; skipping the release. It needs a runner with Xcode 27+ (macos-26 with Xcode 27 selected)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install xcodegen
+        if: steps.sdk.outputs.ok == 'true'
+        run: brew install xcodegen
+
+      - name: Build, verify and package
+        if: steps.sdk.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          ./scripts/release.sh "${{ steps.vars.outputs.version }}" --no-downloads
+          echo "--- dist/ ---"
+          ls -l dist
+          echo "--- SHA256SUMS ---"
+          cat dist/SHA256SUMS
+
+      - name: Upload the workflow artifacts
+        if: steps.sdk.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MenuFold-${{ steps.vars.outputs.version }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      # The zip is re-downloaded from the workflow artifacts so the published file is byte-for-byte
+      # what the build job produced (and what the local script produces).
+      - name: Publish the GitHub release
+        if: steps.sdk.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.vars.outputs.version }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          zip="dist/MenuFold-${VERSION}-macos26-arm64.zip"
+          [[ -f "$zip" ]] || { echo "::error::missing $zip"; exit 1; }
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Never delete a published release: a re-run replaces the assets only.
+            echo "::notice::Release $TAG exists; replacing its assets."
+            gh release upload "$TAG" "$zip" dist/SHA256SUMS --clobber
+            exit 0
+          fi
+          # A tag created by hand but not pushed by this workflow is fine; otherwise create it here.
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git tag -a "$TAG" -m "MenuFold $VERSION" "$SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+
+          cat > notes.md <<EOF
+          MenuFold ${VERSION} — macOS 26+, Apple silicon.
+
+          ### Install
+          1. Download \`MenuFold-${VERSION}-macos26-arm64.zip\` and unzip it.
+          2. Move \`MenuFold.app\` to \`/Applications\`.
+          3. The first time, **right-click → Open** (the app is ad-hoc signed, not notarised).
+          4. Pin it to the Dock like any other app.
+
+          ### Verify the download
+          \`\`\`
+          shasum -a 256 -c SHA256SUMS
+          \`\`\`
+          EOF
+
+          gh release create "$TAG" "$zip" dist/SHA256SUMS \
+            --title "MenuFold ${VERSION}" \
+            --notes-file notes.md \
+            --verify-tag || gh release create "$TAG" "$zip" dist/SHA256SUMS \
+            --title "MenuFold ${VERSION}" \
+            --notes-file notes.md
+
+      - name: Summary
+        run: |
+          {
+            echo "### MenuFold release"
+            echo ""
+            echo "- version: \`${{ steps.vars.outputs.version }}\`"
+            echo "- tag: \`${{ steps.vars.outputs.tag }}\`"
+            echo "- SDK: \`${{ steps.sdk.outputs.version }}\`"
+            echo "- built: \`${{ steps.sdk.outputs.ok }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
