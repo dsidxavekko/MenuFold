@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# Typecheck App/ against the built MenuFoldCore package without building the whole app.
-# Used by agents and CI: fast (~10 s) and needs only the Swift toolchain.
+# Typecheck App/ against the built MenuFoldCore package (no full app build, no signing).
+# Fast (~5 s) and needs only the Swift toolchain, so agents and CI can run it.
 #
-# App/ cannot be typechecked in place without Xcode because @State and #Preview are macros whose
-# plugins ship only with Xcode (see CLAUDE.md). When Xcode is installed this script uses it, so the
-# real sources are checked. Without Xcode it falls back to a scratch copy with `@State` aliased to
-# `SwiftUI.State` and the `#Preview` blocks stripped.
+# App/ cannot be typechecked in place without Xcode: @State, @Entry and #Preview are macros whose
+# plugins ship only with Xcode (see CLAUDE.md). When Xcode is installed this script checks the real
+# sources. Without Xcode it checks a scratch copy in which:
+#   - `@State`  becomes a stand-in property wrapper with a nonmutating setter and `$value` binding
+#               (the same shape the macro expands to),
+#   - `@Entry`  becomes an explicit EnvironmentKey + computed property,
+#   - `#Preview` blocks are wrapped in `#if canImport(XcodeSupport)` so they stay unparsed.
+# The copy is checked with `-parse-as-library` (App has @main) and `-warnings-as-errors` is NOT set,
+# so only real errors fail the run.
 #
-# Usage: scripts/typecheck-app.sh            # quiet, exit code only
-#        scripts/typecheck-app.sh -v       # keep the scratch dir and print the full log path
+# Usage: scripts/typecheck-app.sh        # quiet: exit code only
+#        scripts/typecheck-app.sh -v   # keep the scratch dir and print it
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,71 +21,85 @@ verbose="${1:-}"
 pkg="Packages/MenuFoldCore"
 
 echo "== building $pkg =="
-(cd "$pkg" && swift build)
+(cd "$pkg" && swift build 2>&1 | grep -E "error|Build complete" || true)
 
-repo="$(pwd)"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
 trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
-
 log="$scratch/typecheck.log"
 
 if [[ -x /Applications/Xcode.app/Contents/Developer/usr/bin/swiftc ]]; then
     echo "== typechecking App/ with Xcode =="
     DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-        xcrun swiftc -typecheck -swift-version 5 \
-        -target arm64-apple-macosx26.0 \
-        -I "$pkg/.build/out/Products/Debug" \
-        -I "$pkg/.build/debug" \
-        $(find App -name '*.swift') >"$log" 2>&1 || { cat "$log"; exit 1; }
+        xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 -target arm64-apple-macosx26.0 \
+        -I "$pkg/.build/debug" $(find App -name '*.swift') >"$log" 2>&1 || { cat "$log"; exit 1; }
 else
-    echo "== typechecking App/ with Command Line Tools (scratch copy) =="
+    echo "== typechecking App/ without Xcode (scratch copy) =="
     mkdir -p "$scratch/App"
     while IFS= read -r -d '' f; do
         rel="${f#App/}"
         mkdir -p "$(dirname "$scratch/App/$rel")"
         python3 - "$f" "$scratch/App/$rel" <<'PY'
 import re, sys
+
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding='utf-8').read()
-# Strip every #Preview { ... } block (balanced braces).
+
+
+def block_end(text, start):
+    """Index of the '}' closing the brace block that starts at/after `start`."""
+    k = text.find('{', start)
+    depth = 0
+    while k < len(text):
+        if text[k] == '{':
+            depth += 1
+        elif text[k] == '}':
+            depth -= 1
+            if depth == 0:
+                return k
+        k += 1
+    return len(text) - 1
+
+
+# #Preview { ... } -> #if canImport(XcodeSupport) #Preview { ... } #endif
 out, i = [], 0
 while True:
     j = text.find('#Preview', i)
     if j < 0:
-        out.append(text[i:]); break
+        out.append(text[i:])
+        break
+    k = block_end(text, j)
     out.append(text[i:j])
-    k = text.find('{', j)
-    depth = 0
-    while k < len(text):
-        if text[k] == '{': depth += 1
-        elif text[k] == '}':
-            depth -= 1
-            if depth == 0: break
-        k += 1
-    out.append('\n')
+    out.append('#if canImport(XcodeSupport)\n' + text[j:k + 1] + '\n#endif\n')
     i = k + 1
 text = ''.join(out)
-# @State -> MenuFoldStateShim: SwiftUI.State's own setter is mutating, but the @State macro expands
-# to a nonmutating setter, so Views write to it from plain methods. The shim reproduces that.
+
+# @State -> stand-in wrapper (SwiftUI.State's own setter is mutating; the macro's is not).
 text = re.sub(r'(?<![\w.\$])@State\b(?!\s*\.)', '@MenuFoldStateShim ', text)
-# @Entry (the EnvironmentValues macro, also Xcode-only) -> a generated EnvironmentKey + property.
+
+
+# @Entry var x = false -> computed property backed by a generated EnvironmentKey. The key must be
+# at file scope, so the generated code closes the enclosing extension and reopens it afterwards.
 def entry(m):
     name, default = m.group(1), m.group(2)
-    return ('var %s: Bool { get { self[MenuFoldEntryKey_%s.self] } set { self[MenuFoldEntryKey_%s.self] = newValue } }\n'
-            'private struct MenuFoldEntryKey_%s: EnvironmentKey { static let defaultValue = %s }' % (name, name, name, name, default))
+    return ('var %s: Bool {\n'
+            '        get { self[MenuFoldEntryKey_%s.self] }\n'
+            '        set { self[MenuFoldEntryKey_%s.self] = newValue }\n'
+            '    }\n'
+            '}\n'
+            'struct MenuFoldEntryKey_%s: EnvironmentKey { static let defaultValue = %s }\n'
+            'extension EnvironmentValues {' % (name, name, name, name, default))
+
+
 text = re.sub(r'@Entry var (\w+) = (\w+)', entry, text)
+
 open(dst, 'w', encoding='utf-8').write(text)
 PY
     done < <(find App -name '*.swift' -print0)
 
-    import_dirs=()
-    for d in "$pkg/.build/out/Products/Debug" "$pkg/.build/debug" "$pkg/.build/arm64-apple-macosx/debug"; do
-        [[ -d "$d" ]] && import_dirs+=(-I "$d")
-    done
     cat > "$scratch/StateShim.swift" <<'SWIFT'
 import SwiftUI
 
-/// Stand-in for the @State macro (its plugin ships only with Xcode).
+/// Stand-in for the @State macro (its plugin ships only with Xcode): nonmutating setter + $binding.
 @propertyWrapper struct MenuFoldStateShim<Value> {
     private final class Box { var value: Value; init(_ v: Value) { value = v } }
     private let box: Box
@@ -94,8 +113,14 @@ import SwiftUI
     }
 }
 SWIFT
-    xcrun swiftc -typecheck -swift-version 5 -target arm64-apple-macosx26.0 \
-        "${import_dirs[@]}" "$scratch/StateShim.swift" $(find "$scratch/App" -name '*.swift') >"$log" 2>&1 || { cat "$log"; exit 1; }
+
+    import_dirs=()
+    for d in "$pkg/.build/debug" "$pkg/.build/out/Products/Debug" "$pkg/.build/arm64-apple-macosx/debug"; do
+        [[ -d "$d" ]] && import_dirs+=(-I "$d")
+    done
+    xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 -target arm64-apple-macosx26.0 \
+        "${import_dirs[@]}" "$scratch/StateShim.swift" $(find "$scratch/App" -name '*.swift') \
+        >"$log" 2>&1 || { cat "$log"; exit 1; }
 fi
 
 echo "OK: App/ typechecks"
