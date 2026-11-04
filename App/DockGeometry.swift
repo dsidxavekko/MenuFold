@@ -10,6 +10,9 @@ enum DockGeometry {
     static let gap: CGFloat = 8
     /// Slack beyond the Dock band that still counts as "clicked the Dock icon".
     static let dockProximity: CGFloat = 16
+    /// A real Dock is at most tile size × magnification + padding; anything above this is a corrupt
+    /// or hostile `com.apple.dock` value, which must not turn the whole screen into "the Dock area".
+    static let maxDockSize: CGFloat = 200
 
     /// Thickness of the Dock's icon row from its `tilesize` (default 48), or the magnified
     /// `largesize` when magnification is on, plus padding.
@@ -17,11 +20,12 @@ enum DockGeometry {
     static var dockBand: CGFloat {
         let dock = UserDefaults(suiteName: "com.apple.dock")
         let tile = dock?.double(forKey: "tilesize") ?? 0
-        var size = tile > 0 ? tile : 48
-        if dock?.bool(forKey: "magnification") == true, let large = dock?.double(forKey: "largesize"), large > size {
+        var size = (tile.isFinite && tile > 0) ? tile : 48
+        if dock?.bool(forKey: "magnification") == true,
+           let large = dock?.double(forKey: "largesize"), large.isFinite, large > size {
             size = large
         }
-        return CGFloat(size) + 24
+        return CGFloat(min(size, maxDockSize)) + 24
     }
 
     /// Dock orientation from `defaults read com.apple.dock orientation` (bottom when unset/unknown).
@@ -42,26 +46,26 @@ enum DockGeometry {
             && p.y >= rect.minY - tolerance && p.y <= rect.maxY + tolerance
     }
 
-    /// Whether `point` (default: the current mouse location) is in the Dock area of its screen.
+    /// Whether `point` (default: the current mouse location) is in the Dock area.
+    ///
+    /// Only the *bottom* edge is checked, on purpose. macOS keeps a left/right Dock on a single
+    /// display, but the app can't tell which display hosts it, so honouring `.left`/`.right` used to
+    /// arm the "clicked the Dock" logic on the matching edge of *every* screen (a false positive that
+    /// swallows the user's real Dock click). The bottom-only rule errs the other way: with a side
+    /// Dock the guard simply never arms, which costs at most one redundant reopen. `visibleFrame`
+    /// still measures a side Dock correctly, so nothing here is ever armed wrongly.
     @MainActor
     static func isNearDock(_ point: NSPoint = NSEvent.mouseLocation) -> Bool {
         guard let screen = screen(containing: point) else { return false }
-        return isNearDock(point, screenFrame: screen.frame, visibleFrame: screen.visibleFrame,
-                          orientation: orientation, dockBand: dockBand)
+        return isNearDock(point, screenFrame: screen.frame, visibleFrame: screen.visibleFrame, dockBand: dockBand)
     }
 
-    /// Dock thickness = the larger of the visible-frame inset (≈0 when the Dock auto-hides)
-    /// and `dockBand`; the point must be within that + `dockProximity`.
-    static func isNearDock(_ point: NSPoint, screenFrame: NSRect, visibleFrame: NSRect,
-                           orientation: Orientation, dockBand: CGFloat = 0) -> Bool {
-        switch orientation {
-        case .bottom:
-            point.y - screenFrame.minY <= max(visibleFrame.minY - screenFrame.minY, dockBand) + dockProximity
-        case .left:
-            point.x - screenFrame.minX <= max(visibleFrame.minX - screenFrame.minX, dockBand) + dockProximity
-        case .right:
-            screenFrame.maxX - point.x <= max(screenFrame.maxX - visibleFrame.maxX, dockBand) + dockProximity
-        }
+    /// Bottom band of one screen: Dock thickness = the larger of the visible-frame inset (≈0 when the
+    /// Dock auto-hides) and `dockBand`, plus `dockProximity`. Both parts are clamped to `maxDockSize`.
+    static func isNearDock(_ point: NSPoint, screenFrame: NSRect, visibleFrame: NSRect, dockBand: CGFloat = 0) -> Bool {
+        let inset = visibleFrame.minY - screenFrame.minY
+        let thickness = min(max(inset.isFinite ? inset : 0, dockBand.isFinite ? dockBand : 0), maxDockSize)
+        return point.y - screenFrame.minY <= thickness + dockProximity
     }
 
     /// Frame for a panel of `size` on the screen under the current mouse location.

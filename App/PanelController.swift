@@ -30,19 +30,41 @@ final class PanelController: NSObject, NSWindowDelegate {
     static let cornerRadius: CGFloat = Theme.panelCorner
     static let fallbackSize = NSSize(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight)
 
+    /// A Dock click can first resign key (→ hide) and then call reopen (→ toggle). A reopen that
+    /// arrives within this window after a Dock-caused hide is therefore the *same* click.
+    private static let reopenGuardInterval: TimeInterval = 0.3
+    /// While a tile drag is live, the panel must never be ordered out (it would cancel the session):
+    /// a resign-key hide is deferred until the drag ends, and re-checked at this interval.
+    private static let deferredHideRetryInterval: TimeInterval = 0.1
+    /// If a drag stops reporting and the mouse button has been up for this long, its end callback
+    /// was lost: restore the panel state (nothing else can clear a click-through panel).
+    private static let dragWatchdogDelay: TimeInterval = 2
+
     private let model: GridModel
     private let panel: MenuFoldPanel
     private let glass = NSGlassEffectView()
     private let hostingView: NSHostingView<AnyView>
     private var lastHide: Date = .distantPast
-    /// Whether the last hide was a resign-key with the mouse in the Dock area (i.e. likely a Dock click).
-    private var lastHideWasNearDock = false
+    /// Whether the last hide was caused by a click in the Dock area (see `hide(reason:)`).
+    private var lastHideWasDockClick = false
     private var hideInFlight = false
     private(set) var isShown = false
     /// A tile drag is outside the panel: the window is dimmed and click-through.
     private var dragPassthrough = false
+    /// `AppDragSession.appID != nil`, as last reported by the drag session.
+    private var dragInProgress = false
+    /// A hide asked for while a drag was live, applied when the drag ends.
+    private var hideDeferredByDrag: HideReason?
     /// Bumped by every open/close so a stale animation completion can't undo a newer one.
     private var motionGeneration = 0
+
+    /// Set while `onEnded` closes the panel after a drag-out. `hide()` postpones itself while a drag
+    /// is live (ordering out mid-drag would cancel the session), but this hide *is* the drag's end.
+    private var inDragEnd = false
+
+    private var activationObserver: NSObjectProtocol?
+    private var dragWatchdog: Timer?
+    private var deferredHideRetryTask: Task<Void, Never>?
 
     private static let scaleKey = "menuFold.panelScale"
     private static let blurKey = "menuFold.panelBlur"
@@ -85,6 +107,19 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         configurePanel()
         observeAppDrags()
+        // Coming back to MenuFold (Dock click, ⌘-Tab) ends any "this click came from the Dock" guess.
+        // `didBecomeActiveNotification` is the ObjC `NSApplicationDidBecomeActiveNotification`.
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: NSApp, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lastHideWasDockClick = false }
+        }
+    }
+
+    deinit {
+        if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        dragWatchdog?.invalidate()
+        deferredHideRetryTask?.cancel()
     }
 
     private func configurePanel() {
@@ -150,11 +185,24 @@ final class PanelController: NSObject, NSWindowDelegate {
     func toggle() {
         if isShown {
             hide()
-        } else if !(lastHideWasNearDock && Date().timeIntervalSince(lastHide) <= 0.3) {
+        } else if !wasHiddenByThisDockClick {
             // A Dock click can first resign key (→ hide) and then call reopen (→ toggle);
             // don't immediately reopen in that case.
             show()
         }
+    }
+
+    /// True when the hide we are looking at was caused by a Dock click that is probably still
+    /// arriving as this reopen. Armed only if (a) the screen's Dock is at the bottom, (b) the pointer
+    /// was in the bottom band, and (c) the event that made the panel resign key was a mouse-down —
+    /// i.e. the click itself. Any click that merely *happened* near the bottom edge of the screen
+    /// (a Desktop icon, a Finder window, a browser tab strip) therefore can't swallow a later,
+    /// unrelated Dock click.
+    private var wasHiddenByThisDockClick: Bool {
+        guard lastHideWasDockClick, Date().timeIntervalSince(lastHide) <= Self.reopenGuardInterval else {
+            return false
+        }
+        return true
     }
 
     func show() {
@@ -164,38 +212,113 @@ final class PanelController: NSObject, NSWindowDelegate {
         let size = contentSize
         let frame = DockGeometry.panelFrame(size: size, anchor: anchor)
 
-        panel.setFrame(frame, display: false)
-        panel.alphaValue = 0
-        isShown = true
+        // Reopening is the newer intent, so a hide that is still waiting for a drag to end is dropped.
+        cancelDeferredHide()
+        // A show is always a full reset of the window state: a lost drag-end callback, a deferred
+        // drag hide or a half-faded window must not leak into this presentation.
+        if dragInProgress { endDragState() }
+        dragPassthrough = false
+        panel.ignoresMouseEvents = false
         hideInFlight = false
+        lastHideWasDockClick = false
+
+        panel.setFrame(frame, display: false)
+        // Normally 0 for the fade-in. On a reopen that interrupts a fade-out stay at the current alpha:
+        // the alpha shown must not dip to 0 and back (a visible blink; the window animator would queue
+        // both changes while the drag/passthrough alpha is the authoritative value).
+        panel.alphaValue = isShown || panel.isVisible ? max(panel.alphaValue, 0.01) : 0
+        isShown = true
 
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
+        // animateIn bumps motionGeneration first: any pending out-completion is stale from here on.
         animateIn()
     }
 
     func hide(reason: HideReason = .dismissed) {
+        // A tile drag is in progress: ordering the panel out now would cancel the drag session and
+        // make the pointer cut-through in a weird state. Remember the intent and apply it on drag end.
+        if dragInProgress, !inDragEnd {
+            // Only an Esc / resign-key hide asked for *during* a drag is postponed: a drag-out ends
+            // with its own fade-out (`fadeOutAfterDrag`), and `.appLaunched` hides without
+            // deactivating, which must not come back as a `NSApp.hide` later.
+            if reason == .dismissed || reason == .resignedKey { deferHideUntilDragEnd(reason) }
+            return
+        }
         // Act on the real window state too, so `isShown` and the panel can't drift apart;
         // but don't restart a fade-out that is already running (it would lose its reason).
         guard isShown || (panel.isVisible && !hideInFlight) else { return }
         isShown = false
         hideInFlight = true
         lastHide = Date()
-        lastHideWasNearDock = reason == .resignedKey && DockGeometry.isNearDock(NSEvent.mouseLocation)
+        lastHideWasDockClick = Self.isDockClickHide(reason: reason)
 
         let panel = panel
-        animateOut { [weak self] in
-            guard let self, !self.isShown else { return }
-            self.hideInFlight = false
-            panel.orderOut(nil)
-            self.resetMotion()
-            panel.alphaValue = 1
+        animateOut { [weak self] generation in
+            guard let self, generation == self.motionGeneration, !self.isShown else { return }
+            // `animateOut` already dropped stale generations; the alpha/tween state is restored here
+            // so every hide path (dismiss, resign-key, app launch, drag-out) ends in the same state.
             // After an app launch, NSApp.hide would race the launched app's activation.
-            guard reason != .appLaunched else { return }
-            // Give focus back to the previous app unless another MenuFold window (Settings) is open.
-            let otherVisible = NSApp.windows.contains { $0 !== panel && $0.isVisible && $0.canBecomeMain }
-            if !otherVisible, NSApp.isActive { NSApp.hide(nil) }
+            if reason == .appLaunched {
+                self.hideInFlight = false
+                panel.orderOut(nil)
+                self.resetMotion()
+                panel.alphaValue = 1
+                return
+            }
+            // Also gives focus back to the previous app unless another MenuFold window (Settings) is open.
+            self.resetAfterHide()
         }
+    }
+
+    /// Classifies a resign-key hide as "the user clicked the Dock". See `wasHiddenByThisDockClick`.
+    private static func isDockClickHide(reason: HideReason) -> Bool {
+        guard reason == .resignedKey else { return false }
+        // A left/right Dock is not detected (see `DockGeometry.isNearDock`), so the guard stays off.
+        guard DockGeometry.orientation == .bottom else { return false }
+        guard DockGeometry.isNearDock(NSEvent.mouseLocation) else { return false }
+        // Only a mouse click counts: that is what takes focus away from the panel. Key equivalents,
+        // Cmd-Tab and programmatic resigns leave `currentEvent` as something else. The mouse-down is
+        // the real event; the up-variants only cover a resign that AppKit reports a click later.
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown, .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            return true
+        default:
+            return false
+        }
+    }
+
+    // MARK: Deferred hide (drag in progress)
+
+    private func deferHideUntilDragEnd(_ reason: HideReason) {
+        guard hideDeferredByDrag == nil else { return }
+        hideDeferredByDrag = reason
+        // Backstop for the case where no drag-end callback ever arrives: retry every 0.1 s for about
+        // 3 s (then give up; `show()` also cancels this). Each retry re-reads `dragInProgress`, so a
+        // normal drag-end clears the flag and the next tick applies the hide within 0.1 s.
+        deferredHideRetryTask = Task { @MainActor [weak self] in
+            for _ in 0..<30 {
+                try? await Task.sleep(for: .seconds(Self.deferredHideRetryInterval))
+                guard let self, self.hideDeferredByDrag != nil else { return }
+                if !self.dragInProgress { self.flushDeferredHide(); return }
+            }
+        }
+    }
+
+    /// Applies a hide that was postponed while a drag was live. One-shot by design: a deferred hide
+    /// must never start a second fade-out or outlive the presentation it belongs to.
+    private func flushDeferredHide() {
+        guard let reason = hideDeferredByDrag else { return }
+        hideDeferredByDrag = nil
+        deferredHideRetryTask?.cancel()
+        deferredHideRetryTask = nil
+        hide(reason: reason)
+    }
+
+    private func cancelDeferredHide() {
+        hideDeferredByDrag = nil
+        deferredHideRetryTask?.cancel()
+        deferredHideRetryTask = nil
     }
 
     // MARK: Open / close motion
@@ -257,8 +380,13 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     /// Quick close: fade out while the glass shrinks to 0.97 from wherever it currently is
     /// (an open spring may still be running). Reduce Motion: fade only.
-    private func animateOut(completion: @escaping @MainActor () -> Void) {
+    ///
+    /// The completion is tagged with its `motionGeneration`, and only the newest motion may run it:
+    /// a fade-out that was superseded halfway (reopen, or a second hide) must not order the panel out
+    /// or call `NSApp.hide` behind the newer presentation's back.
+    private func animateOut(completion: @escaping @MainActor (Int) -> Void) {
         motionGeneration += 1
+        let generation = motionGeneration
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         hostingView.layer?.removeAnimation(forKey: Self.blurKey)
         hostingView.layer?.filters = nil
@@ -283,7 +411,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: {
-            MainActor.assumeIsolated { completion() }
+            MainActor.assumeIsolated { completion(generation) }
         })
     }
 
@@ -316,18 +444,55 @@ final class PanelController: NSObject, NSWindowDelegate {
         }
         session.onEnded = { [weak self] droppedOutside in
             guard let self else { return }
-            self.panel.ignoresMouseEvents = false
+            // Read before anything else can clear it: `dragPassthrough` is the only record that the
+            // panel is dimmed from a drag, and every reset below runs before the fade-out's completion.
+            let wasPassthrough = self.dragPassthrough
+            self.endDragState()
             if droppedOutside {
-                self.dragPassthrough = false
-                // Fades out from the current (dimmed) alpha; the completion restores alpha 1.
+                // The user chose to drop outside: close, fading from the current (dimmed) alpha, then
+                // restore the window for the next presentation. `hide()` is called with the marker so
+                // its drag deferral does not swallow this hide.
+                self.inDragEnd = true
                 self.hide()
+                self.inDragEnd = false
+                if self.hideInFlight, wasPassthrough { self.fadeOutAfterDrag() }
             } else {
                 self.setDragPassthrough(false)
+                // A resign-key hide that was postponed for the drag now owns the panel.
+                self.flushDeferredHide()
             }
         }
     }
 
+    /// Fade-out for a drag that ended outside the panel. Not `hide()`: that path reads drag state that
+    /// `AppDragSession.ended` has already reset by the time its completion runs, so the panel would
+    /// stay at 15 % alpha and click-through.
+    private func fadeOutAfterDrag() {
+        guard isShown else { self.resetAfterHide(); return }
+        isShown = false
+        hideInFlight = true
+        lastHide = Date()
+        lastHideWasDockClick = false
+        animateOut { [weak self] generation in
+            guard let self, generation == self.motionGeneration, !self.isShown else { return }
+            self.resetAfterHide()
+        }
+    }
+
+    /// Shared tail of every hide: window hidden, motion and alpha back to the resting state, and the
+    /// app deactivated only if no other MenuFold window (Settings) is visible.
+    private func resetAfterHide() {
+        hideInFlight = false
+        panel.orderOut(nil)
+        resetMotion()
+        panel.alphaValue = 1
+        let otherVisible = NSApp.windows.contains { $0 !== panel && $0.isVisible && $0.canBecomeMain }
+        if !otherVisible, NSApp.isActive { NSApp.hide(nil) }
+    }
+
     private func setDragPassthrough(_ on: Bool) {
+        if on { dragInProgress = true }
+        startDragWatchdog()
         dragPassthrough = on
         panel.ignoresMouseEvents = on
         // Overrides a running open fade (the window animator keeps one alpha animation); a fade-out
@@ -340,10 +505,66 @@ final class PanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Clears everything a drag can leave behind: the click-through flag, the dimmed alpha and a
+    /// hide that was waiting for the drag.
+    private func endDragState() {
+        dragInProgress = false
+        dragPassthrough = false
+        stopDragWatchdog()
+        // Deferred to the next main-queue turn on purpose: AppKit's in-process drag loop restores the
+        // backing window's `ignoresMouseEvents` from a snapshot taken when the drag started, *after*
+        // the source's `endedAt` callback. Setting the flag synchronously would let that restore put
+        // `ignoresMouseEvents = true` back on a panel that will stay visible (pointer still in the
+        // Dock band), and a quick second Dock click would then reach the panel's tiles and launch an
+        // app. One turn later the drag loop is gone, so nothing can resurrect it.
+        if panel.ignoresMouseEvents {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.dragInProgress else { return }
+                self.panel.ignoresMouseEvents = false
+            }
+        }
+        if isShown, panel.alphaValue < 1 {
+            let panel = panel
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.15
+                panel.animator().alphaValue = 1
+            }
+        }
+    }
+
+    /// Watchdog for a lost drag-end callback: nothing else can clear a click-through panel, so if the
+    /// mouse button has been up for `dragWatchdogDelay` while a drag is "in progress", end it here.
+    /// 0.5 s ticks in `.common` mode are free; the timer is created at most once per drag.
+    private func startDragWatchdog() {
+        guard dragWatchdog == nil else { return }
+        var releasedAt: Date?
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard NSEvent.pressedMouseButtons & 1 == 0 else { releasedAt = nil; return }
+                let now = Date()
+                let since = releasedAt ?? now
+                releasedAt = since
+                guard self.dragInProgress,
+                      now.timeIntervalSince(since) >= Self.dragWatchdogDelay else { return }
+                // Recover as if the drag ended inside the panel: keep it open, but interactable.
+                // The session's callbacks stay installed and harmless without a drag.
+                self.endDragState()
+                self.flushDeferredHide()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dragWatchdog = timer
+    }
+
+    private func stopDragWatchdog() {
+        dragWatchdog?.invalidate()
+        dragWatchdog = nil
+    }
+
     // MARK: NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
         hide(reason: .resignedKey)
     }
 }
-

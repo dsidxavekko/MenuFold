@@ -54,6 +54,18 @@ final class AppDragSession {
         isOverDock = false
     }
 
+    /// Ends the current drag immediately, without waiting for AppKit's callback.
+    ///
+    /// The panel calls this on paths where the drag loop is known to be gone (e.g. the window was
+    /// ordered out under the pointer), so a latched `isOutsidePanel`/`isOverDock` — and the
+    /// click-through window state that follows it — can never outlive the drag. Uses the current
+    /// pointer as the end point and `.none` as the operation, i.e. "cancelled", so the panel is
+    /// treated as not having received a drop. Safe to call when no drag is in progress.
+    func forceEnd() {
+        guard appID != nil || isOutsidePanel || isOverDock || window != nil else { return }
+        ended(at: NSEvent.mouseLocation, operation: [])
+    }
+
     func moved(to screenPoint: NSPoint) {
         isOverDock = Self.isDockWindow(at: screenPoint)
         let outside = !isInsidePanel(screenPoint)
@@ -62,12 +74,27 @@ final class AppDragSession {
         onOutsidePanelChanged?(outside)
     }
 
+    /// Ends the drag. Safe to call more than once: the source view calls it from
+    /// `draggingSession(_:endedAt:operation:)` and again from a `defer` after `beginDraggingSession`
+    /// returns, in case AppKit ever skips the callback (bug 2). Every call ends with
+    /// `appID == nil`, `isOverDock == false`, `isOutsidePanel == false` and `window == nil`, so the
+    /// panel's click-through/dim state can never stay latched (bug 3).
     func ended(at screenPoint: NSPoint, operation: NSDragOperation) {
+        let wasActive = appID != nil || isOutsidePanel || isOverDock || window != nil
         let droppedOutside = operation != [] && !isInsidePanel(screenPoint)
+        // Tell the panel the pointer is back inside before ending, so it restores its alpha even
+        // when the last `moved(to:)` was outside (above) and the drag then ended over the panel.
+        if isOutsidePanel {
+            isOutsidePanel = false
+            onOutsidePanelChanged?(false)
+        }
         appID = nil
         window = nil
         isOutsidePanel = false
         isOverDock = false
+        // One `onEnded` per real drag: a repeated call (the `defer` safety net, or a double
+        // callback) must not make the panel hide twice.
+        guard wasActive else { return }
         onEnded?(droppedOutside)
     }
 
@@ -102,10 +129,17 @@ final class AppDragSession {
 
 /// Transparent NSView over a tile that turns a mouse drag into an AppKit dragging session.
 final class AppDragSourceView: NSView, NSDraggingSource {
+    /// The app this view currently represents; SwiftUI rewrites both in `updateNSView` when the
+    /// representable is reused (tab switch, search, catalog refresh). Never read these after a
+    /// mouse-down: use `pendingID`/`pendingURL`, which freeze the identity for that press (bug 1).
     var appID = ""
     var appURL: URL?
 
     private var mouseDownEvent: NSEvent?
+    /// App identity captured in `mouseDown`. A representable reuse between the press and the 4 pt
+    /// drag threshold would otherwise make the drag carry a different app's URL and bundle ID.
+    private var pendingID = ""
+    private var pendingURL: URL?
     private var isDragging = false
     private static let threshold: CGFloat = 4
 
@@ -115,13 +149,18 @@ final class AppDragSourceView: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) {
         isDragging = false
-        mouseDownEvent = event.modifierFlags.contains(.control) ? nil : event
+        clearPress()
+        if !event.modifierFlags.contains(.control) {
+            mouseDownEvent = event
+            pendingID = appID
+            pendingURL = appURL
+        }
         super.mouseDown(with: event)
     }
 
     override func mouseDragged(with event: NSEvent) {
         if isDragging { return }
-        guard let down = mouseDownEvent, appURL != nil else {
+        guard let down = mouseDownEvent, let url = pendingURL else {
             super.mouseDragged(with: event)
             return
         }
@@ -132,13 +171,20 @@ final class AppDragSourceView: NSView, NSDraggingSource {
         }
         isDragging = true
         cancelPress(after: down)
-        startDrag(with: down)
+        startDrag(with: down, appID: pendingID, url: url)
     }
 
     override func mouseUp(with event: NSEvent) {
-        mouseDownEvent = nil
-        if !isDragging { super.mouseUp(with: event) }
+        let wasPressed = mouseDownEvent != nil
+        clearPress()
+        if !isDragging, wasPressed { super.mouseUp(with: event) }
         isDragging = false
+    }
+
+    private func clearPress() {
+        mouseDownEvent = nil
+        pendingID = ""
+        pendingURL = nil
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -166,8 +212,8 @@ final class AppDragSourceView: NSView, NSDraggingSource {
         super.mouseUp(with: up)
     }
 
-    private func startDrag(with event: NSEvent) {
-        guard let url = appURL else { return }
+    /// `appID`/`url` are the identity frozen in `mouseDown`, never the live representable values.
+    private func startDrag(with event: NSEvent, appID: String, url: URL) {
         let item = NSPasteboardItem()
         item.setString(url.absoluteString, forType: .fileURL)
         item.setString(appID, forType: .menuFoldAppID)
@@ -179,6 +225,20 @@ final class AppDragSourceView: NSView, NSDraggingSource {
             NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size),
             contents: MainActor.assumeIsolated { IconCache.shared.icon(for: url) }
         )
+
+        // The session's `ended` is the only place that clears the drag state the panel reacts to
+        // (click-through, dimmed alpha). `beginDraggingSession` runs the legacy drag loop and only
+        // returns when the session is over, so the `defer` is a guaranteed safety net: if AppKit
+        // skipped `draggingSession(_:endedAt:operation:)`, end the session here. `ended` is
+        // idempotent and guards on the id, so the normal path is not affected (bug 2, bug 3).
+        defer {
+            let session = MainActor.assumeIsolated { AppDragSession.shared }
+            if session.appID == appID {
+                session.ended(at: NSEvent.mouseLocation, operation: [])
+            }
+            isDragging = false
+            clearPress()
+        }
 
         MainActor.assumeIsolated { AppDragSession.shared.began(appID: appID, in: window) }
         let session = beginDraggingSession(with: [dragItem], event: event, source: self)
@@ -213,7 +273,7 @@ final class AppDragSourceView: NSView, NSDraggingSource {
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
                          operation: NSDragOperation) {
         isDragging = false
-        mouseDownEvent = nil
+        clearPress()
         MainActor.assumeIsolated { AppDragSession.shared.ended(at: screenPoint, operation: operation) }
     }
 }
@@ -242,6 +302,8 @@ struct AppDragSource: NSViewRepresentable {
 /// source allows within the app.
 struct AppDropDelegate: DropDelegate {
     var isEnabled: Bool
+    /// Validates a dropped bundle ID against the live catalog (see `appDropDestination`).
+    var isKnownApp: (String) -> Bool = { _ in true }
     var setTargeted: (Bool) -> Void
     /// Receives the dropped bundle ID; returns whether the drop was handled.
     var perform: (String) -> Bool
@@ -250,24 +312,46 @@ struct AppDropDelegate: DropDelegate {
         isEnabled && info.hasItemsConforming(to: [.menuFoldAppID])
     }
 
-    func dropEntered(info: DropInfo) { setTargeted(true) }
+    func dragEntered(info: DropInfo) {
+        setTargeted(true)
+        MainActor.assumeIsolated { DragActivity.shared.setActive(true) }
+    }
+
+    func dropEntered(info: DropInfo) {
+        setTargeted(true)
+        MainActor.assumeIsolated { DragActivity.shared.setActive(true) }
+    }
 
     func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
 
-    func dropExited(info: DropInfo) { setTargeted(false) }
+    func dropExited(info: DropInfo) {
+        setTargeted(false)
+        MainActor.assumeIsolated { DragActivity.shared.setActive(false) }
+    }
 
     func performDrop(info: DropInfo) -> Bool {
         setTargeted(false)
+        MainActor.assumeIsolated { DragActivity.shared.setActive(false) }
         // The source is in this process: read the ID synchronously from the shared session.
+        // `isKnownApp` rejects an id that is not in the catalog (stale drag, foreign pasteboard).
         if let id = MainActor.assumeIsolated({ AppDragSession.shared.appID }) {
+            guard MainActor.assumeIsolated({ isKnownApp(id) }) else { return false }
             return MainActor.assumeIsolated { perform(id) }
         }
-        // Fallback: load the private type from the pasteboard.
+        // Fallback: load the private type from the pasteboard. This runs asynchronously, so the
+        // world can change in between (tab switch, catalog refresh, drag cancelled): re-validate
+        // the id against the live state instead of trusting the pasteboard (bug 7).
         guard let provider = info.itemProviders(for: [.menuFoldAppID]).first else { return false }
         let perform = perform
+        let isKnownApp = isKnownApp
         provider.loadDataRepresentation(forTypeIdentifier: UTType.menuFoldAppID.identifier) { data, _ in
             guard let data, let id = String(data: data, encoding: .utf8) else { return }
-            DispatchQueue.main.async { _ = perform(id) }
+            DispatchQueue.main.async {
+                // A newer MenuFold drag is in progress: this stale id must not be applied.
+                guard MainActor.assumeIsolated({ AppDragSession.shared.appID == nil }) else { return }
+                guard MainActor.assumeIsolated({ isKnownApp(id) }) else { return }
+                _ = perform(id)
+            }
         }
         return true
     }
@@ -275,12 +359,16 @@ struct AppDropDelegate: DropDelegate {
 
 extension View {
     /// Accepts MenuFold app drags (bundle IDs) dropped on this view.
+    /// `isKnownApp` validates a dropped id against the live catalog; pass `model.apps.contains`
+    /// so a stale or foreign pasteboard id is ignored instead of applied.
     func appDropDestination(
         isEnabled: Bool = true,
+        isKnownApp: @escaping (String) -> Bool = { _ in true },
         isTargeted: @escaping (Bool) -> Void,
         perform: @escaping (String) -> Bool
     ) -> some View {
         onDrop(of: [.menuFoldAppID],
-               delegate: AppDropDelegate(isEnabled: isEnabled, setTargeted: isTargeted, perform: perform))
+               delegate: AppDropDelegate(isEnabled: isEnabled, isKnownApp: isKnownApp,
+                                         setTargeted: isTargeted, perform: perform))
     }
 }

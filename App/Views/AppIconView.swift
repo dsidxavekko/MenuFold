@@ -41,7 +41,16 @@ struct AppIconView: View {
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             // AppKit drag source (alias in Finder, pin in the Dock, private type for internal drops).
             // Inside the label so forwarded clicks still reach the button.
-            .overlay { AppDragSource(appID: app.id, url: app.url) }
+            // `.id(app.id)` gives each tile its own representable, so SwiftUI never reuses a drag
+            // source view for a different app when the grid re-sorts (tab switch, search, catalog
+            // refresh). The view also freezes the app identity on mouse-down (bug 1).
+            // `.accessibilityHidden` keeps the unlabeled NSView out of the VoiceOver tree, which
+            // would otherwise expose an empty element inside the button (bug 8).
+            .overlay {
+                AppDragSource(appID: app.id, url: app.url)
+                    .id(app.id)
+                    .accessibilityHidden(true)
+            }
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
@@ -49,7 +58,9 @@ struct AppIconView: View {
         .animation(Theme.snappy, value: isTargeted)
         .help(app.name)
         .accessibilityLabel(app.name)
-        .appDropDestination(isEnabled: acceptsFolderDrops) { targeted in
+        .appDropDestination(isEnabled: acceptsFolderDrops, isKnownApp: { id in
+            model.apps.contains { $0.id == id }
+        }) { targeted in
             isTargeted = acceptsFolderDrops && targeted
         } perform: { dropped in
             guard acceptsFolderDrops, dropped != app.id else { return false }
