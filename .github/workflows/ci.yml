@@ -13,6 +13,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # The app deploys to macOS 26; both the App/ typecheck and the app build need an SDK at least this new.
+  MENUFOLD_MIN_SDK_MAJOR: "26"
+
 jobs:
   core:
     name: MenuFoldCore (build + tests)
@@ -25,6 +29,7 @@ jobs:
         run: |
           xcode-select -p
           swift --version
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Cache SwiftPM build
         uses: actions/cache@v4
@@ -40,20 +45,44 @@ jobs:
           swift test --parallel
 
   typecheck-app:
-    name: App typecheck (no Xcode needed)
+    # Fast App/ check when a full Xcode with a macOS >= 26 SDK is available. The shimmed fallback of
+    # scripts/typecheck-app.sh is refused on CI on purpose: its stand-ins are not the real macros, so
+    # it used to pass on a machine where the app itself did not compile. Without a usable SDK this job
+    # skips and `build-app` reports the real verdict instead.
+    name: App typecheck
     runs-on: macos-latest
     timeout-minutes: 20
+    needs: [core]
     steps:
       - uses: actions/checkout@v4
 
+      - name: Show toolchain and SDK
+        id: toolchain
+        run: |
+          set -euo pipefail
+          echo "xcode-select: $(xcode-select -p)"
+          swift --version | head -1
+          sdk="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo 0)"
+          echo "macOS SDK: $sdk"
+          if [[ "${sdk%%.*}" -ge "${MENUFOLD_MIN_SDK_MAJOR}" ]]; then
+            echo "can=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Typecheck skipped::macOS SDK $sdk is older than macOS ${MENUFOLD_MIN_SDK_MAJOR}; the app build job is the source of truth."
+          fi
+
       - name: Cache SwiftPM build
+        if: steps.toolchain.outputs.can == 'true'
         uses: actions/cache@v4
         with:
           path: Packages/MenuFoldCore/.build
           key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/MenuFoldCore/Package.swift') }}
           restore-keys: swiftpm-${{ runner.os }}-
 
-      - name: Typecheck App/
+      - name: Typecheck App/ against the real SDK
+        if: steps.toolchain.outputs.can == 'true'
+        env:
+          MENUFOLD_TYPE_CHECK: real
         run: ./scripts/typecheck-app.sh
 
   build-app:
@@ -64,22 +93,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the SDK supports macOS 26
+      - name: Show toolchain and SDK
         id: sdk
         run: |
-          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          set -euo pipefail
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo 0)"
           echo "macOS SDK in use: $sdk_version"
           echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
-          if [[ "${sdk_version%%.*}" -lt 26 ]]; then
-            echo "::warning title=Build skipped::macOS SDK $sdk_version cannot target macOS 26; the app build needs Xcode 27 or newer."
+          if [[ "${sdk_version%%.*}" -lt "${MENUFOLD_MIN_SDK_MAJOR}" ]]; then
             echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Build skipped::macOS SDK $sdk_version cannot target macOS ${MENUFOLD_MIN_SDK_MAJOR}; the app build needs a newer Xcode."
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install xcodegen
+      - name: Install xcodegen (if missing)
         if: steps.sdk.outputs.ok == 'true'
-        run: brew install xcodegen
+        run: |
+          set -euo pipefail
+          xcrun --find xcodebuild   # full Xcode selected (the image's xcode-select points at one)
+          if command -v xcodegen >/dev/null; then
+            echo "xcodegen already installed: $(xcodegen --version)"
+          else
+            export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
+            brew install xcodegen
+          fi
 
       - name: Build
         if: steps.sdk.outputs.ok == 'true'
