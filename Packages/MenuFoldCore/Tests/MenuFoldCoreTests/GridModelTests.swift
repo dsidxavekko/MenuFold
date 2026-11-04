@@ -54,8 +54,164 @@ import Testing
         let a = try #require(m.createFolder(dropping: "notes", onto: "mail"))
         let b = try #require(m.createFolder(dropping: "xcode", onto: "chess"))
         m.add("xcode", to: a)
-        #expect(m.folder(id: b) == nil) // chess alone → dissolved
+        #expect(m.folder(id: b) == nil) // source: chess alone → dissolved
+        // The target must keep everything it had and gain the moved app.
         #expect(m.folder(id: a)?.appIDs == ["mail", "notes", "xcode"])
+        #expect(m.folderContaining(appID: "chess") == nil)
+    }
+
+    /// The regression: `detach` used to dissolve every ≤1-app folder, so one drag could delete the
+    /// drop TARGET's folder too. Now only the folder the dragged app actually left may dissolve.
+    /// Here the target is a top-level app in no folder, so a new folder is built — and the old one
+    /// is left alone entirely.
+    @Test func createFolderNeverDestroysTheTargetsFolder() throws {
+        let (m, _) = makeModel()
+        // "Ігри" = {chess, xcode}: the dragged app's source.
+        let games = try #require(m.createFolder(dropping: "xcode", onto: "chess"))
+        m.rename(folder: games, to: "Ігри")
+        // "Робота" = {notes, safari}: must survive the drag untouched.
+        let work = try #require(m.createFolder(dropping: "safari", onto: "notes"))
+        m.rename(folder: work, to: "Робота")
+
+        // mail is top-level (in no folder) → new folder {mail, xcode}.
+        let new = try #require(m.createFolder(dropping: "xcode", onto: "mail"))
+        // Source is left with chess alone → dissolved by the documented rule.
+        #expect(m.folder(id: games) == nil)
+        #expect(m.folderContaining(appID: "chess") == nil)
+        // The unrelated folder survives, same id, name and members.
+        #expect(m.folder(id: work)?.name == "Робота")
+        #expect(m.folder(id: work)?.appIDs == ["notes", "safari"])
+        // The new folder holds exactly the two dropped apps.
+        #expect(m.folder(id: new)?.appIDs == ["mail", "xcode"])
+        #expect(m.folder(id: new)?.name == "Нова папка")
+        #expect(m.renamingFolderID == new)
+        // No app vanished: six apps, one new folder tile.
+        #expect(titles(m.items(tab: .all, query: "")).sorted()
+                == ["Café", "Chess", "Нова папка", "Робота"].sorted())
+    }
+
+    /// A drop onto an app that already sits in a manual folder joins THAT folder (documented behaviour):
+    /// no new folder, the target's folder keeps its id/name, and only the dragged app's old folder can go.
+    @Test func createFolderOntoAppInAFolderJoinsIt() throws {
+        let (m, _) = makeModel()
+        let games = try #require(m.createFolder(dropping: "safari", onto: "chess"))
+        m.rename(folder: games, to: "Ігри")
+        let work = try #require(m.createFolder(dropping: "notes", onto: "mail"))
+        m.rename(folder: work, to: "Робота")
+
+        let joined = m.createFolder(dropping: "chess", onto: "mail")
+        #expect(joined == work)
+        #expect(m.layout.folders.count == 2 - 1) // only the emptied source went
+        #expect(m.folder(id: work)?.name == "Робота")
+        #expect(m.folder(id: work)?.appIDs == ["mail", "notes", "chess"])
+        // The source is left with safari alone → dissolved by the documented rule; safari surfaces at top level.
+        #expect(m.folder(id: games) == nil)
+        #expect(m.folderContaining(appID: "safari") == nil)
+        #expect(titles(m.items(tab: .all, query: "")).contains("Safari"))
+    }
+
+    /// A folder is measured on stored IDs, not on visible apps: hiding the dragged app's only sibling
+    /// must not let the move dissolve the target folder, and a hidden member is never resurrected.
+    @Test func createFolderCountsStoredAppsNotVisibleOnes() throws {
+        let (m, _) = makeModel()
+        // "Веб" = {safari, chess}; safari is hidden, so chess is its only visible app.
+        let web = try #require(m.createFolder(dropping: "chess", onto: "safari"))
+        m.hide("safari")
+        #expect(m.apps(in: m.folder(id: web)!).map(\.id) == ["chess"])
+
+        // Drop mail onto chess: chess already sits in "Веб", so mail joins it — the drag can't create a
+        // second folder or dissolve the target's. The hidden safari is not resurrected anywhere.
+        let joined = try #require(m.createFolder(dropping: "mail", onto: "chess"))
+        #expect(joined == web)
+        #expect(m.folder(id: web)?.appIDs == ["safari", "chess", "mail"])
+    }
+
+    @Test func addToAFolderNeverDissolvesIt() throws {
+        let (m, _) = makeModel()
+        let a = try #require(m.createFolder(dropping: "notes", onto: "mail"))
+        let b = try #require(m.createFolder(dropping: "chess", onto: "xcode"))
+        m.add("safari", to: a)
+        #expect(m.folder(id: a)?.appIDs == ["mail", "notes", "safari"])
+        m.add("safari", to: b) // moves out of a, into b
+        #expect(m.folder(id: a)?.appIDs == ["mail", "notes"]) // still ≥2 → intact
+        #expect(m.folder(id: b)?.appIDs == ["xcode", "chess", "safari"]) // b was {xcode, chess}; safari appended
+        #expect(m.folderContaining(appID: "safari")?.id == b)
+    }
+
+    /// A move into a folder never dissolves that folder, and the app left alone in its old folder
+    /// dissolves only the old one (regression: one sweep used to hit both).
+    @Test func addIntoThirdFolderDissolvesOnlyTheSource() throws {
+        let (m, _) = makeModel()
+        let a = try #require(m.createFolder(dropping: "notes", onto: "mail")) // {mail, notes}
+        let b = try #require(m.createFolder(dropping: "xcode", onto: "chess")) // {chess, xcode}
+        let c = try #require(m.createFolder(dropping: "safari", onto: "cafe")) // {safari, café}
+        m.add("safari", to: a) // café left alone → dissolved
+        #expect(m.folder(id: c) == nil)
+        #expect(m.folder(id: a)?.appIDs == ["mail", "notes", "safari"])
+        m.add("safari", to: b) // moves out of a (2 left) into b
+        #expect(m.folder(id: a)?.appIDs == ["mail", "notes"]) // intact
+        #expect(m.folder(id: b)?.appIDs == ["chess", "xcode", "safari"]) // b was {chess, xcode}; safari appended
+    }
+
+    /// Every rejected drop clears `renamingFolderID`, so the UI can't start renaming a stale folder.
+    @Test func invalidCreateFolderClearsRenamingRequest() throws {
+        let (m, _) = makeModel()
+        let id = try #require(m.createFolder(dropping: "safari", onto: "chess"))
+        #expect(m.renamingFolderID == id)
+
+        #expect(m.createFolder(dropping: "mail", onto: "mail") == nil)
+        #expect(m.renamingFolderID == nil)
+
+        m.renamingFolderID = id // as if the user was still renaming
+        #expect(m.createFolder(dropping: "missing", onto: "mail") == nil)
+        #expect(m.renamingFolderID == nil)
+
+        m.renamingFolderID = id
+        // Already a member of the target's folder → nothing to do, but the rename request is cleared.
+        let work = try #require(m.createFolder(dropping: "notes", onto: "mail"))
+        m.renamingFolderID = work
+        #expect(m.createFolder(dropping: "notes", onto: "mail") == nil)
+        #expect(m.renamingFolderID == nil)
+    }
+
+    @Test func setCategoryNilIsANoOpWithoutAnOverride() {
+        let (m, _) = makeModel()
+        let before = m.layout
+        m.setCategory(nil, for: "mail") // no override to remove
+        m.setCategory(nil, for: "does.not.exist") // unknown ID
+        #expect(m.layout == before)
+        #expect(m.layout.categoryOverrides.isEmpty)
+
+        m.setCategory(AppCategory.from(raw: "public.app-category.games"), for: "mail")
+        #expect(m.layout.categoryOverrides == ["mail": "public.app-category.games"])
+        m.setCategory(AppCategory.from(raw: "public.app-category.games"), for: "mail") // same value again
+        #expect(m.layout.categoryOverrides == ["mail": "public.app-category.games"])
+        m.setCategory(nil, for: "mail")
+        #expect(m.layout.categoryOverrides.isEmpty)
+        m.setCategory(nil, for: "mail") // second clear is a no-op
+        #expect(m.layout.categoryOverrides.isEmpty)
+    }
+
+    /// The store writes `Layout.currentVersion`; the in-memory layout must agree, even when the loaded
+    /// file had another version (and stays quiet on repeats, so nothing is rewritten for nothing).
+    @Test func commitKeepsMemoryAndDiskVersionInStep() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("layout.json")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(#"{"version":0,"hidden":["safari"]}"#.utf8).write(to: url)
+
+        let store = LayoutStore(fileURL: url)
+        let (m, _) = makeModel(store: store)
+        #expect(m.layout.version == Layout.currentVersion) // LayoutStore normalizes on load
+        m.hide("chess")
+        #expect(m.layout.version == Layout.currentVersion)
+        #expect(try JSONDecoder().decode(Layout.self, from: Data(contentsOf: url)).version == Layout.currentVersion)
+
+        // A repeated identical intent doesn't change the layout (so it can't cause a rewrite).
+        let applied = m.layout
+        m.hide("chess")
+        #expect(m.layout == applied)
     }
 
     @Test func removeDissolvesAtOne() throws {

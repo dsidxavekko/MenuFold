@@ -43,6 +43,40 @@ import Testing
         #expect(a == FinderFolders.folderID(forPath: "/Applications/Робота"))
         #expect(a != FinderFolders.folderID(forPath: "/Applications/Ігри"))
     }
+
+    /// A path with ".." must never produce a folder key such as "/Applications/..": that key is
+    /// persisted in finderStyles/ignoredFinderFolders and shows up as a nonsense tile.
+    @Test func dotSegmentsAreStandardizedOrRejected() {
+        #expect(key("/Applications/../../tmp/Evil.app") == nil)
+        #expect(key("/Applications/Робота/../Ігри/X.app") == "/Applications/Ігри")
+        #expect(key("/Applications/./Робота/./X.app") == "/Applications/Робота")
+        // Lexically resolved, then judged against the roots: this one really lands in ~/Applications.
+        #expect(FinderFolders.key(forAppPath: "/Users/me/Applications/Dev/../../Applications/A/X.app",
+                                  homeDirectory: home) == "/Users/me/Applications/A")
+        // "/Applications/../.." pops /Applications and then cannot pop "/", so it escapes the root.
+        #expect(FinderFolders.standardized("/Applications/../../Users/me/Applications/A/X.app") == nil)
+        #expect(FinderFolders.standardized("/Applications/../etc") == "/etc")
+        #expect(key("/Applications/../etc/X.app") == nil) // /etc is not an applications root
+        #expect(FinderFolders.standardized("/..") == nil)
+        #expect(FinderFolders.standardized("relative/X.app") == nil)
+        #expect(FinderFolders.standardized("/") == "/")
+    }
+
+    @Test func rootHomeStillFindsApplications() {
+        // "/" and "" are the same: no ~/Applications root, /Applications still works.
+        for rootHome in ["/", ""] {
+            #expect(FinderFolders.key(forAppPath: "/Applications/A/X.app", homeDirectory: rootHome) == "/Applications/A")
+            #expect(FinderFolders.key(forAppPath: "/Applications/A/X.app", homeDirectory: "/") == "/Applications/A")
+        }
+        #expect(FinderFolders.key(forAppPath: "/Applications/A/X.app", homeDirectory: "/Users/me/") == "/Applications/A")
+    }
+
+    /// The key is what gets persisted, so a path that the grid shows must derive the same key
+    /// whichever way the catalog spells "/System/Volumes/Data/…".
+    @Test func dataVolumePathYieldsCanonicalKey() {
+        #expect(key("/System/Volumes/Data/Applications/Робота/Dev/X.app") == "/Applications/Робота")
+        #expect(key("/System/Volumes/Data/System/Applications/Utilities/Terminal.app") == "/System/Applications/Utilities")
+    }
 }
 
 @MainActor
@@ -198,6 +232,25 @@ import Testing
         let (m2, _) = makeModel(store: store, apps: [])
         #expect(m2.ignoredFinderFolders == [FinderFolderRef(id: "/Applications/Gone", name: "Gone")])
         #expect(m.ignoredFinderFolders.isEmpty)
+    }
+
+    /// A junk path in the layout (hand-edited, or written by an older build from a ".." path) is
+    /// dropped on load, so it can never become a folder tile.
+    @Test func junkFinderPathsAreDroppedOnLoad() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
+        var l = Layout()
+        l.finderStyles = [Self.work: FinderFolderStyle(color: .green), "/Applications/..": FinderFolderStyle(color: .red)]
+        l.ignoredFinderFolders = [Self.utils, "/Applications/.."]
+        l.finderAdditions = ["safari": Self.work, "junk": "relative/path"]
+        try store.save(l)
+        let (m, _) = makeModel(store: store)
+        #expect(m.layout.finderStyles.keys.sorted() == [Self.work])
+        #expect(m.layout.ignoredFinderFolders == [Self.utils])
+        #expect(m.layout.finderAdditions == ["safari": Self.work])
+        #expect(m.ignoredFinderFolders.map(\.id) == [Self.utils])
+        #expect(m.folderContaining(appID: "safari")?.id == workID)
     }
 
     @Test func renameIsNoOpAndStylePersists() throws {
