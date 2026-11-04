@@ -8,3 +8,8 @@ xcuserdata/
 
 # Screen recordings
 *.mov
+
+# Screen recordings / pasted screenshots (keep screenshot.png, it is used by the README)
+*.tiff
+*.png
+!screenshot.png
