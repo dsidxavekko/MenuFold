@@ -37,11 +37,18 @@ esac
 # ---------------------------------------------------------------------------------------------------
 # Toolchain: pick one DEVELOPER_DIR and keep it for both the package build and the typecheck.
 # ---------------------------------------------------------------------------------------------------
-xcode_dir="/Applications/Xcode.app/Contents/Developer"
+# Find a full Xcode anywhere under /Applications: GitHub runners install it as
+# /Applications/Xcode_26.6.app, and a hard-coded Xcode.app path made CI fall back to the CLT.
+xcode_dir=""
+for candidate in "${MENUFOLD_XCODE_DEVELOPER_DIR:-}" /Applications/Xcode.app/Contents/Developer /Applications/Xcode*.app/Contents/Developer; do
+    [[ -n "$candidate" && -d "$candidate" ]] || continue
+    if DEVELOPER_DIR="$candidate" xcrun -f swiftc >/dev/null 2>&1; then
+        xcode_dir="$candidate"
+        break
+    fi
+done
 has_xcode=false
-if [[ -d "$xcode_dir" ]] && DEVELOPER_DIR="$xcode_dir" xcrun -f swiftc >/dev/null 2>&1; then
-    has_xcode=true
-fi
+[[ -n "$xcode_dir" ]] && has_xcode=true
 if [[ "$has_xcode" == true ]]; then
     export DEVELOPER_DIR="$xcode_dir"
     # /Applications/Xcode_26.6.app/Contents/Developer -> "Xcode_26.6.app"
