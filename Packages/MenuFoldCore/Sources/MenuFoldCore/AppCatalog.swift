@@ -44,7 +44,7 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         ]
         query = q
         if !q.start() {
-            NSLog("MenuFold: NSMetadataQuery failed to start")
+            NSLog("%@", "MenuFold: NSMetadataQuery failed to start")
             deliver([])
         }
     }
@@ -104,28 +104,40 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
 }
 
 /// Reads Info.plist values for a bundle path (no `Bundle` cache, so updates are picked up).
+/// A path that is not a real bundle, or has no `CFBundleIdentifier`, is not an app: it yields nil,
+/// so helpers and malformed bundles never reach the grid.
 enum BundleReader {
     static func candidate(atPath path: String) -> AppCandidate? {
         let url = URL(fileURLWithPath: path, isDirectory: true)
+        // Fast path: the raw plist, when it is readable. A directory whose plist is missing or
+        // empty is not a bundle, so do not pay for `Bundle(url:)` on it.
         var info = NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist")) as? [String: Any]
-        if info == nil { info = Bundle(url: url)?.infoDictionary }
-        let bundleID = info?["CFBundleIdentifier"] as? String
-        let category = info?["LSApplicationCategoryType"] as? String
+        if info?.isEmpty ?? true { info = Bundle(url: url)?.infoDictionary }
+        guard let bundleID = trimmed(info?["CFBundleIdentifier"] as? String), !bundleID.isEmpty else { return nil }
+        let category = trimmed(info?["LSApplicationCategoryType"] as? String)
+        // Filtering and Finder folders work on the real path; `path` is already standardized by the
+        // caller, so resolving symlinks here cannot make it disagree with the display path.
+        let resolved = url.resolvingSymlinksInPath().path
         let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-        return AppCandidate(path: path, bundleID: bundleID, name: displayName(url: url, info: info),
+        return AppCandidate(path: resolved.isEmpty ? path : resolved, bundleID: bundleID, name: displayName(url: url, info: info),
                             infoCategory: category, modificationDate: mod)
     }
 
+    /// `CFBundleDisplayName`, then `CFBundleName`, then the (localized) file name — the order
+    /// Launchpad and System Settings use, so every list shows the same name for a bundle.
     static func displayName(url: URL, info: [String: Any]?) -> String {
-        let fileName = url.deletingPathExtension().lastPathComponent
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            if let name = trimmed(info?[key] as? String), !name.isEmpty { return name }
+        }
         var localized = FileManager.default.displayName(atPath: url.path)
         if localized.lowercased().hasSuffix(".app") { localized = String(localized.dropLast(4)) }
-        // FileManager returns the localized name when the bundle is localized, else the file name.
-        if !localized.isEmpty, localized != fileName { return localized }
-        if !fileName.isEmpty { return fileName }
-        if let n = info?["CFBundleDisplayName"] as? String, !n.isEmpty { return n }
-        if let n = info?["CFBundleName"] as? String, !n.isEmpty { return n }
-        return url.lastPathComponent
+        if !localized.isEmpty { return localized }
+        let fileName = url.deletingPathExtension().lastPathComponent
+        return fileName.isEmpty ? url.lastPathComponent : fileName
+    }
+
+    private static func trimmed(_ value: String?) -> String? {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

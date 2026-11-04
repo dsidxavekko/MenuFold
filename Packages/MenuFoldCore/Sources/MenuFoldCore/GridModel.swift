@@ -44,6 +44,12 @@ public final class GridModel {
     public private(set) var layout: Layout = Layout()
     /// False until the catalog delivers its first result (even an empty one).
     public private(set) var isLoaded: Bool = false
+    /// What `LayoutStore.loadWithOutcome()` found at launch, so Settings can tell the user (see
+    /// `LayoutHealth.from(outcome:fileURL:quarantineFailedInPlace:)`). `.missing` without a store.
+    public private(set) var layoutOutcome: LoadOutcome = .missing
+
+    /// True when an unusable layout could not be moved aside: saving is blocked to protect it.
+    public var quarantineFailedInPlace: Bool { store?.lastQuarantineFailed ?? false }
 
     public var tab: GridTab = .all
     public var query: String = ""
@@ -74,7 +80,23 @@ public final class GridModel {
         self.store = store
         self.homeDirectory = homeDirectory
         self.finderNameResolver = finderNameResolver
-        self.layout = store?.load() ?? Layout()
+        let loaded = store?.loadWithOutcome()
+        self.layout = loaded?.layout ?? Layout()
+        self.layoutOutcome = loaded?.outcome ?? .missing
+        // A quarantined file was moved aside and the in-memory layout is empty; write a fresh, valid
+        // layout immediately, so the next launch — or a quit right after this one — still has a file
+        // (the old copy is kept as layout.corrupt-…json). If the move failed, `save` refuses to run
+        // and the user's unreadable file stays untouched (surfaced through `quarantineFailedInPlace`).
+        // `.incompatible` works the same way: the newer file was moved aside, so a fresh one is needed.
+        if case .quarantined = layoutOutcome, let store {
+            do { try store.save(layout) } catch {
+                NSLog("%@", "MenuFold: could not write a fresh layout after quarantine: \(error.localizedDescription)")
+            }
+        } else if case .incompatible = layoutOutcome, let store {
+            do { try store.save(layout) } catch {
+                NSLog("%@", "MenuFold: could not write a fresh layout after an incompatible file: \(error.localizedDescription)")
+            }
+        }
         self.apps = catalog.apps
         self.isLoaded = catalog.isLoaded
         catalog.onChange = { [weak self] apps in
@@ -225,36 +247,53 @@ public final class GridModel {
 
     // MARK: Intents
 
-    /// Drop app onto app → new folder "Нова папка" with both; sets `renamingFolderID`. nil if invalid (same app, etc.).
+    /// Drop app onto app → new folder "Нова папка" with both; sets `renamingFolderID`. nil if invalid (same app, etc.),
+    /// and every nil path also clears `renamingFolderID`, so a rejected drop can't leave a stale rename request behind.
     /// If the target already sits in a manual folder, the dropped app joins that folder (its id is returned, no rename).
     /// A target that is only in a Finder folder gets a new manual folder (manual wins over Finder).
+    ///
+    /// Dropping the app may dissolve the folder it left (≤1 app) but never the folder the target is in:
+    /// the new folder takes the target out of its own folder only when that folder's contributions are
+    /// moved along with it (see `leftFolder`).
     @discardableResult
     public func createFolder(dropping appID: String, onto targetAppID: String) -> UUID? {
         guard appID != targetAppID,
               apps.contains(where: { $0.id == appID }),
-              apps.contains(where: { $0.id == targetAppID }) else { return nil }
+              apps.contains(where: { $0.id == targetAppID }) else { return rejectFolderDrop() }
         if let existing = manualFolderContaining(appID: targetAppID) {
-            if existing.appIDs.contains(appID) { return nil }
+            if existing.appIDs.contains(appID) { return rejectFolderDrop() }
             add(appID, to: existing.id)
+            renamingFolderID = nil
             return existing.id
         }
         var l = layout
+        let newID = UUID()
+        // The folder the target comes from (if any) and the other apps in it. It is soft-deleted: it
+        // either loses the target (and dissolves if ≤1 app is left in it) or is re-added to the new folder.
+        let leftFolder = manualFolderContaining(appID: targetAppID)
         Self.detach(appID, from: &l)
-        let folder = Folder(name: "Нова папка", appIDs: [targetAppID, appID])
-        l.folders.append(folder)
+        var members = [targetAppID, appID]
+        if let leftFolder, let idx = l.folders.firstIndex(where: { $0.id == leftFolder.id }) {
+            members = l.folders[idx].appIDs.filter { $0 != targetAppID && $0 != appID } + members
+            l.folders.remove(at: idx)
+        }
+        l.folders.append(Folder(id: newID, name: "Нова папка", appIDs: members))
+        Self.dissolveSingleAppFolders(&l)
         commit(l)
-        renamingFolderID = folder.id
-        return folder.id
+        renamingFolderID = newID
+        return newID
     }
 
     /// Moves app into a folder (removing it from any manual one). For a Finder folder the app is
     /// shown there in MenuFold only (`finderAdditions`); the file is not moved.
+    /// Only folders the app actually left can be dissolved; a move into a folder never dissolves it.
     public func add(_ appID: String, to folderID: UUID) {
         if let path = finderFolders.first(where: { $0.id == folderID })?.finderPath {
             var l = layout
             Self.detach(appID, from: &l)
             l.finderAdditions[appID] = path
             l.finderExclusions.remove(appID)
+            Self.dissolveSingleAppFolders(&l)
             commit(l)
             return
         }
@@ -264,6 +303,7 @@ public final class GridModel {
         // Target can't have been dissolved by detach (app wasn't in it).
         guard let idx = l.folders.firstIndex(where: { $0.id == folderID }) else { return }
         l.folders[idx].appIDs.append(appID)
+        Self.dissolveSingleAppFolders(&l)
         commit(l)
     }
 
@@ -278,6 +318,7 @@ public final class GridModel {
             if nativeFinderKey(appID) != nil { l.finderExclusions.insert(appID) }
         } else {
             Self.detach(appID, from: &l)
+            Self.dissolveSingleAppFolders(&l)
         }
         commit(l)
         closeOpenFolderIfGone()
@@ -319,13 +360,15 @@ public final class GridModel {
         closeOpenFolderIfGone()
     }
 
-    /// nil → remove override.
+    /// nil → remove override. A no-op when there is nothing to remove (or the same value is set again),
+    /// so the UI can't persist overrides for apps that have none, or junk keys for unknown IDs.
     public func setCategory(_ category: AppCategory?, for appID: String) {
         var l = layout
         if let category {
+            guard l.categoryOverrides[appID] != category.id else { return }
             l.categoryOverrides[appID] = category.id
         } else {
-            l.categoryOverrides.removeValue(forKey: appID)
+            guard l.categoryOverrides.removeValue(forKey: appID) != nil else { return }
         }
         commit(l)
     }
@@ -391,12 +434,27 @@ public final class GridModel {
 
     // MARK: Helpers
 
-    /// Removes the app from every folder; folders left with ≤1 app are dissolved.
+    /// Removes the app from every folder it is in. Does NOT dissolve anything: the caller dissolves
+    /// afterwards, with `dissolveSingleAppFolders`, once the layout is in its final shape. Keeping the
+    /// two apart is what stops a move from destroying an unrelated folder (e.g. the drop target's).
     private static func detach(_ appID: String, from l: inout Layout) {
         for i in l.folders.indices where l.folders[i].appIDs.contains(appID) {
             l.folders[i].appIDs.removeAll { $0 == appID }
         }
+    }
+
+    /// Dissolves manual folders left with ≤1 app. Counting is on the stored `appIDs`, so a folder keeps
+    /// the IDs of uninstalled (or hidden) apps. Call only after the layout has its final shape for the
+    /// intent, so a folder that was just given its members survives.
+    private static func dissolveSingleAppFolders(_ l: inout Layout) {
         l.folders.removeAll { $0.appIDs.count <= 1 }
+    }
+
+    /// Clears a pending inline rename and returns nil: the result of every rejected folder drop.
+    @discardableResult
+    private func rejectFolderDrop() -> UUID? {
+        renamingFolderID = nil
+        return nil
     }
 
     private func closeOpenFolderIfGone() {
@@ -410,12 +468,17 @@ public final class GridModel {
         if case .category = tab, !availableTabs.contains(tab) { tab = .all }
     }
 
+    /// Applies and saves a layout. The version is normalized first, because `LayoutStore.save` writes
+    /// `Layout.currentVersion` to disk: without it the in-memory `layout.version` would drift from the file.
+    /// Comparing after normalizing keeps repeated identical intents from rewriting the file.
     private func commit(_ newLayout: Layout) {
-        guard newLayout != layout else { return }
-        layout = newLayout
+        var committed = newLayout
+        committed.version = Layout.currentVersion
+        guard committed != layout else { return }
+        layout = committed
         validateTab()
         guard let store else { return }
-        do { try store.save(newLayout) } catch {
+        do { try store.save(committed) } catch {
             NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")
         }
     }

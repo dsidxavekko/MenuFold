@@ -12,8 +12,10 @@ public enum FinderFolders {
     /// `/Applications/Робота/Dev/X.app` → `/Applications/Робота`;
     /// `/System/Applications/Utilities/Terminal.app` → `/System/Applications/Utilities`.
     public static func key(forAppPath appPath: String, homeDirectory: String) -> String? {
-        let path = normalize(appPath)
-        let home = normalize(homeDirectory)
+        // Standardized first: "/Applications/../../tmp/X.app" must never become the folder "/Applications/..".
+        guard let raw = standardized(appPath) else { return nil }
+        let path = normalize(raw)
+        let home = standardized(homeDirectory).map(normalize) ?? ""
 
         if path.hasPrefix(systemUtilities + "/") {
             return systemUtilities
@@ -48,6 +50,24 @@ public enum FinderFolders {
         if p.hasPrefix(dataVolumePrefix + "/") { p.removeFirst(dataVolumePrefix.count) }
         while p.count > 1, p.hasSuffix("/") { p.removeLast() }
         return p
+    }
+
+    /// Absolute, "."/".."-free form of `path` (dot components are resolved lexically), or nil when
+    /// `path` is relative or a ".." would climb above "/".
+    /// (Compared with `==`, not `switch` patterns: ".." in a case would be a range operator.)
+    static func standardized(_ path: String) -> String? {
+        guard path.hasPrefix("/") else { return nil }
+        var stack: [Substring] = []
+        for component in path.split(separator: "/", omittingEmptySubsequences: true) {
+            if component == "." { continue }
+            if component == ".." {
+                guard !stack.isEmpty else { return nil }
+                stack.removeLast()
+                continue
+            }
+            stack.append(component)
+        }
+        return "/" + stack.joined(separator: "/")
     }
 
     private static func isBundle(_ component: Substring) -> Bool {

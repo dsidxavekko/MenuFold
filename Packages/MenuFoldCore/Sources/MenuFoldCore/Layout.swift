@@ -41,8 +41,10 @@ public struct FinderFolderStyle: Codable, Hashable, Sendable {
     private enum CodingKeys: String, CodingKey { case color, symbol }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        color = (try? c.decode(FolderColor.self, forKey: .color)) ?? .gray
-        symbol = try? c.decodeIfPresent(String.self, forKey: .symbol)
+        // A missing key is fine (older files); a present but unknown colour would silently reset
+        // the user's choice, so it is treated as corruption by the caller.
+        if c.contains(.color) { color = try c.decode(FolderColor.self, forKey: .color) } else { color = .gray }
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol)
     }
 }
 
@@ -79,18 +81,57 @@ public struct Layout: Codable, Equatable, Sendable {
     }
 }
 
-// Lenient decoding: missing keys fall back to defaults, so older/newer files load what they can.
+// MARK: - Decoding
+//
+// Two levels of leniency, on purpose:
+// - a MISSING key is normal (an older or newer file): the field keeps its default;
+// - a key that is PRESENT but cannot be decoded is corruption: such a file is quarantined by
+//   LayoutStore instead of being loaded partially and then saved back without the lost data.
+//
+// Lossy only where a per-element loss cannot be expressed as an error and is visibly repairable:
+// duplicate folder ids (first one wins), duplicate ids inside `appIDs` (removed, order kept).
+
+/// Thrown when a *present* value in layout.json does not have the expected shape.
+private struct MalformedLayoutError: Error, CustomStringConvertible {
+    let description: String
+}
+
+/// A value that is read only when its key is present; a present-but-wrong shape throws.
+private func decodePresent<K: CodingKey, T: Decodable>(_ type: T.Type, _ c: KeyedDecodingContainer<K>,
+                                                       _ key: K, default fallback: @autoclosure () -> T) throws -> T {
+    guard c.contains(key) else { return fallback() }
+    do { return try c.decode(T.self, forKey: key) } catch { throw MalformedLayoutError(description: "\(key.stringValue): \(error)") }
+}
+
 extension Folder {
     private enum CodingKeys: String, CodingKey { case id, name, color, symbol, appIDs, finderPath }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
-        name = (try? c.decode(String.self, forKey: .name)) ?? "Папка"
-        color = (try? c.decode(FolderColor.self, forKey: .color)) ?? .gray
-        symbol = try? c.decodeIfPresent(String.self, forKey: .symbol)
-        appIDs = (try? c.decode([String].self, forKey: .appIDs)) ?? []
-        finderPath = try? c.decodeIfPresent(String.self, forKey: .finderPath)
+        // No id means the folder cannot be addressed by the UI (rename, style, dissolve): corrupt.
+        if c.contains(.id) {
+            do { id = try c.decode(UUID.self, forKey: .id) } catch { throw MalformedLayoutError(description: "folder id: \(error)") }
+        } else {
+            throw MalformedLayoutError(description: "folder without id")
+        }
+        name = try decodePresent(String.self, c, CodingKeys.name, default: "Папка")
+        color = try decodePresent(FolderColor.self, c, CodingKeys.color, default: .gray)
+        symbol = c.contains(.symbol) ? try c.decodeIfPresent(String.self, forKey: .symbol) : nil
+        if c.contains(.appIDs) {
+            var raw = try c.superDecoder(forKey: .appIDs).unkeyedContainer()
+            var ids: [String] = []
+            var seen = Set<String>()
+            while !raw.isAtEnd {
+                guard let id = try? raw.decode(String.self), !id.isEmpty else {
+                    throw MalformedLayoutError(description: "folder \(self.id) has a non-string or empty appID")
+                }
+                if seen.insert(id).inserted { ids.append(id) }  // duplicate ids: keep the first
+            }
+            appIDs = ids
+        } else {
+            appIDs = []
+        }
+        finderPath = c.contains(.finderPath) ? try c.decodeIfPresent(String.self, forKey: .finderPath) : nil
     }
 }
 
@@ -99,14 +140,14 @@ extension Layout {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        version = (try? c.decode(Int.self, forKey: .version)) ?? Layout.currentVersion
-        folders = (try? c.decode([LossyFolder].self, forKey: .folders))?.compactMap(\.folder) ?? []
-        categoryOverrides = (try? c.decode([String: String].self, forKey: .categoryOverrides)) ?? [:]
-        hidden = (try? c.decode(Set<String>.self, forKey: .hidden)) ?? []
-        finderStyles = (try? c.decode([String: FinderFolderStyle].self, forKey: .finderStyles)) ?? [:]
-        ignoredFinderFolders = (try? c.decode(Set<String>.self, forKey: .ignoredFinderFolders)) ?? []
-        finderExclusions = (try? c.decode(Set<String>.self, forKey: .finderExclusions)) ?? []
-        finderAdditions = (try? c.decode([String: String].self, forKey: .finderAdditions)) ?? [:]
+        version = try decodePresent(Int.self, c, CodingKeys.version, default: Layout.currentVersion)
+        folders = try decodePresent([Folder].self, c, CodingKeys.folders, default: [])
+        categoryOverrides = try decodePresent([String: String].self, c, CodingKeys.categoryOverrides, default: [:])
+        hidden = try decodePresent(Set<String>.self, c, CodingKeys.hidden, default: [])
+        finderStyles = try decodePresent([String: FinderFolderStyle].self, c, CodingKeys.finderStyles, default: [:])
+        ignoredFinderFolders = try decodePresent(Set<String>.self, c, CodingKeys.ignoredFinderFolders, default: [])
+        finderExclusions = try decodePresent(Set<String>.self, c, CodingKeys.finderExclusions, default: [])
+        finderAdditions = try decodePresent([String: String].self, c, CodingKeys.finderAdditions, default: [:])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -123,7 +164,37 @@ extension Layout {
     }
 }
 
-private struct LossyFolder: Decodable {
-    let folder: Folder?
-    init(from decoder: Decoder) throws { folder = try? Folder(from: decoder) }
+// MARK: - Load-time validation
+
+extension Layout {
+    /// Drops what can never be shown, so a hand-edited or merged file cannot break the grid
+    /// (duplicate SwiftUI ids) or persist junk. Ids of the surviving folders are kept as they are.
+    /// - Duplicate folder ids: the first folder with an id wins.
+    /// - Manual folders need ≥2 apps (a folder of ≤1 is dissolved by the model), else they are dead.
+    /// - `finderPath` must be absolute, without "."/".." components, and not the filesystem root.
+    /// - Finder-folder keyed entries (`finderStyles`, `ignoredFinderFolders`) must be valid too,
+    ///   since they are paths as well.
+    func droppingInvalidFolders() -> Layout {
+        var copy = self
+        var seenIDs = Set<UUID>()
+        copy.folders = folders.filter { folder in
+            guard seenIDs.insert(folder.id).inserted else { return false }
+            if let path = folder.finderPath {
+                return Self.isValidFolderPath(path)
+            }
+            return Set(folder.appIDs).count >= 2
+        }
+        copy.finderStyles = finderStyles.filter { Self.isValidFolderPath($0.key) }
+        copy.ignoredFinderFolders = ignoredFinderFolders.filter(Self.isValidFolderPath)
+        copy.finderAdditions = finderAdditions.filter { Self.isValidFolderPath($0.value) }
+        return copy
+    }
+
+    /// Absolute path with no "." or ".." component and no trailing slash (other than "/" itself).
+    static func isValidFolderPath(_ path: String) -> Bool {
+        guard path.hasPrefix("/"), !path.isEmpty else { return false }
+        let components = path.dropFirst().split(separator: "/", omittingEmptySubsequences: true)
+        guard !components.isEmpty else { return false }
+        return !components.contains { $0 == "." || $0 == ".." }
+    }
 }
