@@ -103,6 +103,128 @@ extension EnvironmentValues {
     @Entry var isTilePressed = false
 }
 
+// Layout-persistence health shown in Settings.
+//
+// Data-loss transparency: when `LayoutStore` cannot use `layout.json` it moves the file aside
+// (`layout.corrupt-<date>.json`) or leaves it in place when even that fails. The user must be told,
+// because from their point of view the whole layout simply disappeared.
+//
+// Source of truth resolution, in order:
+//  1. `GridModel.layoutHealth` — the core model reports the `LoadOutcome` of its store (preferred).
+//  2. otherwise the store's own `layout.json` on disk is inspected directly, so the warning still
+//     appears on builds whose core does not surface the outcome yet.
+// The Settings row never writes anything: showing the notice does not "fix" the file.
+
+/// What the user needs to know about the layout file right now.
+enum LayoutHealth: Equatable {
+    /// Everything is fine (file is present and readable, or there is nothing to warn about yet).
+    case ok
+    /// The unusable layout was moved aside; `quarantine` is where the old copy went.
+    case quarantined(quarantine: URL)
+    /// The unusable layout could NOT be moved aside, so saving is blocked to protect it.
+    case quarantineFailedInPlace(file: URL)
+    /// The file exists but could not be read (permissions, lock, I/O). It is untouched.
+    case unreadable(file: URL, cause: String)
+    /// Written by a newer MenuFold. Moved aside rather than rewritten in an older schema.
+    case incompatible(quarantine: URL)
+
+    /// The file the user should be shown in Finder, if any.
+    var fileToReveal: URL? {
+        switch self {
+        case .ok: nil
+        case .quarantined(let url), .incompatible(let url): url
+        case .quarantineFailedInPlace(let url), .unreadable(let url, _): url
+        }
+    }
+
+    var isWarning: Bool { self != .ok }
+
+    /// One-line Ukrainian message; `fileName` keeps long paths out of the text.
+    var message: String {
+        switch self {
+        case .ok:
+            return ""
+        case .quarantined(let url), .incompatible(let url):
+            return "Розкладку пошкоджено, попередню копію збережено в «\(url.lastPathComponent)»."
+        case .quarantineFailedInPlace(let url):
+            return "Розкладку пошкоджено, але її не вдалося відкласти. Файл «\(url.lastPathComponent)» лишився на місці, збереження зупинено, щоб не втратити дані."
+        case .unreadable(let url, _):
+            return "Не вдалося прочитати розкладку («\(url.lastPathComponent)»). Файл не змінено — спробуйте перезапустити MenuFold."
+        }
+    }
+
+    /// Secondary detail line (cause / next step), nil when there is nothing to add.
+    var detail: String? {
+        switch self {
+        case .ok:
+            return nil
+        case .quarantined(let url), .incompatible(let url):
+            // Show the full location so the backup can be found without Finder.
+            return url.deletingLastPathComponent().path
+        case .quarantineFailedInPlace:
+            return "Закрийте MenuFold, зробіть копію файлу вручну й видаліть оригінал."
+        case .unreadable(_, let cause):
+            return cause
+        }
+    }
+
+    /// Builds the state from the core outcome when `GridModel` exposes one.
+    /// Kept separate so the core API can be swapped in without touching the view.
+    static func from(outcome: LoadOutcome, fileURL: URL, quarantineFailedInPlace: Bool) -> LayoutHealth {
+        switch outcome {
+        case .loaded, .missing:
+            return .ok
+        case .quarantined(let url):
+            return quarantineFailedInPlace ? .quarantineFailedInPlace(file: fileURL) : .quarantined(quarantine: url)
+        case .incompatible(let url):
+            return .incompatible(quarantine: url)
+        case .unreadable(let cause):
+            return .unreadable(file: fileURL, cause: cause)
+        }
+    }
+
+}
+
+extension LayoutHealth {
+    /// Reads the health the core model knows about: `GridModel.layoutOutcome` is the outcome of the
+    /// actual load this session started with, so nothing has to be guessed from the filesystem.
+    /// A store-less model (previews, tests) reports `.missing`, i.e. nothing to warn about.
+    @MainActor
+    static func current(model: GridModel) -> LayoutHealth {
+        from(outcome: model.layoutOutcome,
+             fileURL: LayoutStore.defaultURL,
+             quarantineFailedInPlace: model.quarantineFailedInPlace)
+    }
+}
+
+/// Reveals the affected file in Finder (the quarantined copy, or the file that could not be moved).
+@MainActor
+enum LayoutHealthActions {
+    static func reveal(_ health: LayoutHealth) {
+        guard let url = health.fileToReveal else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+/// Opening the Settings scene from inside the panel.
+///
+/// SwiftUI's `Settings` scene installs a command action on the app: `showSettingsWindow:` (macOS 26,
+/// the SDK this app builds against) with `showPreferencesWindow:` as the legacy name. Both are tried
+/// through the responder chain with a `nil` target, which is how the matching menu item dispatches,
+/// so whichever the running SwiftUI version installed handles it. Returns whether anything did.
+///
+/// Note: the panel is key while the gear is clicked, and the action is found on the app / command
+/// chain, so the panel being key does not matter. If no handler exists at all (e.g. a preview host
+/// without a Settings scene) this returns `false` and the button simply does nothing.
+enum SettingsScene {
+    @MainActor
+    @discardableResult
+    static func open() -> Bool {
+        if NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) { return true }
+        return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    }
+}
+
 /// Plain tile button that publishes its pressed state to the label via `isTilePressed`.
 /// The scale itself is applied by the tile artwork so the label text stays put.
 struct TileButtonStyle: ButtonStyle {

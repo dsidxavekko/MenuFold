@@ -29,12 +29,18 @@ struct MenuFoldRootView: View {
         reduceMotion ? Theme.crossfade : opening ? Theme.morph : Theme.folderClose
     }
 
+    /// Opens the Settings scene from the gear button. The panel loses key status and hides on its own
+    /// (the shell hides on resign key), which the Settings window then takes over.
+    private func openSettings() {
+        SettingsScene.open()
+    }
+
     var body: some View {
         let folder = openFolder
         let isOpen = folder != nil
         ZStack {
             VStack(spacing: 0) {
-                SearchField(model: model)
+                SearchField(model: model, onOpenSettings: openSettings)
                     .padding(.horizontal, 4)
 
                 if showsTabs {

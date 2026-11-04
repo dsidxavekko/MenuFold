@@ -10,9 +10,15 @@ struct SettingsView: View {
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
     @State private var confirmReset = false
+    /// Layout-file health, refreshed when the window appears and after a reset.
+    @State private var layoutHealth = LayoutHealth.ok
 
     var body: some View {
         Form {
+            if layoutHealth.isWarning {
+                layoutWarning
+            }
+
             Section {
                 Toggle("Відкривати при вході", isOn: Binding(
                     get: { launchAtLogin },
@@ -37,7 +43,6 @@ struct SettingsView: View {
             } header: {
                 Label("Загальне", systemImage: "gearshape")
             }
-
             Section {
                 let hidden = model.hiddenApps
                 if hidden.isEmpty {
@@ -104,7 +109,7 @@ struct SettingsView: View {
                         isPresented: $confirmReset,
                         titleVisibility: .visible
                     ) {
-                        Button("Скинути", role: .destructive) { model.resetLayout() }
+                        Button("Скинути", role: .destructive) { resetLayout() }
                         Button("Скасувати", role: .cancel) {}
                     } message: {
                         Text("Усі папки, перевизначені категорії та приховані програми буде видалено.")
@@ -116,7 +121,52 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .frame(minHeight: 380)
-        .onAppear(perform: refreshLoginStatus)
+        .onAppear {
+            refreshLoginStatus()
+            refreshLayoutHealth()
+        }
+    }
+
+    /// Warning row shown when the layout file could not be used (corrupt, unreadable, newer schema).
+    /// Purely informational: it never writes to disk, it only points at the file that was set aside.
+    private var layoutWarning: some View {
+        Section {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(layoutHealth.message)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail = layoutHealth.detail {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            if layoutHealth.fileToReveal != nil {
+                Button("Показати у Finder") { LayoutHealthActions.reveal(layoutHealth) }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+            }
+        } header: {
+            Label("Розкладка пошкоджена", systemImage: "exclamationmark.triangle")
+        } footer: {
+            Text("Розкладка починається з чистої — папки, категорії та приховані програми доведеться налаштувати знову. Попередній файл не видалено: його можна вивчити або відновити вручну.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func refreshLayoutHealth() {
+        layoutHealth = LayoutHealth.current(model: model)
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -136,5 +186,11 @@ struct SettingsView: View {
     private func refreshLoginStatus() {
         loginStatus = SMAppService.mainApp.status
         launchAtLogin = loginStatus == .enabled || loginStatus == .requiresApproval
+    }
+
+    /// Resets the layout, then re-checks the file: a successful save clears a previous warning.
+    private func resetLayout() {
+        model.resetLayout()
+        refreshLayoutHealth()
     }
 }

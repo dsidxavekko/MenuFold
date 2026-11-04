@@ -125,6 +125,7 @@ struct FolderOverlayView: View {
                 Text("Перетягніть програму за межі папки, щоб вийняти її")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.top, 18)
@@ -160,6 +161,9 @@ struct FolderOverlayView: View {
             }
             .padding(.horizontal, 40)
             .help(folder.finderPath ?? "")
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Папка \(folder.name), з Finder")
+            .accessibilityHint(folder.finderPath ?? "")
         } else {
             editableTitle
         }
@@ -194,6 +198,9 @@ struct FolderOverlayView: View {
             .contentShape(.capsule)
             .onHover { isTitleHovered = $0 }
             .animation(Theme.snappy, value: showsCapsule)
+            .help("Назва папки. Enter — зберегти, Esc — скасувати.")
+            .accessibilityLabel("Назва папки")
+            .accessibilityHint("Enter зберігає нову назву, Esc повертає попередню")
     }
 
     // MARK: Actions
