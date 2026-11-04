@@ -253,8 +253,10 @@ public final class GridModel {
     /// A target that is only in a Finder folder gets a new manual folder (manual wins over Finder).
     ///
     /// Dropping the app may dissolve the folder it left (≤1 app) but never the folder the target is in:
-    /// the new folder takes the target out of its own folder only when that folder's contributions are
-    /// moved along with it (see `leftFolder`).
+    /// taking the target out of a folder with other apps left would delete those apps' home (name,
+    /// colour, symbol), so the drop is rejected instead and the user can join that folder with `add`.
+    /// Only a target that is the sole member of its folder (a folder of ≤1 would be dissolved anyway)
+    /// moves into the new folder.
     @discardableResult
     public func createFolder(dropping appID: String, onto targetAppID: String) -> UUID? {
         guard appID != targetAppID,
@@ -266,18 +268,20 @@ public final class GridModel {
             renamingFolderID = nil
             return existing.id
         }
+        // The folder the target is in, if any. Counting is on stored appIDs (uninstalled apps keep
+        // their id), so "has other apps" means the folder would still be a folder after the move.
+        let leftFolder = manualFolderContaining(appID: targetAppID)
+        let leftOthers = leftFolder.map { $0.appIDs.filter { $0 != targetAppID && $0 != appID } } ?? []
+        // Moving the target out of a folder that keeps other apps would dissolve or rename that
+        // folder — a drop never deletes a folder the user made. Reject it: the target's tile offers
+        // the folder itself as a drop destination, which joins it.
+        guard leftOthers.isEmpty else { return rejectFolderDrop() }
         var l = layout
         let newID = UUID()
-        // The folder the target comes from (if any) and the other apps in it. It is soft-deleted: it
-        // either loses the target (and dissolves if ≤1 app is left in it) or is re-added to the new folder.
-        let leftFolder = manualFolderContaining(appID: targetAppID)
         Self.detach(appID, from: &l)
-        var members = [targetAppID, appID]
-        if let leftFolder, let idx = l.folders.firstIndex(where: { $0.id == leftFolder.id }) {
-            members = l.folders[idx].appIDs.filter { $0 != targetAppID && $0 != appID } + members
-            l.folders.remove(at: idx)
-        }
-        l.folders.append(Folder(id: newID, name: "Нова папка", appIDs: members))
+        // Exactly the two apps the user sees paired. The target's old folder (if any) had no other
+        // members, so it is emptied here and dissolved by the sweep below.
+        l.folders.append(Folder(id: newID, name: "Нова папка", appIDs: [targetAppID, appID]))
         Self.dissolveSingleAppFolders(&l)
         commit(l)
         renamingFolderID = newID

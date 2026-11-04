@@ -126,6 +126,52 @@ import Testing
         #expect(m.folder(id: web)?.appIDs == ["safari", "chess", "mail"])
     }
 
+    @Test func dropOntoTargetWithOtherFolderMembersIsRejected() throws {
+        // The contract for a target that already sits in a manual folder: dropping onto it means
+        // "join that folder" (CLAUDE.md), so the returned id is the existing folder and the other
+        // members keep their home. A drop must never dissolve or rename the folder either way.
+        let (m, _) = makeModel()
+        let seed = try #require(m.createFolder(dropping: "notes", onto: "mail"))
+        m.add("xcode", to: seed)
+        m.add("safari", to: seed)
+        m.rename(folder: seed, to: "Робота")
+        #expect(m.folder(id: seed)?.appIDs.count == 4)
+
+        // Evaluate the call once: `== nil` on the returned value is what is asserted, and writing
+        // the call itself inside an interpolation is evaluated more than once.
+        let joined: UUID? = m.createFolder(dropping: "chess", onto: "mail")
+        #expect(joined == seed)                                  // the folder itself, not a new one
+        #expect(m.folder(id: seed)?.name == "Робота")            // name/colour survive
+        #expect(m.layout.folders.count == 1)                     // nothing new, nothing dissolved
+        #expect(m.folder(id: seed)?.appIDs.count == 5)
+        #expect(m.renamingFolderID == nil)                       // no inline rename is started
+        // The same holds when other members are hidden: stored appIDs are what count.
+        m.hide("notes")
+        m.hide("safari")
+        let joinedWithHidden: UUID? = m.createFolder(dropping: "cafe", onto: "mail")
+        #expect(joinedWithHidden == seed)
+        #expect(m.folder(id: seed)?.appIDs.count == 6)
+        #expect(m.layout.folders.count == 1)
+        // Repeating the exact drop is a no-op.
+        let repeated: UUID? = m.createFolder(dropping: "cafe", onto: "mail")
+        #expect(repeated == nil)
+        #expect(m.folder(id: seed)?.appIDs.count == 6)
+    }
+
+    @Test func dropOntoSoleMemberOfItsFolderMovesIt() throws {
+        // The target is alone in a folder that would be dissolved anyway (≤1 app): it moves into the
+        // new folder with the dropped app.
+        let (m, _) = makeModel()
+        let lonely = Folder(name: "Самотня", appIDs: ["mail"])
+        m.resetLayout()
+        var l = m.layout
+        l.folders = [lonely]
+        m.hide("safari")                       // force a commit that keeps the folder in memory
+        m.unhide("safari")
+        let new = try #require(m.createFolder(dropping: "xcode", onto: "mail"))
+        #expect(m.folder(id: new)?.appIDs == ["mail", "xcode"])
+    }
+
     @Test func addToAFolderNeverDissolvesIt() throws {
         let (m, _) = makeModel()
         let a = try #require(m.createFolder(dropping: "notes", onto: "mail"))

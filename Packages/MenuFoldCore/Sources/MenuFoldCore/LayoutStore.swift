@@ -101,9 +101,11 @@ public final class LayoutStore: @unchecked Sendable {
     // MARK: Save
 
     public func save(_ layout: Layout) throws {
-        guard !lastQuarantineFailed, FileManager.default.isDeletableFile(atPath: fileURL.path) || !FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw LayoutStoreError.quarantinePending(fileURL)
-        }
+        // Only a failed quarantine blocks saving: writing over the one copy of data we could not
+        // read (or move) would destroy it. Writability is left to the write itself — asking whether
+        // the file "is deletable" says nothing about whether the app may write it, and would make
+        // the app silently stop saving in folders where writing works fine.
+        guard !lastQuarantineFailed else { throw LayoutStoreError.quarantinePending(fileURL) }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

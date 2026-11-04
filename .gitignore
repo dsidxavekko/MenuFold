@@ -13,3 +13,7 @@ xcuserdata/
 *.tiff
 *.png
 !screenshot.png
+
+# Release artifacts (built by scripts/release.sh)
+dist/
+build-release/

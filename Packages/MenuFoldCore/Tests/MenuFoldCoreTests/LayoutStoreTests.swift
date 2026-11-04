@@ -95,6 +95,21 @@ import Testing
 
     /// A read error is not corruption: the file must stay where it is (so a retry can succeed),
     /// not be renamed to a `.corrupt-` backup.
+    @Test func saveIsNotBlockedByADeletableCheck() throws {
+        // Saving must depend on the write itself. An earlier guard asked `isDeletableFile`, which
+        // is about the parent directory's write permission for renames; on a writable file in a
+        // restrictively-permissioned folder that made the app silently stop persisting.
+        let (store, dir) = tempStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let parent = store.fileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: store.fileURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: store.fileURL.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: store.fileURL.path) }
+        try store.save(Layout(hidden: ["a"]))          // must not throw `quarantinePending`
+        #expect(store.load().hidden == ["a"])
+    }
+
     @Test func readErrorDoesNotQuarantine() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }

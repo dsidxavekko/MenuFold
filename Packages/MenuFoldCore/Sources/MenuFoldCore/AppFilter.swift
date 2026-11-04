@@ -30,7 +30,13 @@ public enum AppFilter {
 
     /// Top-level locations whose apps are not user apps: other volumes (external disks, Time
     /// Machine backups), temp dirs and the Trash. Backup and temp copies must never show in the grid.
-    static let excludedRoots = ["/Volumes", "/private/tmp", "/private/var/tmp", "/private/var/folders", "/tmp", "/var/tmp"]
+    /// Both spellings of every temp root are listed: `/var` is a symlink to `/private/var`, and
+    /// Spotlight (and `NSTemporaryDirectory()`) return the `/var/folders/...` form.
+    static let excludedRoots = [
+        "/Volumes",
+        "/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp",
+        "/var/folders", "/private/var/folders",
+    ]
 
     /// Drops: no bundle ID, MenuFold itself, apps nested in another bundle (.app/.framework/…),
     /// /System/Library/CoreServices/** (except Finder and CoreServices/Applications/*),
@@ -74,9 +80,12 @@ public enum AppFilter {
     }
 
     /// Home directory as a clean absolute path: "" and "/" both mean "no home root".
+    /// The Data-volume prefix is stripped too, so "/System/Volumes/Data/Users/me" (what the system
+    /// reports when MenuFold was launched through a firmlinked path) matches candidate paths, which
+    /// are normalized the same way.
     static func normalizeHome(_ homeDirectory: String) -> String {
         guard let standardized = FinderFolders.standardized(homeDirectory), standardized != "/" else { return "" }
-        return standardized
+        return FinderFolders.normalize(standardized)
     }
 
     /// Bundle-like directory extensions: an app inside any of these is a helper, not a user app.

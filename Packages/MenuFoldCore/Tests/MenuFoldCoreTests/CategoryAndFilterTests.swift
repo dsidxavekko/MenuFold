@@ -153,6 +153,28 @@ import Testing
         }
     }
 
+    @Test func tempRootSymlinkSpellingIsExcluded() {
+        // `/var` is a symlink to `/private/var`; Spotlight and NSTemporaryDirectory() use the short
+        // spelling, so both forms must be filtered or a TMPDIR app leaks into the grid.
+        let r = AppFilter.filter([
+            cand("/var/folders/f2/abc/T/Build.app", "shortForm"),
+            cand("/var/tmp/X.app", "varTmp"),
+            cand("/private/var/tmp/X.app", "privateVarTmp"),
+            cand("/Applications/X.app", "ok"),
+        ], homeDirectory: home)
+        #expect(r.map(\.id) == ["ok"])
+    }
+
+    @Test func dataVolumeHomeStillExcludesLibrary() {
+        // The system reports the home as /System/Volumes/Data/Users/me when MenuFold was launched
+        // through a firmlinked path; the ~/Library rule must keep working in that spelling.
+        let r = AppFilter.filter([
+            cand("/Users/test/Library/Application Support/Helper.app", "helper"),
+            cand("/Users/test/Applications/Foo.app", "foo"),
+        ], homeDirectory: "/System/Volumes/Data/Users/test")
+        #expect(r.map(\.id) == ["foo"])
+    }
+
     @Test func homeDirectoryWithTrailingSlash() {
         let r = AppFilter.filter([
             cand("/Users/test/Applications/A.app", "a"),

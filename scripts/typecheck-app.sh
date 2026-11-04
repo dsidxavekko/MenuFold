@@ -38,7 +38,10 @@ scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
 trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
 log="$scratch/typecheck.log"
 
-if [[ -x /Applications/Xcode.app/Contents/Developer/usr/bin/swiftc ]]; then
+# A full Xcode, not just its Command Line Tools: only Xcode ships the SwiftUI macro plugins, and
+# whether xcode-select points at it is often not the case on a machine that has both installed.
+xcode_swiftc="$(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun -f swiftc 2>/dev/null || true)"
+if [[ -n "$xcode_swiftc" && -x "$xcode_swiftc" ]]; then
     echo "== typechecking App/ with Xcode =="
     DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
         xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 -target arm64-apple-macosx26.0 \
