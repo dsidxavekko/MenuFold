@@ -21,8 +21,9 @@ scripts/build.sh run    # same, then kill the running copy and open the new one
 
 - `MenuFold.xcodeproj` is generated from `project.yml` and gitignored. Edit `project.yml`, never the project. Re-run `xcodegen generate` after adding or removing files.
 - `scripts/build.sh` sets `DEVELOPER_DIR` to Xcode by itself when `xcode-select` still points at Command Line Tools, so `sudo xcode-select` is not required.
+- `scripts/typecheck-app.sh` typechecks `App/` in about 5 s against the built package (it builds `MenuFoldCore` first), without building or signing the app. With Xcode installed it checks the real sources; without Xcode it checks a scratch copy with stand-ins for the Xcode-only macros (`@State`, `@Entry`) and `#Preview` wrapped in `#if canImport(XcodeSupport)`, using `-parse-as-library -warnings-as-errors`. CI runs it, so App/ changes are checked even when nobody has Xcode.
 - Tests use Swift Testing, not XCTest (XCTest is missing on CLT). `Package.swift` adds a `-plugin-path` flag to the test target only when CLT is the selected developer dir. Leave that block alone.
-- Without Xcode, `swiftc -typecheck` on `App/` fails on `@State` and `#Preview`. On this SDK both are macros, and their plugins (SwiftUIMacros, PreviewsMacros) come only with Xcode. To typecheck anyway, use a scratch copy with `@State` aliased to `SwiftUI.State` and the `#Preview` blocks stripped. Pass `-I Packages/MenuFoldCore/.build/out/Products/Debug`.
+- Without Xcode, `swiftc -typecheck` on `App/` fails on `@State`, `@Entry` and `#Preview`. On this SDK all three are macros whose plugins (SwiftUIMacros, PreviewsMacros) come only with Xcode. `scripts/typecheck-app.sh` handles that fallback; it is the supported way to check `App/` without Xcode (do not hand-roll another scratch copy).
 
 ## Architecture
 
@@ -35,7 +36,7 @@ There are two layers. Only the package is unit-tested.
   - It drops everything under `/System/Library`, `/Library` and `~/Library`, except Finder and `CoreServices/Applications/*`.
   - It de-duplicates by bundle ID, preferring `/Applications`, then `/System/Applications`, then `~/Applications`, then the newest copy.
   - It removes MenuFold itself.
-- `Layout.swift` / `LayoutStore.swift`: the persisted state is folders (bundle-ID lists, colour, optional SF Symbol), category overrides and hidden IDs. It is saved as JSON at `~/Library/Application Support/MenuFold/layout.json` with atomic writes. Decoding is lenient. A missing file gives an empty layout. A file that can't be read or decoded is first renamed to `layout.corrupt-<date>.json`, so it is never silently overwritten.
+- `Layout.swift` / `LayoutStore.swift`: the persisted state is folders (bundle-ID lists, colour, optional SF Symbol), category overrides and hidden IDs. It is saved as JSON at `~/Library/Application Support/MenuFold/layout.json` with atomic writes. Decoding has two levels of leniency: a missing key keeps its default (old/newer files load), but a key that is present with the wrong shape is corruption. A missing file gives an empty layout. A file that can't be decoded, or that comes from a newer app version (`version > Layout.currentVersion`), is moved aside to `layout.corrupt-<date>.json` and `GridModel` immediately writes a fresh layout, so the next launch has a valid file; `GridModel.layoutOutcome` / `LayoutStore.lastQuarantineFailed` tell Settings to warn. A file that can't be *read* (permissions, lock, I/O) is left untouched and retried next launch. Load-time validation drops duplicate folder ids, manual folders with fewer than two apps, and finder paths with dot segments.
 - `GridModel.swift`: the `@MainActor @Observable` hub. It merges catalog and layout into `GridItem`s for the current `tab` and `query`. Every mutating intent saves right away. Rules:
   - A folder left with ≤1 app is dissolved.
   - Folders keep the IDs of uninstalled apps, so an app goes back into its folder after reinstall. A folder with no visible apps is not shown.
