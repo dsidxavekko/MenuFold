@@ -456,7 +456,11 @@ private struct CustomCategoryRow: View {
             Image(systemName: "tag")
                 .foregroundStyle(.secondary)
                 .frame(width: 24)
-            TextField("Назва категорії", text: $name)
+            // A grouped Form turns a TextField's title into a row label and right-aligns the value,
+            // so hide the label and keep the title only as the empty-field prompt.
+            TextField("Назва категорії", text: $name, prompt: Text("Назва категорії"))
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .textFieldStyle(.plain)
                 .focused($focused)
                 .onSubmit(save)
