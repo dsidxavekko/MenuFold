@@ -89,14 +89,6 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         let root = MenuFoldRootView(model: model)
             .environment(model)
-            .overlay {
-                // Faint inner rim on top of the glass's own edge lighting, so the panel edge
-                // stays crisp over busy or very light backgrounds.
-                RoundedRectangle(cornerRadius: Theme.panelCorner, style: .continuous)
-                    .strokeBorder(.white.opacity(0.14), lineWidth: 0.5)
-                    .blendMode(.plusLighter)
-                    .allowsHitTesting(false)
-            }
         hostingView = NSHostingView(rootView: AnyView(root))
         hostingView.sizingOptions = [.intrinsicContentSize]
 
@@ -127,7 +119,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func configurePanel() {
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // No window shadow: AppKit's shadow traced a thin dark outline with a square-ish notch at
+        // the rounded corners. The glass reads fine on its own.
+        panel.hasShadow = false
         panel.level = .popUpMenu
         panel.isFloatingPanel = true
         // Resign-key already hides the panel; a second, AppKit-driven hide could desync `isShown`.

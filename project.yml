@@ -36,8 +36,8 @@ targets:
         ENABLE_APP_SANDBOX: NO
         ENABLE_PREVIEWS: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "0.2.0"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "0.2.1"
+        CURRENT_PROJECT_VERSION: "3"
         COMBINE_HIDPI_IMAGES: YES
         # App icon from App/Assets.xcassets/AppIcon.appiconset (fills CFBundleIconFile/Name).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
