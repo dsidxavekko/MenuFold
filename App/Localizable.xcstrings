@@ -87,6 +87,46 @@
         }
       }
     },
+    "MenuFold запущено з образу диска. Щоб він залишався в Dock і міг оновлюватися, його треба скопіювати в папку «Програми».": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold is running from the disk image. To stay in the Dock and receive updates, it needs to be copied to the Applications folder."
+          }
+        }
+      }
+    },
+    "MenuFold запущено з образу диска. Щоб він залишався в Dock і міг оновлюватися, його треба скопіювати в папку «Програми». Наявну там копію буде переміщено в Смітник.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold is running from the disk image. To stay in the Dock and receive updates, it needs to be copied to the Applications folder. The copy already there will be moved to the Trash."
+          }
+        }
+      }
+    },
+    "MenuFold раз на день звертається до GitHub, щоб дізнатися, чи вийшла нова версія. Інших даних він не надсилає.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once a day MenuFold asks GitHub whether a new version is out. It sends nothing else."
+          }
+        }
+      }
+    },
+    "macOS запустила MenuFold із тимчасової копії, бо його не перенесли з папки, куди він завантажився. Закрийте MenuFold, перетягніть його у Finder у папку «Програми» і відкрийте звідти. Тоді він залишатиметься в Dock і зможе оновлюватися.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS opened MenuFold from a temporary copy because it wasn’t moved out of the folder it was downloaded to. Quit MenuFold, drag it to the Applications folder in Finder and open it from there. It will then stay in the Dock and receive updates."
+          }
+        }
+      }
+    },
     "macOS не дозволила змінити значок самої програми, тому він зміниться лише поки MenuFold запущено. Дозвольте MenuFold у розділі «Керування програмами».": {
       "localizations": {
         "en": {
@@ -365,6 +405,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loading…"
+          }
+        }
+      }
+    },
+    "Завантажувати й установлювати самостійно": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and install automatically"
           }
         }
       }
@@ -705,6 +755,26 @@
         }
       }
     },
+    "Не вдалося скопіювати MenuFold у «Програми»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t copy MenuFold to Applications"
+          }
+        }
+      }
+    },
+    "Не зараз": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Now"
+          }
+        }
+      }
+    },
     "Не показувати як папку": {
       "localizations": {
         "en": {
@@ -801,6 +871,16 @@
         }
       }
     },
+    "Оновлення": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
     "Освіта": {
       "comment": "MenuFoldCore (looked up with L())",
       "extractionState": "manual",
@@ -809,6 +889,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Education"
+          }
+        }
+      }
+    },
+    "Остання перевірка: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked: %@"
           }
         }
       }
@@ -905,6 +995,36 @@
         }
       }
     },
+    "Перевірити зараз": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Now"
+          }
+        }
+      }
+    },
+    "Перевірити оновлення…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      }
+    },
+    "Перевіряти оновлення автоматично": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates automatically"
+          }
+        }
+      }
+    },
     "Перейменувати": {
       "localizations": {
         "en": {
@@ -921,6 +1041,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Move to Trash"
+          }
+        }
+      }
+    },
+    "Перемістити MenuFold у «Програми»?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move MenuFold to Applications?"
           }
         }
       }
@@ -945,6 +1075,16 @@
         }
       }
     },
+    "Перемістіть MenuFold у «Програми»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move MenuFold to Applications"
+          }
+        }
+      }
+    },
     "Пересунути ліворуч": {
       "localizations": {
         "en": {
@@ -961,6 +1101,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Move Right"
+          }
+        }
+      }
+    },
+    "Перетягніть MenuFold у папку «Програми» у Finder. (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag MenuFold to the Applications folder in Finder. (%@)"
           }
         }
       }
@@ -1641,6 +1791,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Red"
+          }
+        }
+      }
+    },
+    "Ще не перевірялося.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never checked."
           }
         }
       }

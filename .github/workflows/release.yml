@@ -1,6 +1,8 @@
 name: Release
 
-# Publishes a MenuFold.app zip to GitHub Releases.
+# Publishes MenuFold to GitHub Releases: a DMG for people, a zip + appcast.xml for Sparkle updates.
+# Needs the repository secret SPARKLE_PRIVATE_KEY (the EdDSA key exported with Sparkle's
+# `generate_keys -x`); without it the build stops, so no release ships that installs cannot update to.
 #   - push a tag  v0.1.0   → builds that tag and creates release "MenuFold 0.1.0"
 #   - manual run           → Enter a version (e.g. 0.1.0) and, optionally, an existing tag to build
 # The build itself lives in scripts/release.sh, so CI and a local `scripts/release.sh` produce the
@@ -95,8 +97,13 @@ jobs:
         if: steps.sdk.outputs.ok == 'true'
         env:
           VERSION: ${{ steps.vars.outputs.version }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo "::error title=No update signing key::Add the SPARKLE_PRIVATE_KEY repository secret (see README → Releasing)."
+            exit 1
+          fi
           ./scripts/release.sh "$VERSION" --no-downloads
           echo "--- dist/ ---"
           ls -l dist
@@ -109,7 +116,10 @@ jobs:
         with:
           name: MenuFold-${{ steps.vars.outputs.version }}
           path: |
+            dist/*.dmg
             dist/*.zip
+            dist/appcast.xml
+            dist/release-notes.md
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
@@ -126,12 +136,17 @@ jobs:
         run: |
           set -euo pipefail
           zip="dist/MenuFold-${VERSION}-macos26-arm64.zip"
-          [[ -f "$zip" ]] || { echo "::error::missing $zip"; exit 1; }
+          dmg="dist/MenuFold-${VERSION}.dmg"
+          for f in "$zip" "$dmg" dist/appcast.xml dist/SHA256SUMS; do
+            [[ -f "$f" ]] || { echo "::error::missing $f"; exit 1; }
+          done
+          # appcast.xml is read by installed copies through releases/latest/download/appcast.xml.
+          assets=("$dmg" "$zip" dist/appcast.xml dist/SHA256SUMS)
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             # Never delete a published release: a re-run replaces the assets only.
             echo "::notice::Release $TAG exists; replacing its assets."
-            gh release upload "$TAG" "$zip" dist/SHA256SUMS --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
             exit 0
           fi
           # A tag created by hand but not pushed by this workflow is fine; otherwise create it here.
@@ -140,26 +155,31 @@ jobs:
             git push origin "refs/tags/$TAG"
           fi
 
-          cat > notes.md <<EOF
-          MenuFold ${VERSION} — macOS 26+, Apple silicon.
+          {
+            echo "MenuFold ${VERSION} — macOS 26+, Apple silicon."
+            echo
+            echo "### What's new"
+            cat dist/release-notes.md
+            echo
+            echo "### Install"
+            echo "1. Download \`MenuFold-${VERSION}.dmg\`, open it and drag **MenuFold** to **Applications**."
+            echo "2. Open MenuFold from Applications. It is not notarised by Apple, so macOS blocks the first launch:"
+            echo "   go to **System Settings → Privacy & Security** and click **Open Anyway**. You only do this once:"
+            echo "   later versions install through **Check for Updates…**."
+            echo "3. Keep it in the Dock: right-click its icon → **Options → Keep in Dock**."
+            echo
+            echo "Already on 0.3 or older? Install this version from the DMG once; it updates itself after that."
+            echo
+            echo "### Verify the download"
+            echo '```'
+            echo 'shasum -a 256 -c SHA256SUMS'
+            echo '```'
+          } > notes.md
 
-          ### Install
-          1. Download \`MenuFold-${VERSION}-macos26-arm64.zip\` and unzip it.
-          2. Move \`MenuFold.app\` to \`/Applications\`.
-          3. Open it. The app is ad-hoc signed, not notarised, so macOS blocks the first launch:
-             go to **System Settings → Privacy & Security** and click **Open Anyway**.
-          4. Pin it to the Dock like any other app.
-
-          ### Verify the download
-          \`\`\`
-          shasum -a 256 -c SHA256SUMS
-          \`\`\`
-          EOF
-
-          gh release create "$TAG" "$zip" dist/SHA256SUMS \
+          gh release create "$TAG" "${assets[@]}" \
             --title "MenuFold ${VERSION}" \
             --notes-file notes.md \
-            --verify-tag || gh release create "$TAG" "$zip" dist/SHA256SUMS \
+            --verify-tag || gh release create "$TAG" "${assets[@]}" \
             --title "MenuFold ${VERSION}" \
             --notes-file notes.md
 

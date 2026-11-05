@@ -65,17 +65,32 @@ Accessibility or Screen Recording permission.
 
 ## Install
 
-1. Download `MenuFold-<version>-macos26-arm64.zip` from the
-   [latest release](https://github.com/dsidxavekko/MenuFold/releases/latest) and unzip it.
-2. Move `MenuFold.app` to `/Applications`.
-3. Open it. The app is ad-hoc signed and not notarised, so macOS blocks the first launch. Go to
-   **System Settings → Privacy & Security** and click **Open Anyway**.
+1. Download `MenuFold-<version>.dmg` from the
+   [latest release](https://github.com/dsidxavekko/MenuFold/releases/latest).
+2. Open the DMG and drag **MenuFold** onto **Applications**. (If you open it straight from the disk
+   image, MenuFold offers to move itself there.)
+3. Open MenuFold from Applications. It is not notarised by Apple, so macOS blocks the first launch with
+   "Apple could not verify…". Click **Done**, go to **System Settings → Privacy & Security**, scroll down
+   and click **Open Anyway**, then confirm with your password. You only do this once.
 4. Keep MenuFold in the Dock: right-click its icon → **Options → Keep in Dock**. You can then remove the
    Dock's own Applications stack.
 
 Requires macOS 26 or later on Apple silicon.
 
 To check the download, run `shasum -a 256 -c SHA256SUMS` in the folder that holds both files.
+
+### Updates
+
+MenuFold updates itself with [Sparkle](https://sparkle-project.org). On the second launch it asks whether
+to check for updates automatically. You can also use **Check for Updates…** in the app menu or in the
+Dock icon's menu, and change the setting in **Settings → General → Updates**. Every update is signed, and
+MenuFold refuses an update whose signature does not match. Updates install without the **Open Anyway** step.
+
+Versions up to 0.3 have no updater: install 0.4 or newer from the DMG once.
+
+### Uninstall
+
+Quit MenuFold, move `MenuFold.app` to the Trash and delete `~/Library/Application Support/MenuFold/`.
 
 What changed in each version is listed on the [Releases](https://github.com/dsidxavekko/MenuFold/releases) page.
 
@@ -105,7 +120,9 @@ Your layout (folders, categories, hidden apps, custom icons) is saved in
 
 ## Privacy
 
-MenuFold runs entirely on your Mac and makes no network requests. It reads:
+MenuFold runs entirely on your Mac. Its only network request is the update check: once a day (if you
+allow it) it downloads `appcast.xml` from this repository's GitHub releases. It sends no data about you
+or your apps; GitHub sees the request like any download. It reads:
 
 - Spotlight metadata, to find apps;
 - each app's `Info.plist`, for its name and category;
@@ -123,7 +140,7 @@ You need macOS 26+, Xcode with the macOS 26 SDK, and [XcodeGen](https://github.c
 
 ```bash
 scripts/build.sh run          # generate the project, build Debug into ./build and launch it
-scripts/release.sh            # Release build, verified and zipped into ./dist
+scripts/release.sh            # Release build, verified, packed into ./dist (DMG, zip, appcast.xml)
 ```
 
 The logic lives in a Swift package that builds and tests with just the Command Line Tools:
@@ -145,9 +162,30 @@ scripts/typecheck-app.sh      # typecheck App/ in a few seconds, without buildin
 CI builds and tests the package and typechecks `App/` on every push. Pushing a `v*` tag builds the app and
 publishes a GitHub release.
 
+### Releasing
+
+1. Add a `## <version>` section to [CHANGELOG.md](CHANGELOG.md) and set `MARKETING_VERSION` in
+   `project.yml`. Commit.
+2. `git tag v<version> && git push origin v<version>`. The Release workflow builds the DMG, the zip and
+   `appcast.xml` and publishes them. Installed copies pick the version up from
+   `releases/latest/download/appcast.xml`, so do not mark a release you don't want installed as latest.
+
+Updates are signed with an EdDSA key. It was made once with Sparkle's `generate_keys` and lives in the
+maintainer's login Keychain; its public half is `SUPublicEDKey` in `App/Info.plist`. CI reads the private
+key from the `SPARKLE_PRIVATE_KEY` repository secret:
+
+```bash
+build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle.key   # after scripts/build.sh
+gh secret set SPARKLE_PRIVATE_KEY < sparkle.key && rm -P sparkle.key
+```
+
+Keep a backup of this key (for example in a password manager). Without it, existing installs can no
+longer be updated.
+
 ## Known limitations
 
-- The app is not notarised, so the first launch needs **Open Anyway** (see Install).
+- The app is not notarised, so the first launch needs **Open Anyway** (see Install). Notarisation needs a
+  paid Apple Developer account.
 - With ad-hoc signing, **Open at Login** may need to be approved again after an update.
 
 ## License

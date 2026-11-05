@@ -28,6 +28,12 @@
 	<string>© 2026 dsidxavekko</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/dsidxavekko/MenuFold/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>ureAF/s1pHFotpuuehYEzX309sXCGbReh8w+I2r7ggM=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

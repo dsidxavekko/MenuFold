@@ -155,6 +155,17 @@ if [[ ${#import_args[@]} -eq 0 ]]; then
     fail "cannot locate the built MenuFoldCore module (bin path: ${bin_path:-<none>})" "$build_log"
 fi
 
+# Sparkle (in-app updates) is a binary SwiftPM package that only xcodebuild downloads. When a build
+# already fetched it, check App/Updater.swift against it; otherwise that file falls back to its
+# `#if canImport(Sparkle)` no-op branch.
+for fw in build/SourcePackages/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-* \
+          build-release/SourcePackages/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*; do
+    if [[ -d "$fw/Sparkle.framework" ]]; then
+        import_args+=(-F "$fw")
+        break
+    fi
+done
+
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
 trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
 log="$scratch/typecheck.log"

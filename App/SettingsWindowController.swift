@@ -27,7 +27,7 @@ enum SettingsTab: Int, CaseIterable {
     /// Fixed content size per tab; the window resizes when the tab changes.
     var size: NSSize {
         switch self {
-        case .general: NSSize(width: 520, height: 530)
+        case .general: NSSize(width: 520, height: Updater.isEnabled ? 680 : 530)
         case .categories: NSSize(width: 520, height: 380)
         case .apps: NSSize(width: 520, height: 460)
         case .about: NSSize(width: 520, height: 360)

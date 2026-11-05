@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var dockIconRevision = 0
     @State private var showsFrequent = UserDefaults.standard.object(forKey: AppDelegate.showsFrequentKey) as? Bool ?? true
     @State private var showsRunningTab = UserDefaults.standard.object(forKey: AppDelegate.showsRunningTabKey) as? Bool ?? true
+    @State private var autoChecksUpdates = Updater.shared.automaticallyChecks
+    @State private var autoDownloadsUpdates = Updater.shared.automaticallyDownloads
+    @State private var lastUpdateCheck = Updater.shared.lastCheckDate
 
     var body: some View {
         Group {
@@ -33,6 +36,9 @@ struct SettingsView: View {
         .onAppear {
             refreshLoginStatus()
             refreshLayoutHealth()
+            autoChecksUpdates = Updater.shared.automaticallyChecks
+            autoDownloadsUpdates = Updater.shared.automaticallyDownloads
+            lastUpdateCheck = Updater.shared.lastCheckDate
         }
     }
 
@@ -136,6 +142,10 @@ struct SettingsView: View {
                 Label("Часті", systemImage: "clock.arrow.circlepath")
             }
 
+            if Updater.shared.isEnabled {
+                updatesSection
+            }
+
             Section {
                 HStack {
                     Text("Розкладка зберігається у файлі layout.json")
@@ -162,6 +172,50 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var updatesSection: some View {
+        Section {
+            Toggle("Перевіряти оновлення автоматично", isOn: Binding(
+                get: { autoChecksUpdates },
+                set: { on in
+                    autoChecksUpdates = on
+                    Updater.shared.automaticallyChecks = on
+                }
+            ))
+            Toggle("Завантажувати й установлювати самостійно", isOn: Binding(
+                get: { autoDownloadsUpdates },
+                set: { on in
+                    autoDownloadsUpdates = on
+                    Updater.shared.automaticallyDownloads = on
+                }
+            ))
+            .disabled(!autoChecksUpdates)
+            HStack {
+                Group {
+                    if let lastUpdateCheck {
+                        Text("Остання перевірка: \(lastUpdateCheck.formatted(date: .abbreviated, time: .shortened))")
+                    } else {
+                        Text("Ще не перевірялося.")
+                    }
+                }
+                .foregroundStyle(.secondary)
+                Spacer()
+                Button("Перевірити зараз") {
+                    Updater.shared.checkForUpdates()
+                    lastUpdateCheck = Updater.shared.lastCheckDate
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+            }
+            .font(.callout)
+        } header: {
+            Label("Оновлення", systemImage: "arrow.triangle.2.circlepath")
+        } footer: {
+            Text("MenuFold раз на день звертається до GitHub, щоб дізнатися, чи вийшла нова версія. Інших даних він не надсилає.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var categoriesTab: some View {

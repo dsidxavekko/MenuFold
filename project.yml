@@ -11,6 +11,10 @@ options:
 packages:
   MenuFoldCore:
     path: Packages/MenuFoldCore
+  # In-app updates. The feed (appcast.xml) is a GitHub release asset; see scripts/release.sh.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -27,6 +31,8 @@ targets:
     dependencies:
       - package: MenuFoldCore
         product: MenuFoldCore
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.menufold.MenuFold
@@ -42,7 +48,9 @@ targets:
         # Lets Xcode keep App/Localizable.xcstrings in sync with the strings in the code.
         SWIFT_EMIT_LOC_STRINGS: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "0.3.1"
+        MARKETING_VERSION: "0.4.0"
+        # Debug builds only: scripts/release.sh sets the build number to the commit count, which
+        # Sparkle compares to decide whether an update is newer.
         CURRENT_PROJECT_VERSION: "5"
         COMBINE_HIDPI_IMAGES: YES
         # App icon from App/Assets.xcassets/AppIcon.appiconset (fills CFBundleIconFile/Name).

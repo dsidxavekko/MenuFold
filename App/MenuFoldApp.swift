@@ -15,6 +15,9 @@ struct MenuFoldApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("Про MenuFold") { appDelegate.showSettings(tab: .about) }
+                if Updater.shared.isEnabled {
+                    Button("Перевірити оновлення…") { Updater.shared.checkForUpdates() }
+                }
             }
             CommandGroup(replacing: .appSettings) {
                 Button("Налаштування…") { appDelegate.showSettings() }
@@ -84,12 +87,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchedAsLoginItem = Self.isLoginItemLaunch()
         // As early as possible, so the Dock does not flash the bundle icon first.
         DockIconStyle.applyCurrent()
+        // Starts Sparkle's scheduled checks (release builds only).
+        _ = Updater.shared
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The usual way to launch MenuFold is a click on its Dock icon, so show the panel right away.
         // (Placement falls back to screen center if the mouse is not near the Dock.)
         // A login-item launch must not pop the panel up at every login.
+        // Running straight from the mounted DMG: offer to copy MenuFold into /Applications first.
+        if InstallLocation.offerMoveIfNeeded() { return }
         if !launchedAsLoginItem { panel.show() }
         #if DEBUG
         // `open MenuFold.app --args -openSettings about` opens Settings on a tab, for checking it
@@ -123,7 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showSettings(tab: .about)
     }
 
-    /// Right-click on the Dock icon: Settings and About, since the panel itself has no settings button.
+    @objc private func checkForUpdates(_ sender: Any?) {
+        Updater.shared.checkForUpdates()
+    }
+
+    /// Right-click on the Dock icon: Settings, About and the update check, since the panel itself has no settings button.
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
         let settings = NSMenuItem(title: String(localized: "Налаштування…"), action: #selector(openSettings(_:)), keyEquivalent: "")
@@ -134,6 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         about.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         menu.addItem(settings)
         menu.addItem(about)
+        if Updater.shared.isEnabled {
+            let update = NSMenuItem(title: String(localized: "Перевірити оновлення…"), action: #selector(checkForUpdates(_:)), keyEquivalent: "")
+            update.target = self
+            update.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+            menu.addItem(update)
+        }
         return menu
     }
 
