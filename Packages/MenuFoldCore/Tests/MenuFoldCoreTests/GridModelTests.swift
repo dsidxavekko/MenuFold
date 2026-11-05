@@ -336,6 +336,7 @@ import Testing
         let names = m.availableTabs.map { tab -> String in
             switch tab {
             case .all: return "*"
+            case .running: return "▶"
             case .category(let c): return c.displayName
             }
         }

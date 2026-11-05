@@ -54,7 +54,9 @@ struct CategoryTabs: View {
         guard let liveOrder else { return tabs }
         var byID: [String: GridTab] = [:]
         for tab in tabs { byID[tabID(tab)] = tab }
-        return [.all] + liveOrder.compactMap { byID[$0] }
+        // "Все" and "Запущені" stay in front; only categories are reordered.
+        let fixed = tabs.filter { if case .category = $0 { false } else { true } }
+        return fixed + liveOrder.compactMap { byID[$0] }
     }
 
     /// Category ids in the model's order (without String(localized: "Все")).
@@ -149,6 +151,7 @@ struct CategoryTabs: View {
     private func tabID(_ tab: GridTab) -> String {
         switch tab {
         case .all: "all"
+        case .running: "running"
         case .category(let category): category.id
         }
     }
@@ -156,6 +159,7 @@ struct CategoryTabs: View {
     private func title(for tab: GridTab) -> String {
         switch tab {
         case .all: String(localized: "Все")
+        case .running: String(localized: "Запущені")
         case .category(let category): category.displayName
         }
     }

@@ -19,6 +19,7 @@ struct SettingsView: View {
     /// Bumped when the custom Dock picture changes, so its preview redraws.
     @State private var dockIconRevision = 0
     @State private var showsFrequent = UserDefaults.standard.object(forKey: AppDelegate.showsFrequentKey) as? Bool ?? true
+    @State private var showsRunningTab = UserDefaults.standard.object(forKey: AppDelegate.showsRunningTabKey) as? Bool ?? true
 
     var body: some View {
         Group {
@@ -165,6 +166,21 @@ struct SettingsView: View {
 
     private var categoriesTab: some View {
         Form {
+            Section {
+                Toggle("Показувати вкладку «Запущені»", isOn: Binding(
+                    get: { showsRunningTab },
+                    set: { on in
+                        showsRunningTab = on
+                        UserDefaults.standard.set(on, forKey: AppDelegate.showsRunningTabKey)
+                        model.showsRunningTab = on
+                    }
+                ))
+            } footer: {
+                Text("Програми, які зараз відкриті. Вкладка стоїть одразу після «Все».")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 let custom = model.customCategories
                 if custom.isEmpty {

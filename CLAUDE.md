@@ -43,6 +43,7 @@ There are two layers. Only the package is unit-tested.
   - Folders keep the IDs of uninstalled apps, so an app goes back into its folder after reinstall. A folder with no visible apps is not shown.
   - A non-empty search ignores the tab and finds apps inside folders too.
   - Category tabs are flat lists that ignore folders.
+  - "Запущені" (`GridTab.running`) is a flat list of `runningAppIDs`, which the app feeds from `RunningAppsMonitor`. It sits right after "Все", is not reorderable, and `showsRunningTab` (Settings → Категорії, default on in the app, off in the model) hides it.
   - Custom categories (`Layout.customCategories`, ids prefixed `custom.`) are user-made tabs. Apps join one through `categoryOverrides`. Their tabs come right after "Все" and show even when empty. Deleting one drops its overrides, so its apps go back to their automatic category. They are created from the tile menu ("Нова категорія…", then renamed inline on the tab via `renamingCategoryID`), renamed or deleted from the tab's context menu, and managed in Settings.
   - Tab order: `Layout.categoryOrder` holds category ids (system or custom) in the user's order; categories not in it follow in the default order (custom, then system by name, "Інше" last). "Все" is always first. Tabs are reordered by dragging in the panel or "Пересунути ліворуч/праворуч" in the tab's context menu; Settings can reset the order.
   - `GridModel.preview` is the sample model every `#Preview` uses.

@@ -8,7 +8,11 @@ import Observation
 final class RunningAppsMonitor {
     static let shared = RunningAppsMonitor()
 
-    private(set) var bundleIDs: Set<String> = []
+    private(set) var bundleIDs: Set<String> = [] {
+        didSet { onChange?(bundleIDs) }
+    }
+    /// Called on the main actor whenever `bundleIDs` changes (feeds `GridModel.runningAppIDs`).
+    @ObservationIgnored var onChange: ((Set<String>) -> Void)?
 
     @ObservationIgnored private var observation: NSKeyValueObservation?
 

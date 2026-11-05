@@ -12,6 +12,8 @@ public struct FinderFolderRef: Identifiable, Hashable, Sendable {
 
 public enum GridTab: Hashable, Sendable {
     case all
+    /// Apps running right now (`GridModel.runningAppIDs`). Fixed right after "Все", not reorderable.
+    case running
     case category(AppCategory)
 }
 
@@ -71,6 +73,16 @@ public final class GridModel {
     public internal(set) var isTrashing = false
     /// How many apps the "Часті" row holds (one grid row).
     public var frequentLimit = 7
+    /// Bundle IDs of the apps running right now. The model can't watch processes itself, so the app
+    /// keeps this current (NSWorkspace KVO).
+    public var runningAppIDs: Set<String> = [] {
+        didSet { if runningAppIDs != oldValue, tab == .running { clearSelectionIfGone() } }
+    }
+    /// Shows the "Запущені" tab (a Settings switch the app persists; off by default here so tests
+    /// and previews keep the plain tab list).
+    public var showsRunningTab = false {
+        didSet { if showsRunningTab != oldValue { validateTab() } }
+    }
     /// Set right after `createFolder` so UI can start inline rename; UI clears it.
     public var renamingFolderID: UUID?
     /// Custom category whose tab is being renamed inline. Unlike `renamingFolderID` this stays set
@@ -162,7 +174,7 @@ public final class GridModel {
             let l = rank[lhs.element.id] ?? Int.max, r = rank[rhs.element.id] ?? Int.max
             return l != r ? l < r : lhs.offset < rhs.offset
         }
-        return [.all] + ordered.map { .category($0.element) }
+        return [.all] + (showsRunningTab ? [.running] : []) + ordered.map { .category($0.element) }
     }
 
     /// Categories shown as tabs, in the default order (see `availableTabs`).
@@ -198,6 +210,7 @@ public final class GridModel {
     /// Non-empty query → flat list of matching apps (including ones inside folders), ignoring tab.
     /// `.all` → folders (manual + Finder) + apps not in any folder, alphabetical (localized, case-insensitive).
     /// `.category` → flat alphabetical list of apps in that category (folders ignored).
+    /// `.running` → flat alphabetical list of the running apps (folders ignored).
     /// Hidden apps never appear.
     public func items(tab: GridTab, query: String) -> [GridItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -205,6 +218,8 @@ public final class GridModel {
             return Self.sorted(visibleApps.filter { $0.matches(q) }).map { .app($0) }
         }
         switch tab {
+        case .running:
+            return Self.sorted(visibleApps.filter { runningAppIDs.contains($0.id) }).map { .app($0) }
         case .category(let cat):
             return Self.sorted(visibleApps.filter { category(of: $0).id == cat.id }).map { .app($0) }
         case .all:
@@ -686,7 +701,7 @@ public final class GridModel {
 
     /// Guarantees `tab ∈ availableTabs`.
     private func validateTab() {
-        if case .category = tab, !availableTabs.contains(tab) { tab = .all }
+        if tab != .all, !availableTabs.contains(tab) { tab = .all }
     }
 
     /// Applies and saves a layout. The version is normalized first, because `LayoutStore.save` writes

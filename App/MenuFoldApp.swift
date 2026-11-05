@@ -34,11 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// UserDefaults key of the "Часті" row switch (Settings writes it together with the model).
     static let showsFrequentKey = "showsFrequent"
+    /// UserDefaults key of the "Запущені" tab switch.
+    static let showsRunningTabKey = "showsRunningTab"
 
     override init() {
         let model = GridModel(catalog: SpotlightAppCatalog(), store: LayoutStore(), usageStore: UsageStore())
         model.frequentLimit = GridMetrics.columns
         model.showsFrequent = UserDefaults.standard.object(forKey: Self.showsFrequentKey) as? Bool ?? true
+        model.showsRunningTab = UserDefaults.standard.object(forKey: Self.showsRunningTabKey) as? Bool ?? true
+        let running = RunningAppsMonitor.shared
+        model.runningAppIDs = running.bundleIDs
+        running.onChange = { [weak model] ids in model?.runningAppIDs = ids }
         self.model = model
         self.panel = PanelController(model: model)
         super.init()

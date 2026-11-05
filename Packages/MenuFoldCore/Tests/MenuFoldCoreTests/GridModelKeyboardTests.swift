@@ -52,6 +52,30 @@ import Testing
         #expect(m.frequentApps.isEmpty)
     }
 
+    @Test func runningTab() {
+        let (m, _) = makeModel()
+        #expect(!m.availableTabs.contains(.running)) // off by default
+        m.showsRunningTab = true
+        #expect(m.availableTabs.prefix(2) == [.all, .running])
+        m.runningAppIDs = ["c", "a", "com.example.not-in-catalog"]
+        m.tab = .running
+        #expect(m.visibleItems.map(\.id) == ["app:a", "app:c"])
+        m.hide("a")
+        #expect(m.visibleItems.map(\.id) == ["app:c"])
+        // Search ignores the tab, as for categories.
+        m.query = "B"
+        #expect(m.visibleItems.map(\.id) == ["app:b"])
+        m.query = ""
+        // A quit app takes its selection with it.
+        m.selectedItemID = "app:c"
+        m.runningAppIDs = []
+        #expect(m.selectedItemID == nil)
+        #expect(m.visibleItems.isEmpty)
+        // Turning the tab off while it is shown goes back to "Все".
+        m.showsRunningTab = false
+        #expect(m.tab == .all)
+    }
+
     @Test func recordUseIgnoresAppsOutsideTheCatalog() {
         let (m, _) = makeModel()
         m.recordUse(appID: "com.example.helper")

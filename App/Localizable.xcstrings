@@ -429,6 +429,16 @@
         }
       }
     },
+    "Запущені": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        }
+      }
+    },
     "Здоров'я та фітнес": {
       "comment": "MenuFoldCore (looked up with L())",
       "extractionState": "manual",
@@ -1039,6 +1049,16 @@
         }
       }
     },
+    "Показувати вкладку «Запущені»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the “Running” tab"
+          }
+        }
+      }
+    },
     "Показувати часті програми": {
       "localizations": {
         "en": {
@@ -1145,6 +1165,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apps"
+          }
+        }
+      }
+    },
+    "Програми, які зараз відкриті. Вкладка стоїть одразу після «Все».": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps that are open right now. The tab comes right after “All”."
           }
         }
       }
