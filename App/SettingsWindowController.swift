@@ -8,10 +8,10 @@ enum SettingsTab: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .general: "Загальне"
-        case .categories: "Категорії"
-        case .apps: "Програми"
-        case .about: "Про програму"
+        case .general: String(localized: "Загальне")
+        case .categories: String(localized: "Категорії")
+        case .apps: String(localized: "Програми")
+        case .about: String(localized: "Про програму")
         }
     }
 

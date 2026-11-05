@@ -173,7 +173,7 @@ struct FolderOverlayView: View {
     private var editableTitle: some View {
         let showsCapsule = isTitleHovered || titleFocused
         // A hidden Text sizes the field to its contents so the capsule hugs the name.
-        return Text(name.isEmpty ? "Назва папки" : name)
+        return Text(name.isEmpty ? String(localized: "Назва папки") : name)
             .font(Theme.headerFont)
             .fontDesign(.rounded)
             .lineLimit(1)

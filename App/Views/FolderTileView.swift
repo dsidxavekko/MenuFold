@@ -110,8 +110,8 @@ struct FolderTileView: View {
         .onHover { isHovered = $0 }
         .animation(Theme.snappy, value: isHovered)
         .animation(Theme.snappy, value: isTargeted)
-        .help(folder.isFinder ? "\(folder.name) — папка з Finder" : folder.name)
-        .accessibilityLabel(folder.isFinder ? "Папка \(folder.name), з Finder" : "Папка \(folder.name)")
+        .help(folder.isFinder ? String(localized: "\(folder.name) — папка з Finder") : folder.name)
+        .accessibilityLabel(folder.isFinder ? String(localized: "Папка \(folder.name), з Finder") : String(localized: "Папка \(folder.name)"))
         .appDropDestination(isEnabled: canAcceptDrops) { targeted in
             isTargeted = canAcceptDrops && targeted
         } perform: { id in
@@ -233,7 +233,7 @@ struct FolderContextMenu: View {
             }
         }
         Divider()
-        Button(folder.isFinder ? "Не показувати як папку" : "Розформувати") {
+        Button(folder.isFinder ? String(localized: "Не показувати як папку") : String(localized: "Розформувати")) {
             withAnimation(Theme.content) {
                 if model.openFolderID == folder.id { model.openFolderID = nil }
                 model.dissolve(folder: folder.id)

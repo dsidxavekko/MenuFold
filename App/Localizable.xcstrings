@@ -1,0 +1,1324 @@
+{
+  "sourceLanguage": "uk",
+  "strings": {
+    "%@ — папка з Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — Finder folder"
+          }
+        }
+      }
+    },
+    "%lld програм": {
+      "comment": "Number of apps in a category",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld app"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld apps"
+                }
+              }
+            }
+          }
+        },
+        "uk": {
+          "variations": {
+            "plural": {
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld програми"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld програм"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld програма"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld програми"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Enter зберігає нову назву, Esc повертає попередню": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter saves the new name, Esc restores the previous one"
+          }
+        }
+      }
+    },
+    "MenuFold": {
+      "shouldTranslate": false
+    },
+    "MenuFold відкривається кліком по його значку в Dock. Права кнопка на значку — налаштування та інформація про програму.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold opens when you click its icon in the Dock. Right-click the icon for Settings and About."
+          }
+        }
+      }
+    },
+    "macOS не дозволила змінити значок самої програми, тому він зміниться лише поки MenuFold запущено. Дозвольте MenuFold у розділі «Керування програмами».": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS did not allow changing the app's own icon, so it only changes while MenuFold is running. Allow MenuFold in “App Management”."
+          }
+        }
+      }
+    },
+    "Ігри": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Games"
+          }
+        }
+      }
+    },
+    "Іконка": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icon"
+          }
+        }
+      }
+    },
+    "Інше": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other"
+          }
+        }
+      }
+    },
+    "Автоматично": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      }
+    },
+    "Без іконки": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Icon"
+          }
+        }
+      }
+    },
+    "Бізнес": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Business"
+          }
+        }
+      }
+    },
+    "Версія %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@"
+          }
+        }
+      }
+    },
+    "Версія %@ (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@ (%@)"
+          }
+        }
+      }
+    },
+    "Видалити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "Видалити категорію": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Category"
+          }
+        }
+      }
+    },
+    "Власна категорія. Перетягніть, щоб змінити порядок; контекстне меню: перейменувати або видалити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom category. Drag to reorder; context menu: rename or delete"
+          }
+        }
+      }
+    },
+    "Власні категорії з’являються вкладками в MenuFold. Програму можна додати через її контекстне меню: «Змінити категорію». Після видалення категорії її програми повертаються до автоматичних категорій. Порядок вкладок змінюється перетягуванням у панелі.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom categories appear as tabs in MenuFold. Add an app from its context menu: “Change Category”. When a category is deleted, its apps go back to their automatic categories. Drag tabs in the panel to reorder them."
+          }
+        }
+      }
+    },
+    "Все": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        }
+      }
+    },
+    "Відео": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        }
+      }
+    },
+    "Відкривати при вході": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open at Login"
+          }
+        }
+      }
+    },
+    "Відкрити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "Графіка й дизайн": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Graphics & Design"
+          }
+        }
+      }
+    },
+    "Довідка": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference"
+          }
+        }
+      }
+    },
+    "Додати категорію": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Category"
+          }
+        }
+      }
+    },
+    "Жовтий": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yellow"
+          }
+        }
+      }
+    },
+    "Завантаження…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading…"
+          }
+        }
+      }
+    },
+    "Загальне": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        }
+      }
+    },
+    "Закрийте MenuFold, зробіть копію файлу вручну й видаліть оригінал.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit MenuFold, copy the file manually and delete the original."
+          }
+        }
+      }
+    },
+    "Запуск": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startup"
+          }
+        }
+      }
+    },
+    "Здоров'я та фітнес": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health & Fitness"
+          }
+        }
+      }
+    },
+    "Зелений": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Green"
+          }
+        }
+      }
+    },
+    "Змінити категорію": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Category"
+          }
+        }
+      }
+    },
+    "Значок у Dock": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dock Icon"
+          }
+        }
+      }
+    },
+    "Значок у Dock: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dock icon: %@"
+          }
+        }
+      }
+    },
+    "Категорії": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categories"
+          }
+        }
+      }
+    },
+    "Колір": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color"
+          }
+        }
+      }
+    },
+    "Медицина": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medical"
+          }
+        }
+      }
+    },
+    "Можливо, індексування Spotlight вимкнене.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotlight indexing may be turned off."
+          }
+        }
+      }
+    },
+    "Мої категорії": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My Categories"
+          }
+        }
+      }
+    },
+    "Музика": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Music"
+          }
+        }
+      }
+    },
+    "Назва категорії": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category Name"
+          }
+        }
+      }
+    },
+    "Назва категорії. Enter — зберегти, Esc — скасувати.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category name. Enter to save, Esc to cancel."
+          }
+        }
+      }
+    },
+    "Назва папки": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder Name"
+          }
+        }
+      }
+    },
+    "Назва папки. Enter — зберегти, Esc — скасувати.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder name. Enter to save, Esc to cancel."
+          }
+        }
+      }
+    },
+    "Налаштування…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        }
+      }
+    },
+    "Не вдалося відкрити «%@»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open “%@”"
+          }
+        }
+      }
+    },
+    "Не вдалося змінити: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't change it: %@"
+          }
+        }
+      }
+    },
+    "Не вдалося прочитати розкладку («%@»). Файл не змінено — спробуйте перезапустити MenuFold.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read the layout (“%@”). The file was not changed — try restarting MenuFold."
+          }
+        }
+      }
+    },
+    "Не показувати як папку": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't Show as Folder"
+          }
+        }
+      }
+    },
+    "Немає власних категорій": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No custom categories"
+          }
+        }
+      }
+    },
+    "Немає прихованих програм": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hidden apps"
+          }
+        }
+      }
+    },
+    "Нова категорія": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Category"
+          }
+        }
+      }
+    },
+    "Нова категорія…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Category…"
+          }
+        }
+      }
+    },
+    "Нова папка": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder"
+          }
+        }
+      }
+    },
+    "Новини": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "News"
+          }
+        }
+      }
+    },
+    "Нічого не знайдено": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing Found"
+          }
+        }
+      }
+    },
+    "Освіта": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Education"
+          }
+        }
+      }
+    },
+    "Очистити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
+    "Очистити пошук": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Search"
+          }
+        }
+      }
+    },
+    "Папка": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        }
+      }
+    },
+    "Папка %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder %@"
+          }
+        }
+      }
+    },
+    "Папка %@, з Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder %@, from Finder"
+          }
+        }
+      }
+    },
+    "Папка «Програми»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applications Folder"
+          }
+        }
+      }
+    },
+    "Папка з Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder folder"
+          }
+        }
+      }
+    },
+    "Папки з Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder Folders"
+          }
+        }
+      }
+    },
+    "Перейменувати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        }
+      }
+    },
+    "Пересунути ліворуч": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Left"
+          }
+        }
+      }
+    },
+    "Пересунути праворуч": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Right"
+          }
+        }
+      }
+    },
+    "Перетягніть програму за межі папки, щоб вийняти її": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag an app outside the folder to take it out"
+          }
+        }
+      }
+    },
+    "Перетягніть, щоб змінити порядок": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag to reorder"
+          }
+        }
+      }
+    },
+    "Повідомити про проблему": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report an Issue"
+          }
+        }
+      }
+    },
+    "Погода": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weather"
+          }
+        }
+      }
+    },
+    "Подорожі": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Travel"
+          }
+        }
+      }
+    },
+    "Показати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      }
+    },
+    "Показати знову": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Again"
+          }
+        }
+      }
+    },
+    "Показати у Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Finder"
+          }
+        }
+      }
+    },
+    "Помаранчевий": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orange"
+          }
+        }
+      }
+    },
+    "Потрібно дозволити в Системних параметрах.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs approval in System Settings."
+          }
+        }
+      }
+    },
+    "Пошук": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "Прибрати з папки": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Folder"
+          }
+        }
+      }
+    },
+    "Приховані програми": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden Apps"
+          }
+        }
+      }
+    },
+    "Приховати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
+    "Про MenuFold": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About MenuFold"
+          }
+        }
+      }
+    },
+    "Про програму": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "Програм не знайдено": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Apps Found"
+          }
+        }
+      }
+    },
+    "Програми": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps"
+          }
+        }
+      }
+    },
+    "Продуктивність": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Productivity"
+          }
+        }
+      }
+    },
+    "Підпапки в «Програмах» у Finder автоматично з’являються в MenuFold як папки. Програми можна додавати й виймати перетягуванням — файли на диску при цьому не переміщуються. Назва береться з Finder.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subfolders of Applications in Finder appear in MenuFold as folders automatically. Drag apps in and out of them — files on disk are never moved. The name comes from Finder."
+          }
+        }
+      }
+    },
+    "Робота": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work"
+          }
+        }
+      }
+    },
+    "Рожевий": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pink"
+          }
+        }
+      }
+    },
+    "Розваги": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entertainment"
+          }
+        }
+      }
+    },
+    "Розкладка": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout"
+          }
+        }
+      }
+    },
+    "Розкладка зберігається у файлі layout.json": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The layout is saved in layout.json"
+          }
+        }
+      }
+    },
+    "Розкладка починається з чистої — папки, категорії та приховані програми доведеться налаштувати знову. Попередній файл не видалено: його можна вивчити або відновити вручну.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The layout starts fresh — folders, categories and hidden apps have to be set up again. The previous file was not deleted: you can inspect it or restore it manually."
+          }
+        }
+      }
+    },
+    "Розкладка пошкоджена": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout Damaged"
+          }
+        }
+      }
+    },
+    "Розкладку пошкоджено, але її не вдалося відкласти. Файл «%@» лишився на місці, збереження зупинено, щоб не втратити дані.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The layout is damaged but couldn't be set aside. “%@” was left in place and saving is paused so no data is lost."
+          }
+        }
+      }
+    },
+    "Розкладку пошкоджено, попередню копію збережено в «%@».": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The layout was damaged; the previous copy was saved as “%@”."
+          }
+        }
+      }
+    },
+    "Розробка": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Developer Tools"
+          }
+        }
+      }
+    },
+    "Розформувати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungroup"
+          }
+        }
+      }
+    },
+    "Синій": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blue"
+          }
+        }
+      }
+    },
+    "Системні": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        }
+      }
+    },
+    "Скасувати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "Скинути": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        }
+      }
+    },
+    "Скинути порядок вкладок": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Tab Order"
+          }
+        }
+      }
+    },
+    "Скинути розкладку?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset the layout?"
+          }
+        }
+      }
+    },
+    "Скинути розкладку…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Layout…"
+          }
+        }
+      }
+    },
+    "Соцмережі": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Social Networking"
+          }
+        }
+      }
+    },
+    "Спорт": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sports"
+          }
+        }
+      }
+    },
+    "Спробуйте іншу назву.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try a different name."
+          }
+        }
+      }
+    },
+    "Стиль життя": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifestyle"
+          }
+        }
+      }
+    },
+    "Сторінка проєкту": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project Page"
+          }
+        }
+      }
+    },
+    "Сірий": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gray"
+          }
+        }
+      }
+    },
+    "Сітка всіх програм із папками, категоріями та пошуком — замість стосу «Програми» в Dock. Нічого не змінює в системі й ніколи не переміщує файли.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A grid of all your apps with folders, categories and search — instead of the Applications stack in the Dock. It changes nothing in the system and never moves files."
+          }
+        }
+      }
+    },
+    "Тут поки порожньо": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing Here Yet"
+          }
+        }
+      }
+    },
+    "Усі папки з Finder показано": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Finder folders are shown"
+          }
+        }
+      }
+    },
+    "Усі папки, власні й перевизначені категорії та приховані програми буде видалено.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All folders, custom and overridden categories, and hidden apps will be removed."
+          }
+        }
+      }
+    },
+    "Утиліти": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilities"
+          }
+        }
+      }
+    },
+    "Фото": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photography"
+          }
+        }
+      }
+    },
+    "Фінанси": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finance"
+          }
+        }
+      }
+    },
+    "Фіолетовий": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purple"
+          }
+        }
+      }
+    },
+    "Червоний": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red"
+          }
+        }
+      }
+    },
+    "з Finder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from Finder"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

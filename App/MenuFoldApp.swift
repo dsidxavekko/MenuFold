@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showLaunchFailure(app: AppEntry, message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Не вдалося відкрити «\(app.name)»"
+        alert.messageText = String(localized: "Не вдалося відкрити «\(app.name)»")
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         NSApp.activate()
@@ -100,10 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Right-click on the Dock icon: Settings and About, since the panel itself has no settings button.
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
-        let settings = NSMenuItem(title: "Налаштування…", action: #selector(openSettings(_:)), keyEquivalent: "")
+        let settings = NSMenuItem(title: String(localized: "Налаштування…"), action: #selector(openSettings(_:)), keyEquivalent: "")
         settings.target = self
         settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
-        let about = NSMenuItem(title: "Про MenuFold", action: #selector(openAbout(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: String(localized: "Про MenuFold"), action: #selector(openAbout(_:)), keyEquivalent: "")
         about.target = self
         about.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         menu.addItem(settings)

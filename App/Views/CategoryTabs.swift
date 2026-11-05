@@ -4,7 +4,7 @@ import SwiftUI
 /// Horizontal capsule tabs: [Все] + one per category, bound to `model.tab`.
 /// The selected tab is a tinted Liquid Glass capsule that morphs between tabs (`glassEffectID`
 /// inside a `GlassEffectContainer`); the others are plain labels with a hover highlight.
-/// Category tabs can be dragged to a new place or moved from their context menu ("Все" stays
+/// Category tabs can be dragged to a new place or moved from their context menu (String(localized: "Все") stays
 /// first). Custom categories are also renamed inline (while `model.renamingCategoryID` names one,
 /// its tab is a text field) and deleted from the same menu.
 struct CategoryTabs: View {
@@ -57,7 +57,7 @@ struct CategoryTabs: View {
         return [.all] + liveOrder.compactMap { byID[$0] }
     }
 
-    /// Category ids in the model's order (without "Все").
+    /// Category ids in the model's order (without String(localized: "Все")).
     private var categoryIDs: [String] {
         model.availableTabs.compactMap { tab in
             if case .category(let category) = tab { category.id } else { nil }
@@ -95,8 +95,8 @@ struct CategoryTabs: View {
                     .accessibilityAction(named: "Пересунути ліворуч") { move(category.id, by: -1) }
                     .accessibilityAction(named: "Пересунути праворуч") { move(category.id, by: 1) }
                     .accessibilityHint(category.isCustom
-                        ? "Власна категорія. Перетягніть, щоб змінити порядок; контекстне меню: перейменувати або видалити"
-                        : "Перетягніть, щоб змінити порядок")
+                        ? String(localized: "Власна категорія. Перетягніть, щоб змінити порядок; контекстне меню: перейменувати або видалити")
+                        : String(localized: "Перетягніть, щоб змінити порядок"))
             }
         } else {
             capsule(for: tab)
@@ -155,7 +155,7 @@ struct CategoryTabs: View {
 
     private func title(for tab: GridTab) -> String {
         switch tab {
-        case .all: "Все"
+        case .all: String(localized: "Все")
         case .category(let category): category.displayName
         }
     }
@@ -173,7 +173,7 @@ private struct CategoryNameField: View {
 
     var body: some View {
         // A hidden Text sizes the field to its contents so the capsule hugs the name.
-        Text(name.isEmpty ? "Назва категорії" : name)
+        Text(name.isEmpty ? String(localized: "Назва категорії") : name)
             .font(Theme.tabFont)
             .lineLimit(1)
             .hidden()

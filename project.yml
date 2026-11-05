@@ -4,6 +4,10 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+  # UI strings are keyed by their Ukrainian text (App/Localizable.xcstrings); English is the
+  # other localization. Info.plist's CFBundleDevelopmentRegion is "en", so any other system
+  # language falls back to English.
+  developmentLanguage: uk
 packages:
   MenuFoldCore:
     path: Packages/MenuFoldCore
@@ -35,6 +39,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
         ENABLE_PREVIEWS: YES
+        # Lets Xcode keep App/Localizable.xcstrings in sync with the strings in the code.
+        SWIFT_EMIT_LOC_STRINGS: YES
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "0.2.1"
         CURRENT_PROJECT_VERSION: "3"

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>uk</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>MenuFold</string>
 	<key>CFBundleExecutable</key>

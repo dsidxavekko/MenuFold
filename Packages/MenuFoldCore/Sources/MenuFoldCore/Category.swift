@@ -16,7 +16,7 @@ public struct AppCategory: Identifiable, Hashable, Sendable {
     /// True for a user-made category (stored in `Layout.customCategories`).
     public var isCustom: Bool { id.hasPrefix(Self.customPrefix) }
     /// Fallback for apps without a (known) category.
-    public static let other = AppCategory(id: otherID, displayName: "Інше")
+    public static let other = AppCategory(id: otherID, displayName: L("Інше"))
 
     /// Maps a raw UTI (e.g. "public.app-category.games") to a category; nil/unknown → `.other`.
     public static func from(raw: String?) -> AppCategory {
@@ -24,17 +24,17 @@ public struct AppCategory: Identifiable, Hashable, Sendable {
             return .other
         }
         if raw == otherID { return .other }
-        if let name = displayNames[raw] { return AppCategory(id: raw, displayName: name) }
+        if let name = displayNames[raw] { return AppCategory(id: raw, displayName: L(name)) }
         // All game subcategories (public.app-category.action-games, …) collapse into "games".
         if raw.hasPrefix(prefix), raw.hasSuffix("-games") {
-            return AppCategory(id: gamesID, displayName: displayNames[gamesID]!)
+            return AppCategory(id: gamesID, displayName: L(displayNames[gamesID]!))
         }
         return .other
     }
 
-    /// All known categories (Ukrainian display names), excluding `.other`.
+    /// All known categories (localized display names), excluding `.other`.
     public static var known: [AppCategory] {
-        orderedIDs.map { AppCategory(id: $0, displayName: displayNames[$0]!) }
+        orderedIDs.map { AppCategory(id: $0, displayName: L(displayNames[$0]!)) }
     }
 
     private static let prefix = "public.app-category."

@@ -20,7 +20,7 @@ enum DockIconStyle: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .menuFold: "MenuFold"
-        case .applicationsFolder: "Папка «Програми»"
+        case .applicationsFolder: String(localized: "Папка «Програми»")
         }
     }
 

@@ -172,7 +172,7 @@ public final class GridModel {
     public func items(tab: GridTab, query: String) -> [GridItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            return Self.sorted(visibleApps.filter { $0.name.localizedStandardContains(q) }).map { .app($0) }
+            return Self.sorted(visibleApps.filter { $0.matches(q) }).map { .app($0) }
         }
         switch tab {
         case .category(let cat):
@@ -321,7 +321,7 @@ public final class GridModel {
         Self.detach(appID, from: &l)
         // Exactly the two apps the user sees paired. The target's old folder (if any) had no other
         // members, so it is emptied here and dissolved by the sweep below.
-        l.folders.append(Folder(id: newID, name: "Нова папка", appIDs: [targetAppID, appID]))
+        l.folders.append(Folder(id: newID, name: L("Нова папка"), appIDs: [targetAppID, appID]))
         Self.dissolveSingleAppFolders(&l)
         commit(l)
         renamingFolderID = newID
@@ -425,7 +425,7 @@ public final class GridModel {
     @discardableResult
     public func createCategory(named name: String = "", assigning appID: String? = nil) -> AppCategory {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let custom = CustomCategory(name: uniqueCategoryName(trimmed.isEmpty ? "Нова категорія" : trimmed))
+        let custom = CustomCategory(name: uniqueCategoryName(trimmed.isEmpty ? L("Нова категорія") : trimmed))
         var l = layout
         l.customCategories.append(custom)
         if let appID { l.categoryOverrides[appID] = custom.id }
@@ -647,7 +647,7 @@ public final class GridModel {
         ]
         let model = GridModel(catalog: StaticAppCatalog(apps: apps), store: nil)
         model.layout = Layout(folders: [
-            Folder(name: "Робота", color: .blue, appIDs: ["com.apple.mail", "com.apple.Notes", "com.apple.iCal"]),
+            Folder(name: L("Робота"), color: .blue, appIDs: ["com.apple.mail", "com.apple.Notes", "com.apple.iCal"]),
         ])
         return model
     }

@@ -290,7 +290,7 @@ struct SettingsView: View {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            loginError = "Не вдалося змінити: \(error.localizedDescription)"
+            loginError = String(localized: "Не вдалося змінити: \(error.localizedDescription)")
         }
         refreshLoginStatus()
     }
@@ -383,16 +383,8 @@ private struct CustomCategoryRow: View {
         }
     }
 
-    /// "1 програма", "3 програми", "5 програм" (Ukrainian plural rules).
+    /// "1 програма", "3 програми", "5 програм"; the plural forms live in the string catalog.
     private func countLabel(_ n: Int) -> String {
-        let mod10 = n % 10, mod100 = n % 100
-        let word = if mod10 == 1 && mod100 != 11 {
-            "програма"
-        } else if (2...4).contains(mod10) && !(12...14).contains(mod100) {
-            "програми"
-        } else {
-            "програм"
-        }
-        return "\(n) \(word)"
+        String(localized: "\(n) програм", comment: "Number of apps in a category")
     }
 }

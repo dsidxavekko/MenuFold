@@ -34,17 +34,17 @@ struct GridView: View {
         Group {
             switch phase {
             case .loading:
-                EmptyStateView(title: "Завантаження…", showsSpinner: true)
+                EmptyStateView(title: String(localized: "Завантаження…"), showsSpinner: true)
             case .noApps:
                 EmptyStateView(
-                    title: "Програм не знайдено",
-                    subtitle: "Можливо, індексування Spotlight вимкнене.",
+                    title: String(localized: "Програм не знайдено"),
+                    subtitle: String(localized: "Можливо, індексування Spotlight вимкнене."),
                     systemImage: "square.grid.3x3"
                 )
             case .empty:
                 EmptyStateView(
-                    title: model.query.isEmpty ? "Тут поки порожньо" : "Нічого не знайдено",
-                    subtitle: model.query.isEmpty ? nil : "Спробуйте іншу назву.",
+                    title: model.query.isEmpty ? String(localized: "Тут поки порожньо") : String(localized: "Нічого не знайдено"),
+                    subtitle: model.query.isEmpty ? nil : String(localized: "Спробуйте іншу назву."),
                     systemImage: model.query.isEmpty ? "tray" : "magnifyingglass",
                     effectTrigger: model.query
                 )

@@ -33,14 +33,14 @@ extension FolderColor {
 
     var displayName: String {
         switch self {
-        case .gray: "Сірий"
-        case .blue: "Синій"
-        case .green: "Зелений"
-        case .orange: "Помаранчевий"
-        case .red: "Червоний"
-        case .purple: "Фіолетовий"
-        case .pink: "Рожевий"
-        case .yellow: "Жовтий"
+        case .gray: String(localized: "Сірий")
+        case .blue: String(localized: "Синій")
+        case .green: String(localized: "Зелений")
+        case .orange: String(localized: "Помаранчевий")
+        case .red: String(localized: "Червоний")
+        case .purple: String(localized: "Фіолетовий")
+        case .pink: String(localized: "Рожевий")
+        case .yellow: String(localized: "Жовтий")
         }
     }
 
@@ -139,17 +139,17 @@ enum LayoutHealth: Equatable {
 
     var isWarning: Bool { self != .ok }
 
-    /// One-line Ukrainian message; `fileName` keeps long paths out of the text.
+    /// One-line localized message; `fileName` keeps long paths out of the text.
     var message: String {
         switch self {
         case .ok:
             return ""
         case .quarantined(let url), .incompatible(let url):
-            return "Розкладку пошкоджено, попередню копію збережено в «\(url.lastPathComponent)»."
+            return String(localized: "Розкладку пошкоджено, попередню копію збережено в «\(url.lastPathComponent)».")
         case .quarantineFailedInPlace(let url):
-            return "Розкладку пошкоджено, але її не вдалося відкласти. Файл «\(url.lastPathComponent)» лишився на місці, збереження зупинено, щоб не втратити дані."
+            return String(localized: "Розкладку пошкоджено, але її не вдалося відкласти. Файл «\(url.lastPathComponent)» лишився на місці, збереження зупинено, щоб не втратити дані.")
         case .unreadable(let url, _):
-            return "Не вдалося прочитати розкладку («\(url.lastPathComponent)»). Файл не змінено — спробуйте перезапустити MenuFold."
+            return String(localized: "Не вдалося прочитати розкладку («\(url.lastPathComponent)»). Файл не змінено — спробуйте перезапустити MenuFold.")
         }
     }
 
@@ -162,7 +162,7 @@ enum LayoutHealth: Equatable {
             // Show the full location so the backup can be found without Finder.
             return url.deletingLastPathComponent().path
         case .quarantineFailedInPlace:
-            return "Закрийте MenuFold, зробіть копію файлу вручну й видаліть оригінал."
+            return String(localized: "Закрийте MenuFold, зробіть копію файлу вручну й видаліть оригінал.")
         case .unreadable(_, let cause):
             return cause
         }

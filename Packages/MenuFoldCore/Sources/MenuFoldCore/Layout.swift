@@ -136,7 +136,7 @@ extension Folder {
         } else {
             throw MalformedLayoutError(description: "folder without id")
         }
-        name = try decodePresent(String.self, c, CodingKeys.name, default: "Папка")
+        name = try decodePresent(String.self, c, CodingKeys.name, default: L("Папка"))
         color = try decodePresent(FolderColor.self, c, CodingKeys.color, default: .gray)
         symbol = c.contains(.symbol) ? try c.decodeIfPresent(String.self, forKey: .symbol) : nil
         if c.contains(.appIDs) {

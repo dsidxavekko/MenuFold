@@ -240,6 +240,66 @@ import Testing
         #expect(BundleReader.displayName(url: url, info: ["CFBundleDisplayName": " ", "CFBundleName": "Name"]) == "Name")
     }
 
+    @Test func nameFollowsTheSystemLanguageFromLproj() throws {
+        let app = try fixture(name: "Calc", plist: ["CFBundleIdentifier": "com.example.calc", "CFBundleName": "Calculator",
+                                                   "CFBundleDevelopmentRegion": "en"])
+        defer { cleanup(app) }
+        let res = app.appendingPathComponent("Contents/Resources")
+        for (lang, name) in [("uk", "Калькулятор"), ("de", "Rechner")] {
+            let dir = res.appendingPathComponent("\(lang).lproj")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            // Classic text format, as most third-party apps ship it.
+            try "\"CFBundleName\" = \"\(name)\";\n".write(to: dir.appendingPathComponent("InfoPlist.strings"), atomically: true, encoding: .utf8)
+        }
+        let uk = try #require(BundleReader.candidate(atPath: app.path, languages: ["uk-UA", "en"]))
+        #expect(uk.name == "Калькулятор")
+        #expect(uk.alternateName == "Calculator")
+        #expect(BundleReader.candidate(atPath: app.path, languages: ["de"])?.name == "Rechner")
+        // The development language and unsupported ones use Info.plist.
+        let en = try #require(BundleReader.candidate(atPath: app.path, languages: ["en-US", "uk"]))
+        #expect(en.name == "Calculator")
+        #expect(en.alternateName == nil)
+        #expect(BundleReader.candidate(atPath: app.path, languages: ["fr"])?.name == "Calculator")
+    }
+
+    /// Some apps ship broken InfoPlist.strings; reading one must fall back, not crash.
+    @Test func malformedStringsFileFallsBack() throws {
+        let app = try fixture(name: "Broken", plist: ["CFBundleIdentifier": "com.example.broken", "CFBundleName": "Broken"])
+        defer { cleanup(app) }
+        let dir = app.appendingPathComponent("Contents/Resources/uk.lproj")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try "\"CFBundleName = ;;; \"".write(to: dir.appendingPathComponent("InfoPlist.strings"), atomically: true, encoding: .utf8)
+        #expect(BundleReader.candidate(atPath: app.path, languages: ["uk"])?.name == "Broken")
+    }
+
+    @Test func nameFollowsTheSystemLanguageFromLoctable() throws {
+        let app = try fixture(name: "Play", plist: ["CFBundleIdentifier": "com.example.play", "CFBundleDisplayName": "Image Play"])
+        defer { cleanup(app) }
+        let res = app.appendingPathComponent("Contents/Resources")
+        try FileManager.default.createDirectory(at: res, withIntermediateDirectories: true)
+        let table: [String: Any] = [
+            "uk": ["CFBundleDisplayName": "Гра", "CFBundleDisplayName-macos": "Гра з зображеннями"],
+            "de": ["NSCameraUsageDescription": "Kamera"], // no name: falls back to Info.plist
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: table, format: .binary, options: 0)
+        try data.write(to: res.appendingPathComponent("InfoPlist.loctable"))
+        #expect(BundleReader.candidate(atPath: app.path, languages: ["uk"])?.name == "Гра з зображеннями")
+        #expect(BundleReader.candidate(atPath: app.path, languages: ["de"])?.name == "Image Play")
+    }
+
+    @Test func invisibleMarksAreTrimmed() {
+        let url = URL(fileURLWithPath: "/Applications/WhatsApp.app", isDirectory: true)
+        #expect(BundleReader.displayName(url: url, info: ["CFBundleName": "\u{200E}WhatsApp"]) == "WhatsApp")
+    }
+
+    @Test func searchMatchesTheUnlocalizedName() {
+        let entry = AppEntry(id: "com.apple.calculator", name: "Калькулятор", alternateName: "Calculator",
+                             url: URL(fileURLWithPath: "/System/Applications/Calculator.app"), infoCategory: nil)
+        #expect(entry.matches("calc"))
+        #expect(entry.matches("Кальк"))
+        #expect(!entry.matches("notes"))
+    }
+
     /// A symlinked bundle is filtered by its real location, so a link from a temp dir to
     /// /Applications cannot smuggle a Temp app into the grid.
     @Test func symlinkedCandidateUsesRealPath() throws {

@@ -5,13 +5,18 @@ public struct AppCandidate: Hashable, Sendable {
     public var path: String
     public var bundleID: String?
     public var name: String
+    /// The bundle's unlocalized name when it differs from `name` (e.g. "Calculator" next to
+    /// "Калькулятор"), so search finds an app by either.
+    public var alternateName: String?
     public var infoCategory: String?
     public var modificationDate: Date?
 
-    public init(path: String, bundleID: String?, name: String, infoCategory: String?, modificationDate: Date?) {
+    public init(path: String, bundleID: String?, name: String, alternateName: String? = nil,
+                infoCategory: String?, modificationDate: Date?) {
         self.path = path
         self.bundleID = bundleID
         self.name = name
+        self.alternateName = alternateName
         self.infoCategory = infoCategory
         self.modificationDate = modificationDate
     }
@@ -61,7 +66,7 @@ public enum AppFilter {
         }
         return best.values
             .map { c in
-                AppEntry(id: c.bundleID!, name: c.name, url: URL(fileURLWithPath: c.path, isDirectory: true), infoCategory: c.infoCategory)
+                AppEntry(id: c.bundleID!, name: c.name, alternateName: c.alternateName, url: URL(fileURLWithPath: c.path, isDirectory: true), infoCategory: c.infoCategory)
             }
             .sorted { lhs, rhs in
                 let r = lhs.name.localizedStandardCompare(rhs.name)

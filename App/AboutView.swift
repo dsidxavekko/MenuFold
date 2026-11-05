@@ -56,7 +56,7 @@ struct AboutView: View {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String
-        return build.map { "Версія \(version) (\($0))" } ?? "Версія \(version)"
+        return build.map { String(localized: "Версія \(version) (\($0))") } ?? String(localized: "Версія \(version)")
     }
 
     private static var copyright: String? {
