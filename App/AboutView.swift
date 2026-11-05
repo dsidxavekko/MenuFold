@@ -40,6 +40,11 @@ struct AboutView: View {
             .controlSize(.small)
             .padding(.top, 4)
 
+            if !CryptoWallet.visible.isEmpty {
+                DonationSection()
+                    .padding(.top, 8)
+            }
+
             if let copyright = Self.copyright {
                 Text(copyright)
                     .font(.caption)
@@ -62,6 +67,107 @@ struct AboutView: View {
     private static var copyright: String? {
         let text = Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String
         return text?.isEmpty == false ? text : nil
+    }
+}
+
+/// "Підтримати проєкт": one row per wallet with copy and QR buttons.
+private struct DonationSection: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Підтримати проєкт")
+                .font(.headline)
+            Text("MenuFold безкоштовний. Якщо він вам знадобився, можна підтримати розробку криптовалютою.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 380)
+
+            VStack(spacing: 6) {
+                ForEach(CryptoWallet.visible) { wallet in
+                    WalletRow(wallet: wallet)
+                }
+            }
+            .frame(maxWidth: 440)
+
+            Text("Надсилайте лише в зазначеній мережі.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+}
+
+private struct WalletRow: View {
+    let wallet: CryptoWallet
+    @State private var copied = false
+    @State private var showsQR = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(wallet.coin)
+                    .font(.callout.weight(.semibold))
+                Text(wallet.network)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 110, alignment: .leading)
+
+            Text(wallet.address)
+                .font(.caption.monospaced())
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(wallet.address)
+
+            Button {
+                copy()
+            } label: {
+                Label(copyTitle, systemImage: copied ? "checkmark" : "doc.on.doc")
+                    .labelStyle(.iconOnly)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .help(copyTitle)
+
+            Button {
+                showsQR = true
+            } label: {
+                Label("QR-код", systemImage: "qrcode")
+                    .labelStyle(.iconOnly)
+            }
+            .help("QR-код")
+            .popover(isPresented: $showsQR, arrowEdge: .bottom) {
+                VStack(spacing: 8) {
+                    if let image = wallet.qrCode() {
+                        Image(nsImage: image)
+                            .interpolation(.none)
+                            .accessibilityLabel(Text(verbatim: wallet.address))
+                    }
+                    Text(verbatim: "\(wallet.coin) · \(wallet.network)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(14)
+            }
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+    }
+
+    private var copyTitle: LocalizedStringKey {
+        copied ? "Скопійовано" : "Копіювати"
+    }
+
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(wallet.address, forType: .string)
+        withAnimation(reduceMotion ? nil : Theme.crossfade) { copied = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation(reduceMotion ? nil : Theme.crossfade) { copied = false }
+        }
     }
 }
 

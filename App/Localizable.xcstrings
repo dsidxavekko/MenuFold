@@ -77,6 +77,16 @@
     "MenuFold": {
       "shouldTranslate": false
     },
+    "MenuFold безкоштовний. Якщо він вам знадобився, можна підтримати розробку криптовалютою.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold is free. If you find it useful, you can support its development with crypto."
+          }
+        }
+      }
+    },
     "MenuFold відкривається кліком по його значку в Dock. Права кнопка на значку — налаштування та інформація про програму.": {
       "localizations": {
         "en": {
@@ -113,6 +123,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Once a day MenuFold asks GitHub whether a new version is out. It sends nothing else."
+          }
+        }
+      }
+    },
+    "QR-код": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR Code"
           }
         }
       }
@@ -611,6 +631,16 @@
         }
       }
     },
+    "Копіювати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
     "Лаунчер macOS": {
       "localizations": {
         "en": {
@@ -661,6 +691,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Music"
+          }
+        }
+      }
+    },
+    "Надсилайте лише в зазначеній мережі.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send only on the network shown."
           }
         }
       }
@@ -1351,6 +1391,16 @@
         }
       }
     },
+    "Підтримати проєкт": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support the Project"
+          }
+        }
+      }
+    },
     "Робота": {
       "comment": "MenuFoldCore (looked up with L())",
       "extractionState": "manual",
@@ -1575,6 +1625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reset Layout…"
+          }
+        }
+      }
+    },
+    "Скопійовано": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
           }
         }
       }

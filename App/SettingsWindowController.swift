@@ -30,7 +30,7 @@ enum SettingsTab: Int, CaseIterable {
         case .general: NSSize(width: 520, height: Updater.isEnabled ? 680 : 530)
         case .categories: NSSize(width: 520, height: 380)
         case .apps: NSSize(width: 520, height: 460)
-        case .about: NSSize(width: 520, height: 360)
+        case .about: NSSize(width: 520, height: CryptoWallet.visible.isEmpty ? 360 : 470 + CGFloat(CryptoWallet.visible.count) * 36)
         }
     }
 }

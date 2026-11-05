@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-blue" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Apple%20silicon-arm64-lightgrey" alt="Apple silicon">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/dsidxavekko/MenuFold" alt="License"></a>
+  <a href="#support-menufold"><img src="https://img.shields.io/badge/support-crypto-orange" alt="Support MenuFold with crypto"></a>
 </p>
 
 <p align="center">
@@ -116,7 +117,7 @@ Your layout (folders, categories, hidden apps, custom icons) is saved in
 | **General** | Open at login, Dock icon, the frequent apps row and its history, show or reset the layout |
 | **Categories** | Turn the **Running** tab on or off, add, rename or delete your own categories, reset the tab order |
 | **Apps** | Bring back hidden apps, change or reset custom icons, show Finder folders you dissolved again |
-| **About** | Version and links |
+| **About** | Version, links and the donation addresses |
 
 ## Privacy
 
@@ -132,6 +133,18 @@ It writes only inside `~/Library/Application Support/MenuFold/`. If `layout.json
 moves it aside as `layout.corrupt-<date>.json` and warns you in Settings, so your old layout is not lost.
 
 When you drag an app out of the panel, Finder can only make an alias of it. It cannot move or copy the app.
+
+## Support MenuFold
+
+MenuFold is free. If you find it useful, you can support its development with crypto. The same
+addresses, with copy buttons and QR codes, are in **Settings → About**. Send only on the network shown.
+
+| Coin | Network | Address |
+|---|---|---|
+| BTC | Bitcoin | `bc1qucdvlr66xqu4xeeyrlhm0ru2nl7klyfnyy3wsc` |
+| ETH | Ethereum (ERC-20) | `0xb1c1314a1d63d6ae92c54d64ed8f34daca683a80` |
+| SOL | Solana | `H8AgKJgd9yCwXQQfPYV3DwhAcXSUADpYbiXY4reHiPLS` |
+| TRX | Tron (TRC-20) | `TF9rt5o7RkgpsA88mrXxqLBiUnnMGnAanr` |
 
 ## Build from source
 

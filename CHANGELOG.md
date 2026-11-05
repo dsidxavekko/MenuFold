@@ -4,6 +4,11 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.4.1
+
+- **Support MenuFold.** Settings → About now lists crypto addresses (BTC, ETH, SOL, TRX) for donations,
+  with a copy button and a QR code for each.
+
 ## 0.4.0
 
 - **Automatic updates.** MenuFold checks for a new version once a day and installs it for you.
