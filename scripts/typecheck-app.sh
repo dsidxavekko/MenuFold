@@ -147,10 +147,16 @@ for base in "${bin_candidates[@]}"; do
 done
 for dir in "${bin_candidates[@]}"; do
     [[ -n "$dir" && -d "$dir" ]] || continue
-    [[ -d "$dir/MenuFoldCore.swiftmodule" ]] || continue
+    # A directory in older SwiftPM, a single file in Modules/ in newer ones (Swift 6.3).
+    [[ -e "$dir/MenuFoldCore.swiftmodule" ]] || continue
     [[ " ${import_args[*]-} " == *" -I $dir "* ]] && continue
     import_args+=(-I "$dir")
 done
+if [[ ${#import_args[@]} -eq 0 ]]; then
+    # Last resort for yet another layout: wherever SwiftPM put the module under .build.
+    found="$(find "$pkg/.build" -maxdepth 6 -name MenuFoldCore.swiftmodule -not -path '*/index/*' 2>/dev/null | head -1)"
+    [[ -n "$found" ]] && import_args+=(-I "$(dirname "$found")")
+fi
 if [[ ${#import_args[@]} -eq 0 ]]; then
     fail "cannot locate the built MenuFoldCore module (bin path: ${bin_path:-<none>})" "$build_log"
 fi
