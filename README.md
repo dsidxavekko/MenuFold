@@ -77,6 +77,8 @@ Requires macOS 26 or later on Apple silicon.
 
 To check the download, run `shasum -a 256 -c SHA256SUMS` in the folder that holds both files.
 
+What changed in each version is listed on the [Releases](https://github.com/dsidxavekko/MenuFold/releases) page.
+
 ## Using it
 
 | Action | How |
@@ -91,6 +93,15 @@ To check the download, run `shasum -a 256 -c SHA256SUMS` in the folder that hold
 
 Your layout (folders, categories, hidden apps, custom icons) is saved in
 `~/Library/Application Support/MenuFold/`. **Settings → General → Show in Finder** takes you there.
+
+## Settings
+
+| Tab | What's there |
+| --- | --- |
+| **General** | Open at login, Dock icon, the frequent apps row and its history, show or reset the layout |
+| **Categories** | Turn the **Running** tab on or off, add, rename or delete your own categories, reset the tab order |
+| **Apps** | Bring back hidden apps, change or reset custom icons, show Finder folders you dissolved again |
+| **About** | Version and links |
 
 ## Privacy
 
@@ -141,4 +152,5 @@ publishes a GitHub release.
 
 ## License
 
-[MIT](LICENSE)
+MenuFold is released under the [MIT License](LICENSE): you may use, copy, change and share it freely, as
+long as the copyright notice stays with it.
