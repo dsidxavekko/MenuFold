@@ -4,8 +4,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Use full Xcode without needing `sudo xcode-select` when the active dir is only Command Line Tools.
-if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p)" == *CommandLineTools* && -d /Applications/Xcode.app ]]; then
-    export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+# Any /Applications/Xcode*.app counts (GitHub runners name it e.g. Xcode_26.6.app).
+if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p)" == *CommandLineTools* ]]; then
+    for candidate in /Applications/Xcode.app/Contents/Developer /Applications/Xcode*.app/Contents/Developer; do
+        if [[ -d "$candidate" ]]; then
+            export DEVELOPER_DIR="$candidate"
+            break
+        fi
+    done
 fi
 
 xcodegen generate

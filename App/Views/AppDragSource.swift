@@ -256,6 +256,8 @@ final class AppDragSourceView: NSView, NSDraggingSource {
         case .outsideApplication:
             // Never .copy/.move (Finder would copy or move the bundle) and never .delete (Trash).
             // Finder treats .generic like a move, so it is offered only over the Dock.
+            // Checked by hand on macOS 27: the Dock's Trash and folder stacks reject this mask
+            // (nothing is moved, trashed or aliased), so .generic only enables pinning.
             let overDock = MainActor.assumeIsolated { AppDragSession.shared.isOverDock }
             return overDock ? [.link, .generic] : [.link]
         @unknown default:

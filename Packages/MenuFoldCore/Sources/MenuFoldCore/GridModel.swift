@@ -60,6 +60,9 @@ public final class GridModel {
 
     /// Called after an app was launched (Shell closes the panel).
     @ObservationIgnored public var onLaunched: (() -> Void)?
+    /// Called on the main actor when a launch from `launch(_:)` fails (app removed since the last
+    /// scan, damaged bundle, …), with the system's error text. The panel is already closed by then.
+    @ObservationIgnored public var onLaunchFailed: ((AppEntry, String) -> Void)?
 
     @ObservationIgnored private let catalog: AppCatalogProviding
     @ObservationIgnored private let store: LayoutStore?
@@ -418,12 +421,16 @@ public final class GridModel {
         commit(Layout())
     }
 
-    /// Opens app via NSWorkspace, then calls `onLaunched`.
+    /// Opens app via NSWorkspace, then calls `onLaunched` right away (the panel closes without
+    /// waiting). A failure is reported later through `onLaunchFailed`.
     public func launch(_ app: AppEntry) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
-        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { _, error in
-            if let error { NSLog("MenuFold: failed to launch \(app.url.path): \(error.localizedDescription)") }
+        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { [weak self] _, error in
+            guard let error else { return }
+            let message = error.localizedDescription
+            NSLog("%@", "MenuFold: failed to launch \(app.url.path): \(message)")
+            Task { @MainActor in self?.onLaunchFailed?(app, message) }
         }
         onLaunched?()
     }

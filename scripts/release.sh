@@ -53,8 +53,20 @@ done
 # ---------------------------------------------------------------- toolchain
 step "Checking toolchain"
 # The machine's xcode-select may point at Command Line Tools; the app needs the full Xcode.
-xcode_dir="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
-[[ -d "$xcode_dir" ]] || die 2 "Xcode not found at $xcode_dir. Install Xcode (macOS 26+ SDK) or set DEVELOPER_DIR."
+# Order: an explicit DEVELOPER_DIR, then the selected Xcode (CI selects one), then any
+# /Applications/Xcode*.app (GitHub runners name it e.g. Xcode_26.6.app).
+xcode_dir="${DEVELOPER_DIR:-}"
+if [[ -z "$xcode_dir" ]]; then
+    selected="$(xcode-select -p 2>/dev/null || true)"
+    if [[ -n "$selected" && "$selected" != *CommandLineTools* && -d "$selected" ]]; then
+        xcode_dir="$selected"
+    else
+        for candidate in /Applications/Xcode.app/Contents/Developer /Applications/Xcode*.app/Contents/Developer; do
+            [[ -d "$candidate" ]] && { xcode_dir="$candidate"; break; }
+        done
+    fi
+fi
+[[ -n "$xcode_dir" && -d "$xcode_dir" ]] || die 2 "No full Xcode found (looked at DEVELOPER_DIR, xcode-select and /Applications/Xcode*.app). Install Xcode (macOS 26+ SDK) or set DEVELOPER_DIR."
 export DEVELOPER_DIR="$xcode_dir"
 command -v xcodebuild >/dev/null || die 2 "xcodebuild not found (is Xcode installed?)."
 command -v xcodegen  >/dev/null || die 2 "xcodegen not found. Install it with: brew install xcodegen"
@@ -75,7 +87,8 @@ project_version="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"[:space:]]*\)"\
 [[ -n "$version" ]] || version="$project_version"
 [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?$ ]] || die 1 "Invalid version '$version' (expected e.g. 0.1.0)."
 if [[ "$version" != "$project_version" ]]; then
-    warn "Building $version, but project.yml says $project_version: the app's CFBundleShortVersionString will be $project_version."
+    # The requested version is passed to xcodebuild as MARKETING_VERSION, so the bundle reports it.
+    warn "Building $version, but project.yml says $project_version: overriding MARKETING_VERSION for this build (update project.yml to keep them in sync)."
 fi
 
 # ---------------------------------------------------------------- git state
@@ -120,6 +133,7 @@ if ! xcodebuild \
         -derivedDataPath "$build_dir" \
         -arch arm64 \
         ONLY_ACTIVE_ARCH=NO \
+        MARKETING_VERSION="$version" \
         CODE_SIGN_IDENTITY=- \
         build >"$log" 2>&1; then
     printf '\n%s--- last 60 lines of the build log ---%s\n' "$bold" "$reset" >&2
@@ -141,11 +155,14 @@ ok "bundle: $app_path"
 codesign --verify --strict --verbose=1 "$app_path" 2>&1 | sed 's/^/    /'
 ok "codesign --verify --strict"
 
-plutil -lint "$app_path/Contents/Info.plist" >/dev/null || die 3 "Info.plist is not a valid property list."
-for plist in "$app_path"/Contents/**/Info.plist; do
-    [[ -f "$plist" ]] && plutil -lint "$plist" >/dev/null || true
-done
-ok "plutil -lint"
+# Every Info.plist in the bundle, nested ones included (bash 3.2 has no globstar, so use find).
+plist_count=0
+while IFS= read -r -d '' plist; do
+    plutil -lint "$plist" >/dev/null || die 3 "Not a valid property list: ${plist#"$app_path"/}"
+    plist_count=$((plist_count + 1))
+done < <(find "$app_path/Contents" -name Info.plist -type f -print0)
+[[ "$plist_count" -gt 0 ]] || die 3 "No Info.plist found in the bundle."
+ok "plutil -lint ($plist_count Info.plist)"
 
 plist_version="$(plutil -extract CFBundleShortVersionString raw "$app_path/Contents/Info.plist")"
 [[ "$plist_version" == "$version" ]] || die 3 "Bundle version '$plist_version' != requested '$version'."
@@ -216,5 +233,6 @@ step "Done"
 info "zip:    $out_zip"
 info "sha256: $sha"
 info "state:  $git_commit$( [[ "$allow_dirty" -eq 1 && -n "$dirty_paths" ]] && printf ' + local changes' )"
-printf '\n    Install: unzip, move MenuFold.app to /Applications, then right-click → Open the first time\n'
-printf '    (the app is ad-hoc signed, not notarised). Requires macOS %s+ on Apple silicon.\n\n' "$min_os"
+printf '\n    Install: unzip, move MenuFold.app to /Applications and open it. The app is ad-hoc signed, not\n'
+printf '    notarised, so macOS blocks the first launch: System Settings → Privacy & Security → Open Anyway.\n'
+printf '    Requires macOS %s+ on Apple silicon.\n\n' "$min_os"

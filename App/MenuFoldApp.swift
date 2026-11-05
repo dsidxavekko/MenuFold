@@ -61,7 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.panel = PanelController(model: model)
         super.init()
         model.onLaunched = { [weak self] in self?.panel.hide(reason: .appLaunched) }
+        model.onLaunchFailed = { [weak self] app, message in self?.showLaunchFailure(app: app, message: message) }
         observeApps()
+    }
+
+    /// The panel is already gone when a launch fails, so without this the click would do nothing
+    /// visible. The alert takes key status, which also closes the panel if it was reopened meanwhile.
+    private func showLaunchFailure(app: AppEntry, message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Не вдалося відкрити «\(app.name)»"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        NSApp.activate()
+        alert.runModal()
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {

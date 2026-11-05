@@ -56,8 +56,18 @@ jobs:
             version="${INPUT_VERSION:-$project_version}"
             tag="${INPUT_TAG:-v$version}"
           fi
+          # The tag name is user-controlled text: refuse anything that is not a plain version
+          # before it reaches an output, a shell or a release title.
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error title=Bad version::'$version' is not a version like 0.1.0"
+            exit 1
+          fi
+          if [[ ! "$tag" =~ ^[0-9A-Za-z._/-]+$ ]]; then
+            echo "::error title=Bad tag::'$tag' contains characters a tag name should not have"
+            exit 1
+          fi
           if [[ "$version" != "$project_version" ]]; then
-            echo "::warning title=Version mismatch::Requested $version but project.yml has MARKETING_VERSION $project_version; the app bundle will report $project_version."
+            echo "::warning title=Version mismatch::Requested $version but project.yml has MARKETING_VERSION $project_version; the build overrides it to $version. Update project.yml to keep them in sync."
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -83,9 +93,11 @@ jobs:
 
       - name: Build, verify and package
         if: steps.sdk.outputs.ok == 'true'
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
         run: |
           set -euo pipefail
-          ./scripts/release.sh "${{ steps.vars.outputs.version }}" --no-downloads
+          ./scripts/release.sh "$VERSION" --no-downloads
           echo "--- dist/ ---"
           ls -l dist
           echo "--- SHA256SUMS ---"
@@ -134,7 +146,8 @@ jobs:
           ### Install
           1. Download \`MenuFold-${VERSION}-macos26-arm64.zip\` and unzip it.
           2. Move \`MenuFold.app\` to \`/Applications\`.
-          3. The first time, **right-click → Open** (the app is ad-hoc signed, not notarised).
+          3. Open it. The app is ad-hoc signed, not notarised, so macOS blocks the first launch:
+             go to **System Settings → Privacy & Security** and click **Open Anyway**.
           4. Pin it to the Dock like any other app.
 
           ### Verify the download
@@ -151,12 +164,17 @@ jobs:
             --notes-file notes.md
 
       - name: Summary
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          SDK: ${{ steps.sdk.outputs.version }}
+          BUILT: ${{ steps.sdk.outputs.ok }}
         run: |
           {
             echo "### MenuFold release"
             echo ""
-            echo "- version: \`${{ steps.vars.outputs.version }}\`"
-            echo "- tag: \`${{ steps.vars.outputs.tag }}\`"
-            echo "- SDK: \`${{ steps.sdk.outputs.version }}\`"
-            echo "- built: \`${{ steps.sdk.outputs.ok }}\`"
+            echo "- version: \`$VERSION\`"
+            echo "- tag: \`$TAG\`"
+            echo "- SDK: \`$SDK\`"
+            echo "- built: \`$BUILT\`"
           } >> "$GITHUB_STEP_SUMMARY"
