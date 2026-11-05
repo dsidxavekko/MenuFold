@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var layoutHealth = LayoutHealth.ok
     @State private var dockIcon = DockIconStyle.current
     @State private var dockIconWriteFailed = false
+    /// Bumped when the custom Dock picture changes, so its preview redraws.
+    @State private var dockIconRevision = 0
 
     var body: some View {
         Group {
@@ -70,15 +72,30 @@ struct SettingsView: View {
             }
 
             Section {
-                HStack(spacing: 12) {
-                    ForEach(DockIconStyle.allCases) { style in
-                        DockIconChoice(style: style, isSelected: dockIcon == style) {
-                            dockIcon = style
-                            dockIconWriteFailed = !DockIconStyle.select(style)
+                HStack(spacing: 8) {
+                    ForEach(DockIconStyle.available) { style in
+                        DockIconChoice(style: style, isSelected: dockIcon == style, revision: dockIconRevision) {
+                            if style == .custom && !DockIconStyle.hasCustomImage {
+                                chooseCustomDockIcon()
+                            } else {
+                                dockIcon = style
+                                dockIconWriteFailed = !DockIconStyle.select(style)
+                            }
                         }
                     }
                 }
                 .frame(maxWidth: .infinity)
+                if dockIcon == .custom {
+                    HStack {
+                        Text("Своє зображення або значок іншої програми.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Вибрати інше…") { chooseCustomDockIcon() }
+                            .buttonStyle(.glass)
+                            .controlSize(.small)
+                    }
+                    .font(.callout)
+                }
                 if dockIconWriteFailed {
                     HStack {
                         Text("macOS не дозволила змінити значок самої програми, тому він зміниться лише поки MenuFold запущено. Дозвольте MenuFold у розділі «Керування програмами».")
@@ -114,7 +131,7 @@ struct SettingsView: View {
                         Button("Скинути", role: .destructive) { resetLayout() }
                         Button("Скасувати", role: .cancel) {}
                     } message: {
-                        Text("Усі папки, власні й перевизначені категорії та приховані програми буде видалено.")
+                        Text("Усі папки, власні й перевизначені категорії, власні значки та приховані програми буде видалено.")
                     }
             } header: {
                 Label("Розкладка", systemImage: "square.grid.3x3")
@@ -167,7 +184,7 @@ struct SettingsView: View {
                 } else {
                     ForEach(hidden) { app in
                         HStack(spacing: 8) {
-                            Image(nsImage: IconCache.shared.icon(for: app.url))
+                            Image(nsImage: IconCache.shared.icon(for: app))
                                 .resizable()
                                 .frame(width: 24, height: 24)
                             Text(app.name)
@@ -180,6 +197,34 @@ struct SettingsView: View {
                 }
             } header: {
                 Label("Приховані програми", systemImage: "eye.slash")
+            }
+
+            Section {
+                let custom = model.appsWithCustomIcons
+                if custom.isEmpty {
+                    Text("Немає власних значків")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(custom) { app in
+                        HStack(spacing: 8) {
+                            Image(nsImage: IconCache.shared.icon(for: app))
+                                .resizable()
+                                .frame(width: 24, height: 24)
+                            Text(app.name)
+                            Spacer()
+                            Button("Змінити…") { CustomIconPicker.choose(for: app, model: model) }
+                                .buttonStyle(.glass)
+                                .controlSize(.small)
+                            Button("Стандартний") { model.resetCustomIcon(for: app.id) }
+                                .buttonStyle(.glass)
+                                .controlSize(.small)
+                        }
+                    }
+                }
+            } header: {
+                Label("Власні значки", systemImage: "photo")
+            } footer: {
+                Text("Значок програми змінюється через її контекстне меню: «Змінити значок…». Підійде будь-яке зображення або інша програма. Файли програм не змінюються.")
             }
 
             Section {
@@ -281,6 +326,17 @@ struct SettingsView: View {
         layoutHealth = LayoutHealth.current(model: model)
     }
 
+    private func chooseCustomDockIcon() {
+        guard let url = CustomIconPicker.pickFile(title: String(localized: "Значок MenuFold у Dock")) else { return }
+        do {
+            dockIconWriteFailed = !(try DockIconStyle.setCustomImage(from: url))
+            dockIcon = .custom
+            dockIconRevision += 1
+        } catch {
+            CustomIconPicker.showError(error)
+        }
+    }
+
     private func setLaunchAtLogin(_ enabled: Bool) {
         loginError = nil
         do {
@@ -311,6 +367,8 @@ struct SettingsView: View {
 private struct DockIconChoice: View {
     let style: DockIconStyle
     let isSelected: Bool
+    /// Changes when the custom picture is replaced; part of the view's input, so it redraws.
+    let revision: Int
     let select: () -> Void
 
     var body: some View {
@@ -318,11 +376,16 @@ private struct DockIconChoice: View {
             VStack(spacing: 6) {
                 Image(nsImage: style.image)
                     .resizable()
-                    .frame(width: 64, height: 64)
+                    .frame(width: 56, height: 56)
+                    .foregroundStyle(.secondary)
                 Text(style.title)
                     .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2, reservesSpace: true)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 18)
+            .frame(width: 92)
+            .padding(.horizontal, 6)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

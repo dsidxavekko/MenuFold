@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.model = model
         self.panel = PanelController(model: model)
         super.init()
+        IconCache.shared.customIconURL = { [weak model] id in model?.customIconURL(for: id) }
         model.onLaunched = { [weak self] in self?.panel.hide(reason: .appLaunched) }
         model.onLaunchFailed = { [weak self] app, message in self?.showLaunchFailure(app: app, message: message) }
         observeApps()

@@ -74,6 +74,8 @@ public final class GridModel {
     /// Finder folder path → display name (injectable for tests; results are cached).
     @ObservationIgnored private let finderNameResolver: (String) -> String
     @ObservationIgnored private var finderNameCache: [String: String] = [:]
+    /// Folder that holds custom icon files. Without a store (previews, tests) a private temp folder.
+    @ObservationIgnored public let iconsDirectory: URL
 
     public convenience init(catalog: AppCatalogProviding, store: LayoutStore?) {
         self.init(catalog: catalog, store: store,
@@ -86,6 +88,8 @@ public final class GridModel {
         self.store = store
         self.homeDirectory = homeDirectory
         self.finderNameResolver = finderNameResolver
+        self.iconsDirectory = store?.iconsDirectory
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("MenuFold-Icons-\(UUID().uuidString)", isDirectory: true)
         let loaded = store?.loadWithOutcome()
         self.layout = loaded?.layout ?? Layout()
         self.layoutOutcome = loaded?.outcome ?? .missing
@@ -103,6 +107,9 @@ public final class GridModel {
                 NSLog("%@", "MenuFold: could not write a fresh layout after an incompatible file: \(error.localizedDescription)")
             }
         }
+        // Only a layout that was really read says which icon files are in use; after a quarantine
+        // the old file still refers to them, so they are kept.
+        if case .loaded = layoutOutcome { removeUnusedIconFiles() }
         self.apps = catalog.apps
         self.isLoaded = catalog.isLoaded
         catalog.onChange = { [weak self] apps in
@@ -536,6 +543,51 @@ public final class GridModel {
         renamingFolderID = nil
         renamingCategoryID = nil
         commit(Layout())
+        removeUnusedIconFiles()
+    }
+
+    // MARK: Custom icons
+
+    /// The user's icon file for `appID`, or nil to use the app's own icon.
+    public func customIconURL(for appID: String) -> URL? {
+        layout.customIcons[appID].map { iconsDirectory.appendingPathComponent($0) }
+    }
+
+    /// Installed apps that have a custom icon, sorted by name (listed in Settings).
+    public var appsWithCustomIcons: [AppEntry] {
+        Self.sorted(apps.filter { layout.customIcons[$0.id] != nil })
+    }
+
+    /// Uses `source` as the icon of `appID`: an image file as is, any other file (e.g. another app)
+    /// by its Finder icon. The picture is copied as a PNG, so the original may be moved or deleted.
+    /// Each change gets a new file name, so caches keyed by the file never show the old picture.
+    public func setCustomIcon(for appID: String, from source: URL) throws {
+        let data = try CustomIcons.pngData(from: source)
+        try FileManager.default.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
+        let name = UUID().uuidString + ".png"
+        try data.write(to: iconsDirectory.appendingPathComponent(name), options: .atomic)
+        let old = layout.customIcons[appID]
+        var l = layout
+        l.customIcons[appID] = name
+        commit(l)
+        if let old { try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old)) }
+    }
+
+    /// Goes back to the app's own icon.
+    public func resetCustomIcon(for appID: String) {
+        var l = layout
+        guard let old = l.customIcons.removeValue(forKey: appID) else { return }
+        commit(l)
+        try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old))
+    }
+
+    /// Deletes icon files that no layout entry points at (left over after a reset or a crash).
+    private func removeUnusedIconFiles() {
+        let used = Set(layout.customIcons.values)
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: iconsDirectory.path)) ?? []
+        for file in files where file.hasSuffix(".png") && !used.contains(file) {
+            try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(file))
+        }
     }
 
     /// Opens app via NSWorkspace, then calls `onLaunched` right away (the panel closes without

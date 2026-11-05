@@ -223,7 +223,7 @@ final class AppDragSourceView: NSView, NSDraggingSource {
         let dragItem = NSDraggingItem(pasteboardWriter: item)
         dragItem.setDraggingFrame(
             NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size),
-            contents: MainActor.assumeIsolated { IconCache.shared.icon(for: url) }
+            contents: MainActor.assumeIsolated { IconCache.shared.icon(appID: appID, url: url) }
         )
 
         // The session's `ended` is the only place that clears the drag state the panel reacts to

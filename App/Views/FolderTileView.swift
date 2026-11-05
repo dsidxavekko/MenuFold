@@ -42,7 +42,7 @@ struct FolderArtwork: View {
                     ForEach(0..<3, id: \.self) { col in
                         let index = row * 3 + col
                         if index < shown.count {
-                            Image(nsImage: IconCache.shared.icon(for: shown[index].url))
+                            Image(nsImage: IconCache.shared.icon(for: shown[index]))
                                 .resizable()
                                 .interpolation(.high)
                                 .frame(width: cell, height: cell)

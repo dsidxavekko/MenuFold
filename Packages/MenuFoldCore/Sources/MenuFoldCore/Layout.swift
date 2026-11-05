@@ -85,11 +85,14 @@ public struct Layout: Codable, Equatable, Sendable {
     /// Bundle ID → Finder folder path the user dropped it into in MenuFold (files are not moved).
     /// Wins over the app's real location and over `finderExclusions`; manual folders still win over it.
     public var finderAdditions: [String: String]
+    /// Bundle ID → file name of the user's icon in the icons folder (`LayoutStore.iconsDirectory`).
+    /// Kept for uninstalled apps too, like folders, so the icon comes back on reinstall.
+    public var customIcons: [String: String]
 
     public init(version: Int = Layout.currentVersion, folders: [Folder] = [], categoryOverrides: [String: String] = [:], hidden: Set<String> = [],
                 finderStyles: [String: FinderFolderStyle] = [:], ignoredFinderFolders: Set<String> = [], finderExclusions: Set<String> = [],
                 finderAdditions: [String: String] = [:], customCategories: [CustomCategory] = [],
-                categoryOrder: [String] = []) {
+                categoryOrder: [String] = [], customIcons: [String: String] = [:]) {
         self.version = version
         self.folders = folders
         self.categoryOverrides = categoryOverrides
@@ -100,6 +103,7 @@ public struct Layout: Codable, Equatable, Sendable {
         self.finderAdditions = finderAdditions
         self.customCategories = customCategories
         self.categoryOrder = categoryOrder
+        self.customIcons = customIcons
     }
 }
 
@@ -158,7 +162,7 @@ extension Folder {
 }
 
 extension Layout {
-    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder }
+    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder, customIcons }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -172,6 +176,7 @@ extension Layout {
         finderAdditions = try decodePresent([String: String].self, c, CodingKeys.finderAdditions, default: [:])
         customCategories = try decodePresent([CustomCategory].self, c, CodingKeys.customCategories, default: [])
         categoryOrder = try decodePresent([String].self, c, CodingKeys.categoryOrder, default: [])
+        customIcons = try decodePresent([String: String].self, c, CodingKeys.customIcons, default: [:])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -187,6 +192,7 @@ extension Layout {
         try c.encode(finderAdditions, forKey: .finderAdditions)
         try c.encode(customCategories, forKey: .customCategories)
         try c.encode(categoryOrder, forKey: .categoryOrder)
+        try c.encode(customIcons, forKey: .customIcons)
     }
 }
 
@@ -202,6 +208,7 @@ extension Layout {
     ///   since they are paths as well.
     /// - Custom categories need a `custom.` id and a name; overrides and `categoryOrder` entries for
     ///   unknown custom ids are dropped.
+    /// - Custom icon file names must be plain names inside the icons folder (no path, no dot file).
     func droppingInvalidFolders() -> Layout {
         var copy = self
         var seenIDs = Set<UUID>()
@@ -235,7 +242,13 @@ extension Layout {
                 && (!id.hasPrefix(AppCategory.customPrefix) || seenCategories.contains(id))
                 && seenOrder.insert(id).inserted
         }
+        copy.customIcons = customIcons.filter { !$0.key.isEmpty && Self.isValidIconFileName($0.value) }
         return copy
+    }
+
+    /// A bare file name: no separators, not hidden, so it cannot point outside the icons folder.
+    static func isValidIconFileName(_ name: String) -> Bool {
+        !name.isEmpty && !name.contains("/") && !name.contains(":") && !name.hasPrefix(".")
     }
 
     /// Absolute path with no "." or ".." component and no trailing slash (other than "/" itself).

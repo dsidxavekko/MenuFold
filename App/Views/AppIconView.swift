@@ -23,7 +23,7 @@ struct AppIconView: View {
         } label: {
             VStack(spacing: 6) {
                 AppIconArtwork(
-                    url: app.url,
+                    image: IconCache.shared.icon(for: app),
                     isHovered: isHovered,
                     isTargeted: isTargeted,
                     launchPulse: launchPulse
@@ -75,7 +75,7 @@ struct AppIconView: View {
 /// The icon part of a tile: scales on hover/press/drop-target (the label stays), soft shadow,
 /// glass halo while an app is dragged over it, and a quick pulse on launch.
 private struct AppIconArtwork: View {
-    let url: URL
+    let image: NSImage
     let isHovered: Bool
     let isTargeted: Bool
     let launchPulse: Int
@@ -94,7 +94,7 @@ private struct AppIconArtwork: View {
     var body: some View {
         let size = GridMetrics.iconSize
         let lifted = isHovered && !isPressed
-        Image(nsImage: IconCache.shared.icon(for: url))
+        Image(nsImage: image)
             .resizable()
             .interpolation(.high)
             .frame(width: size, height: size)
@@ -142,6 +142,10 @@ struct AppContextMenu: View {
     var body: some View {
         Button("Відкрити") { model.launch(app) }
         Button("Показати у Finder") { model.revealInFinder(app) }
+        Button("Змінити значок…") { CustomIconPicker.choose(for: app, model: model) }
+        if model.customIconURL(for: app.id) != nil {
+            Button("Стандартний значок") { model.resetCustomIcon(for: app.id) }
+        }
         Menu("Змінити категорію") {
             let hasOverride = model.layout.categoryOverrides[app.id] != nil
             let current = model.category(of: app)

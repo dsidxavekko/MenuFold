@@ -45,6 +45,11 @@ public final class LayoutStore: @unchecked Sendable {
     /// files out of $TMPDIR may be denied under SIP, and the failure path must be testable anyway.
     var isQuarantinable: (URL) -> Bool = { _ in true }
 
+    /// Where custom app icons are kept: an `Icons` folder next to layout.json.
+    public var iconsDirectory: URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("Icons", isDirectory: true)
+    }
+
     public init(fileURL: URL = LayoutStore.defaultURL) {
         self.fileURL = fileURL
     }

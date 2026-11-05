@@ -183,6 +183,36 @@
         }
       }
     },
+    "Виберіть зображення (PNG, JPEG, HEIC, ICNS, SVG…) або програму, чий значок узяти.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an image (PNG, JPEG, HEIC, ICNS, SVG…) or an app whose icon to use."
+          }
+        }
+      }
+    },
+    "Вибрати": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose"
+          }
+        }
+      }
+    },
+    "Вибрати інше…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Another…"
+          }
+        }
+      }
+    },
     "Видалити": {
       "localizations": {
         "en": {
@@ -209,6 +239,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Custom category. Drag to reorder; context menu: rename or delete"
+          }
+        }
+      }
+    },
+    "Власні значки": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom Icons"
           }
         }
       }
@@ -371,12 +411,62 @@
         }
       }
     },
+    "Змінити значок…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Icon…"
+          }
+        }
+      }
+    },
     "Змінити категорію": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Change Category"
+          }
+        }
+      }
+    },
+    "Змінити…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change…"
+          }
+        }
+      }
+    },
+    "Значок MenuFold у Dock": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold Dock Icon"
+          }
+        }
+      }
+    },
+    "Значок для «%@»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icon for “%@”"
+          }
+        }
+      }
+    },
+    "Значок програми змінюється через її контекстне меню: «Змінити значок…». Підійде будь-яке зображення або інша програма. Файли програм не змінюються.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change an app's icon from its context menu: “Change Icon…”. Any image or another app will do. The apps themselves are not changed."
           }
         }
       }
@@ -417,6 +507,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Color"
+          }
+        }
+      }
+    },
+    "Лаунчер macOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS Launcher"
           }
         }
       }
@@ -525,6 +625,16 @@
         }
       }
     },
+    "Не вдалося змінити значок": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't Change the Icon"
+          }
+        }
+      }
+    },
     "Не вдалося змінити: %@": {
       "localizations": {
         "en": {
@@ -551,6 +661,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Don't Show as Folder"
+          }
+        }
+      }
+    },
+    "Немає власних значків": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No custom icons"
           }
         }
       }
@@ -1077,6 +1197,26 @@
         }
       }
     },
+    "Своє зображення або значок іншої програми.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your own image or another app's icon."
+          }
+        }
+      }
+    },
+    "Свій": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom"
+          }
+        }
+      }
+    },
     "Синій": {
       "localizations": {
         "en": {
@@ -1181,6 +1321,26 @@
         }
       }
     },
+    "Стандартний": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        }
+      }
+    },
+    "Стандартний значок": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default Icon"
+          }
+        }
+      }
+    },
     "Стиль життя": {
       "comment": "MenuFoldCore (looked up with L())",
       "extractionState": "manual",
@@ -1243,12 +1403,12 @@
         }
       }
     },
-    "Усі папки, власні й перевизначені категорії та приховані програми буде видалено.": {
+    "Усі папки, власні й перевизначені категорії, власні значки та приховані програми буде видалено.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "All folders, custom and overridden categories, and hidden apps will be removed."
+            "value": "All folders, custom and overridden categories, custom icons and hidden apps will be removed."
           }
         }
       }
@@ -1295,6 +1455,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Purple"
+          }
+        }
+      }
+    },
+    "Цей файл не вдалося прочитати як зображення.": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file couldn't be read as an image."
           }
         }
       }
