@@ -1,89 +1,144 @@
-# MenuFold
+<p align="center">
+  <img src="App/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="128" height="128" alt="MenuFold icon">
+</p>
 
-[![CI](https://github.com/dsidxavekko/MenuFold/actions/workflows/ci.yml/badge.svg)](https://github.com/dsidxavekko/MenuFold/actions/workflows/ci.yml)
+<h1 align="center">MenuFold</h1>
 
-**MenuFold** is a native macOS SwiftUI & AppKit application that replaces the default Dock "Applications" stack with a polished, fast, and feature-rich app grid.
+<p align="center">
+  An app launcher for the macOS Dock: every app in one grid, with your own folders, categories and search.<br>
+  A replacement for the Dock's Applications stack, in Liquid Glass.
+</p>
 
-Pinned directly in your Dock like a normal app, clicking MenuFold opens a borderless panel centered on your screen, featuring:
-- **Grid of all installed apps** with smooth scrolling and responsive layout.
-- **Custom folders** created instantly via simple drag-and-drop (one level deep, with custom titles, colors, and SF symbols).
-- **Automatic category tabs** to easily browse apps by type (e.g. Productivity, Games, Utilities, Social, etc.).
-- **Instant search** that searches across all apps and inside folders simultaneously.
-- **Finder folders integration**, automatically surfacing real subfolders of `/Applications` and `~/Applications` (such as Utilities).
-- **Liquid Glass aesthetics** leveraging modern macOS visual effects (`NSGlassEffectView`) with smooth scale and blur animations.
+<p align="center">
+  <a href="https://github.com/dsidxavekko/MenuFold/releases/latest"><img src="https://img.shields.io/github/v/release/dsidxavekko/MenuFold?label=download" alt="Latest release"></a>
+  <a href="https://github.com/dsidxavekko/MenuFold/actions/workflows/ci.yml"><img src="https://github.com/dsidxavekko/MenuFold/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-26%2B-blue" alt="macOS 26+">
+  <img src="https://img.shields.io/badge/Apple%20silicon-arm64-lightgrey" alt="Apple silicon">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/dsidxavekko/MenuFold" alt="License"></a>
+</p>
 
-MenuFold operates entirely independently without patching the Dock or any system process (no SIP changes required).
+<p align="center">
+  <img src="docs/screenshots/panel.png" width="844" alt="MenuFold panel: search field, category tabs, a row of frequent apps and the grid of all apps">
+</p>
 
----
+Pin MenuFold to the Dock like any other app. Click its icon and a panel opens in the middle of the screen
+with all your apps. Click an app to launch it, or press Esc to close the panel.
 
-## System Requirements
+MenuFold doesn't patch the Dock or any system process, so you don't need to change SIP. It also needs no
+Accessibility or Screen Recording permission.
 
-- **macOS** 26+ (developed on macOS 27)
-- **Xcode** (for building from source)
-- **XcodeGen** (`brew install xcodegen`)
+## Features
 
----
+- **Every app in one grid.** Apps are found through Spotlight, so new installs show up on their own. Copies
+  inside other bundles, helper apps under `/Library` and duplicates are skipped.
+- **Folders.** Drop one app onto another to make a folder, just like on iPhone. You can rename a folder and
+  pick its colour and an SF Symbol. Subfolders of `/Applications` (such as Utilities) appear as folders too.
+  MenuFold never moves any files.
+- **Category tabs.** Apps are sorted into tabs by their App Store category. You can move an app to another
+  category, make your own categories, and drag tabs into any order.
+- **Running tab.** The apps that are open right now, with a Dock-style dot under each one that is running.
+- **Frequent apps.** The apps you open most often sit in a row above the grid.
+- **Search.** Type to find an app, including apps inside folders. Names match in the system language and
+  in English, so both «Калькулятор» and "Calculator" work.
+- **Keyboard.** Use the arrow keys to move, Return to launch, ⌘R to show in Finder and ⌘⌫ to move to the
+  Trash. Esc closes a folder, then the panel.
+- **Per-app actions.** Right-click an app to open it, show it in Finder, quit it, hide it from the grid,
+  give it a custom icon, change its category or move it to the Trash (MenuFold asks first).
+- **Dock icon.** Choose the MenuFold logo, the macOS launcher icon, the Applications folder icon or your own
+  picture.
+- **English and Ukrainian** interface.
 
-## Architecture & Structure
+<table>
+  <tr>
+    <td><img src="docs/screenshots/folder.png" alt="An open folder showing its apps"></td>
+    <td><img src="docs/screenshots/search.png" alt="Search results for “ca”"></td>
+  </tr>
+  <tr>
+    <td align="center">An open folder</td>
+    <td align="center">Search</td>
+  </tr>
+</table>
 
-MenuFold is split into two layers:
-1. **`Packages/MenuFoldCore`**: Pure Swift business logic package (App catalog scanning via Spotlight, app filtering rules, layout persistence, finder folders virtualization, and `@Observable` grid models). Fully unit-tested with Swift Testing.
-2. **`App/`**: AppKit & SwiftUI presentation layer (`MenuFoldApp`, `PanelController`, window chrome, Liquid Glass glass layer, Dock geometry calculations, and views).
+<p align="center">
+  <img src="docs/screenshots/settings.png" width="560" alt="Settings window, General tab: open at login, Dock icon choice, frequent apps">
+</p>
 
----
+## Install
 
-## Building and Running
+1. Download `MenuFold-<version>-macos26-arm64.zip` from the
+   [latest release](https://github.com/dsidxavekko/MenuFold/releases/latest) and unzip it.
+2. Move `MenuFold.app` to `/Applications`.
+3. Open it. The app is ad-hoc signed and not notarised, so macOS blocks the first launch. Go to
+   **System Settings → Privacy & Security** and click **Open Anyway**.
+4. Keep MenuFold in the Dock: right-click its icon → **Options → Keep in Dock**. You can then remove the
+   Dock's own Applications stack.
 
-### Building Logic & Running Tests (Command Line Tools only)
+Requires macOS 26 or later on Apple silicon.
+
+To check the download, run `shasum -a 256 -c SHA256SUMS` in the folder that holds both files.
+
+## Using it
+
+| Action | How |
+| --- | --- |
+| Open or close the panel | Click MenuFold in the Dock |
+| Launch an app | Click it, or select it and press Return |
+| Make a folder | Drag an app onto another app (on the **All** tab, with an empty search) |
+| Take an app out of a folder | Drag it outside the open folder |
+| Rename a folder | Click its title while it is open |
+| Reorder tabs | Drag a tab, or right-click it → Move Left / Move Right |
+| Settings | ⌘, while MenuFold is active, or right-click its Dock icon |
+
+Your layout (folders, categories, hidden apps, custom icons) is saved in
+`~/Library/Application Support/MenuFold/`. **Settings → General → Show in Finder** takes you there.
+
+## Privacy
+
+MenuFold runs entirely on your Mac and makes no network requests. It reads:
+
+- Spotlight metadata, to find apps;
+- each app's `Info.plist`, for its name and category;
+- the `com.apple.dock` preferences (tile size and orientation only), to tell whether a click came from the Dock.
+
+It writes only inside `~/Library/Application Support/MenuFold/`. If `layout.json` gets damaged, MenuFold
+moves it aside as `layout.corrupt-<date>.json` and warns you in Settings, so your old layout is not lost.
+
+When you drag an app out of the panel, Finder can only make an alias of it. It cannot move or copy the app.
+
+## Build from source
+
+You need macOS 26+, Xcode with the macOS 26 SDK, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`).
+
 ```bash
-cd Packages/MenuFoldCore
-swift build
-swift test
-
-# From the repository root: typecheck App/ against the built package (~5 s, no Xcode needed)
-scripts/typecheck-app.sh
+scripts/build.sh run          # generate the project, build Debug into ./build and launch it
+scripts/release.sh            # Release build, verified and zipped into ./dist
 ```
 
-### Building & Running the App (Xcode required)
-```bash
-# Generate Xcode project and build into ./build
-scripts/build.sh
+The logic lives in a Swift package that builds and tests with just the Command Line Tools:
 
-# Build, terminate any running copy, and open the new one
-scripts/build.sh run
+```bash
+cd Packages/MenuFoldCore && swift build && swift test
+scripts/typecheck-app.sh      # typecheck App/ in a few seconds, without building the app
 ```
 
----
+`MenuFold.xcodeproj` is generated from `project.yml`. Edit `project.yml`, not the project.
 
-## Continuous Integration
+### Layout
 
-Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
-`swift build` + `swift test` for `MenuFoldCore`, `scripts/typecheck-app.sh` for the App layer, and a full
-`scripts/build.sh` app build when the runner's macOS SDK is 26 or newer.
+- `Packages/MenuFoldCore`: the app catalog (Spotlight), filtering rules, the saved layout, Finder folders
+  and the `GridModel` that drives the UI. It has no views and is unit-tested with Swift Testing.
+- `App/`: the AppKit + SwiftUI shell, made up of the panel window, Dock click handling, keyboard input, the
+  views and Settings.
 
----
-
-## Security & Privacy
-
-MenuFold is a personal, locally built app, so it is **not sandboxed** and signed **ad-hoc**. It needs no
-Accessibility or Screen Recording permission. It reads Spotlight metadata (`NSMetadataQuery`) to find
-applications, the `com.apple.dock` defaults (tile size and orientation only) to tell whether a click came
-from the Dock, and the app bundles' `Info.plist` files for names and categories. It writes exactly one file:
-`~/Library/Application Support/MenuFold/layout.json`, atomically; an unusable copy is moved aside to
-`layout.corrupt-<date>.json` instead of being overwritten, and Settings warns you when that happens.
-
-Drags out of the panel carry the app's file URL with a `.link` operation only, so Finder can create an
-alias but can never move or copy a bundle; internal drops accept only MenuFold's private pasteboard type.
+CI builds and tests the package and typechecks `App/` on every push. Pushing a `v*` tag builds the app and
+publishes a GitHub release.
 
 ## Known limitations
 
-- With ad-hoc signing, the "open at login" item (`SMAppService`) can need re-approval after each rebuild.
-- Apps are listed only from local, standard locations: external volumes (`/Volumes`), the Trash and temp
-  directories are ignored, so Time Machine copies of apps never show up in the grid.
-- A layout written by a newer version of MenuFold is moved aside rather than downgraded.
-
----
+- The app is not notarised, so the first launch needs **Open Anyway** (see Install).
+- With ad-hoc signing, **Open at Login** may need to be approved again after an update.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE)

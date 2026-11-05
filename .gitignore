@@ -16,3 +16,6 @@ xcuserdata/
 # Release artifacts (built by scripts/release.sh)
 dist/
 build-release/
+
+# README screenshots
+!docs/screenshots/*.png
