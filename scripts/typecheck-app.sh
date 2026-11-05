@@ -141,6 +141,10 @@ grep -E "Build complete" "$build_log" || true
 bin_path="$(cd "$pkg" && swift build --show-bin-path 2>/dev/null || true)"
 import_args=()
 declare -a bin_candidates=("$bin_path" "$pkg/.build/debug" "$pkg/.build/out/Products/Debug" "$pkg/.build/arm64-apple-macosx/debug")
+# Newer SwiftPM (e.g. Swift 6.3 on CI) puts the module in a Modules/ subfolder of the bin path.
+for base in "${bin_candidates[@]}"; do
+    [[ -n "$base" ]] && bin_candidates+=("$base/Modules")
+done
 for dir in "${bin_candidates[@]}"; do
     [[ -n "$dir" && -d "$dir" ]] || continue
     [[ -d "$dir/MenuFoldCore.swiftmodule" ]] || continue
