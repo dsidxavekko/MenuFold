@@ -11,6 +11,10 @@ public struct AppCategory: Identifiable, Hashable, Sendable {
     }
 
     public static let otherID = "other"
+    /// Prefix of the ids of user-made categories (`CustomCategory.id`).
+    public static let customPrefix = "custom."
+    /// True for a user-made category (stored in `Layout.customCategories`).
+    public var isCustom: Bool { id.hasPrefix(Self.customPrefix) }
     /// Fallback for apps without a (known) category.
     public static let other = AppCategory(id: otherID, displayName: "Інше")
 

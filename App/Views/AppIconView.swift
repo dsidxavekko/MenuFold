@@ -149,12 +149,33 @@ struct AppContextMenu: View {
                 get: { !hasOverride },
                 set: { _ in model.setCategory(nil, for: app.id) }
             ))
+            let custom = model.customCategories
+            if !custom.isEmpty {
+                Section("Мої категорії") {
+                    ForEach(custom) { category in
+                        Toggle(category.displayName, isOn: Binding(
+                            get: { hasOverride && current == category },
+                            set: { _ in model.setCategory(category, for: app.id) }
+                        ))
+                    }
+                }
+            }
+            Section("Системні") {
+                ForEach(AppCategory.known + [AppCategory.other]) { category in
+                    Toggle(category.displayName, isOn: Binding(
+                        get: { hasOverride && current == category },
+                        set: { _ in model.setCategory(category, for: app.id) }
+                    ))
+                }
+            }
             Divider()
-            ForEach(AppCategory.known + [AppCategory.other]) { category in
-                Toggle(category.displayName, isOn: Binding(
-                    get: { hasOverride && current == category },
-                    set: { _ in model.setCategory(category, for: app.id) }
-                ))
+            Button("Нова категорія…") {
+                // Created with a placeholder name, then renamed inline on its tab (like a new folder).
+                let category = model.createCategory(assigning: app.id)
+                model.query = ""
+                model.openFolderID = nil
+                withAnimation(Theme.content) { model.tab = .category(category) }
+                model.renamingCategoryID = category.id
             }
         }
         if insideFolder {

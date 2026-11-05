@@ -57,6 +57,9 @@ public final class GridModel {
     public var openFolderID: UUID?
     /// Set right after `createFolder` so UI can start inline rename; UI clears it.
     public var renamingFolderID: UUID?
+    /// Custom category whose tab is being renamed inline. Unlike `renamingFolderID` this stays set
+    /// while the field is being edited; the UI clears it when editing ends.
+    public var renamingCategoryID: String?
 
     /// Called after an app was launched (Shell closes the panel).
     @ObservationIgnored public var onLaunched: (() -> Void)?
@@ -118,19 +121,45 @@ public final class GridModel {
 
     // MARK: Queries
 
-    /// `.all` + one tab per category that has at least one visible app, sorted by name; `.other` last.
+    /// `.all` first, then the categories in the user's order (`layout.categoryOrder`). Categories the
+    /// user never placed keep the default order after them: custom categories, then system ones,
+    /// each sorted by name, `.other` last.
+    /// A system category appears only when it has a visible app. A custom category always appears
+    /// (the user made it on purpose, and an empty tab is where apps can be added from).
     public var availableTabs: [GridTab] {
+        let rank = Dictionary(layout.categoryOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let ordered = defaultCategoryOrder.enumerated().sorted { lhs, rhs in
+            let l = rank[lhs.element.id] ?? Int.max, r = rank[rhs.element.id] ?? Int.max
+            return l != r ? l < r : lhs.offset < rhs.offset
+        }
+        return [.all] + ordered.map { .category($0.element) }
+    }
+
+    /// Categories shown as tabs, in the default order (see `availableTabs`).
+    private var defaultCategoryOrder: [AppCategory] {
         var seen = Set<String>()
         var cats: [AppCategory] = []
         var hasOther = false
         for app in visibleApps {
             let c = category(of: app)
             if c.id == AppCategory.otherID { hasOther = true; continue }
+            if c.isCustom { continue }
             if seen.insert(c.id).inserted { cats.append(c) }
         }
         cats.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
         if hasOther { cats.append(.other) }
-        return [.all] + cats.map { .category($0) }
+        return customCategories + cats
+    }
+
+    /// True when the user has set their own tab order.
+    public var hasCustomCategoryOrder: Bool { !layout.categoryOrder.isEmpty }
+
+    /// User-made categories, sorted by name.
+    public var customCategories: [AppCategory] {
+        layout.customCategories.map(\.category).sorted { lhs, rhs in
+            let r = lhs.displayName.localizedStandardCompare(rhs.displayName)
+            return r == .orderedSame ? lhs.id < rhs.id : r == .orderedAscending
+        }
     }
 
     /// Items for current `tab` / `query`.
@@ -164,9 +193,12 @@ public final class GridModel {
         }
     }
 
-    /// Override if set, else from Info.plist.
+    /// Override if set, else from Info.plist. An override to a deleted custom category is ignored.
     public func category(of app: AppEntry) -> AppCategory {
-        if let raw = layout.categoryOverrides[app.id] { return AppCategory.from(raw: raw) }
+        if let raw = layout.categoryOverrides[app.id] {
+            if !raw.hasPrefix(AppCategory.customPrefix) { return AppCategory.from(raw: raw) }
+            if let custom = layout.customCategories.first(where: { $0.id == raw }) { return custom.category }
+        }
         return AppCategory.from(raw: app.infoCategory)
     }
 
@@ -378,11 +410,95 @@ public final class GridModel {
         var l = layout
         if let category {
             guard l.categoryOverrides[appID] != category.id else { return }
+            // A custom category must still exist (a stale menu could offer a deleted one).
+            if category.isCustom, !l.customCategories.contains(where: { $0.id == category.id }) { return }
             l.categoryOverrides[appID] = category.id
         } else {
             guard l.categoryOverrides.removeValue(forKey: appID) != nil else { return }
         }
         commit(l)
+    }
+
+    /// Creates a custom category. A blank name becomes "Нова категорія"; a name already used by
+    /// another custom category gets a number ("Нова категорія 2"), so tabs stay tellable apart.
+    /// With `appID`, that app is moved into it. Returns the new category.
+    @discardableResult
+    public func createCategory(named name: String = "", assigning appID: String? = nil) -> AppCategory {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let custom = CustomCategory(name: uniqueCategoryName(trimmed.isEmpty ? "Нова категорія" : trimmed))
+        var l = layout
+        l.customCategories.append(custom)
+        if let appID { l.categoryOverrides[appID] = custom.id }
+        commit(l)
+        return custom.category
+    }
+
+    /// Renames a custom category; a blank name or a system category is a no-op.
+    public func renameCategory(id: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let idx = layout.customCategories.firstIndex(where: { $0.id == id }) else { return }
+        var l = layout
+        l.customCategories[idx].name = trimmed
+        // The tab value carries the display name: keep the selection on the renamed category.
+        let followsTab = tab == .category(layout.customCategories[idx].category)
+        commit(l)
+        if followsTab { tab = .category(l.customCategories[idx].category) }
+    }
+
+    /// Sets the tab order from category ids (as the tabs show them, without `.all`). Unknown ids and
+    /// repeats are ignored. Ids already in the saved order but not passed (a category with no visible
+    /// apps right now) are kept, after the passed ones.
+    public func setCategoryOrder(_ ids: [String]) {
+        let known = Set(defaultCategoryOrder.map(\.id))
+        var seen = Set<String>()
+        var order = ids.filter { known.contains($0) && seen.insert($0).inserted }
+        order += layout.categoryOrder.filter { seen.insert($0).inserted }
+        var l = layout
+        l.categoryOrder = order
+        commit(l)
+    }
+
+    /// Moves a category tab one step left (`offset` -1) or right (+1). `.all` stays first.
+    public func moveCategory(id: String, by offset: Int) {
+        var ids = availableTabs.compactMap { tab -> String? in
+            if case .category(let c) = tab { return c.id } else { return nil }
+        }
+        guard let from = ids.firstIndex(of: id) else { return }
+        let to = from + offset
+        guard ids.indices.contains(to) else { return }
+        ids.swapAt(from, to)
+        setCategoryOrder(ids)
+    }
+
+    /// Back to the default tab order.
+    public func resetCategoryOrder() {
+        var l = layout
+        l.categoryOrder = []
+        commit(l)
+    }
+
+    /// Deletes a custom category; its apps go back to their automatic category.
+    public func deleteCategory(id: String) {
+        guard layout.customCategories.contains(where: { $0.id == id }) else { return }
+        var l = layout
+        l.customCategories.removeAll { $0.id == id }
+        l.categoryOverrides = l.categoryOverrides.filter { $0.value != id }
+        l.categoryOrder.removeAll { $0 == id }
+        if renamingCategoryID == id { renamingCategoryID = nil }
+        commit(l)
+    }
+
+    /// Visible apps the user put into a custom category (for Settings).
+    public func apps(inCategory id: String) -> [AppEntry] {
+        Self.sorted(visibleApps.filter { layout.categoryOverrides[$0.id] == id })
+    }
+
+    private func uniqueCategoryName(_ base: String) -> String {
+        let taken = Set(layout.customCategories.map { $0.name.lowercased() })
+        guard taken.contains(base.lowercased()) else { return base }
+        var n = 2
+        while taken.contains("\(base) \(n)".lowercased()) { n += 1 }
+        return "\(base) \(n)"
     }
 
     public func hide(_ appID: String) {
@@ -418,6 +534,7 @@ public final class GridModel {
     public func resetLayout() {
         openFolderID = nil
         renamingFolderID = nil
+        renamingCategoryID = nil
         commit(Layout())
     }
 
@@ -439,13 +556,14 @@ public final class GridModel {
         NSWorkspace.shared.activateFileViewerSelecting([app.url])
     }
 
-    /// Shell calls this each time the panel opens: clears query, closes open folder.
-    /// Keeps the current tab if it is still available, else falls back to `.all`.
+    /// Shell calls this each time the panel opens: clears query, closes open folder, and goes back
+    /// to the "Все" tab (the panel always opens on all apps, not on the last category).
     public func panelDidOpen() {
         query = ""
         openFolderID = nil
         renamingFolderID = nil
-        validateTab()
+        renamingCategoryID = nil
+        tab = .all
     }
 
     // MARK: Helpers

@@ -206,25 +206,6 @@ enum LayoutHealthActions {
     }
 }
 
-/// Opening the Settings scene from inside the panel.
-///
-/// SwiftUI's `Settings` scene installs a command action on the app: `showSettingsWindow:` (macOS 26,
-/// the SDK this app builds against) with `showPreferencesWindow:` as the legacy name. Both are tried
-/// through the responder chain with a `nil` target, which is how the matching menu item dispatches,
-/// so whichever the running SwiftUI version installed handles it. Returns whether anything did.
-///
-/// Note: the panel is key while the gear is clicked, and the action is found on the app / command
-/// chain, so the panel being key does not matter. If no handler exists at all (e.g. a preview host
-/// without a Settings scene) this returns `false` and the button simply does nothing.
-enum SettingsScene {
-    @MainActor
-    @discardableResult
-    static func open() -> Bool {
-        if NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) { return true }
-        return NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-    }
-}
-
 /// Plain tile button that publishes its pressed state to the label via `isTilePressed`.
 /// The scale itself is applied by the tile artwork so the label text stays put.
 struct TileButtonStyle: ButtonStyle {

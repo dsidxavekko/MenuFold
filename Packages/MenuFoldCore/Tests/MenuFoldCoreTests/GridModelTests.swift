@@ -360,9 +360,11 @@ import Testing
         let (m, _) = makeModel()
         m.query = "x"
         m.openFolderID = UUID()
+        m.tab = .category(AppCategory.from(raw: "public.app-category.productivity"))
         m.panelDidOpen()
         #expect(m.query.isEmpty)
         #expect(m.openFolderID == nil)
+        #expect(m.tab == .all)
     }
 
     @Test func staleTabFallsBackToAll() {
@@ -370,8 +372,6 @@ import Testing
         let games = GridTab.category(AppCategory.from(raw: "public.app-category.games"))
         let prod = GridTab.category(AppCategory.from(raw: "public.app-category.productivity"))
         m.tab = games
-        m.panelDidOpen()
-        #expect(m.tab == games) // still valid → kept
         m.hide("chess") // last game
         #expect(m.tab == .all)
 

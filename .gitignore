@@ -10,6 +10,8 @@ xcuserdata/
 *.tiff
 *.png
 *.mov
+# ...but the app icon PNGs are part of the project (rendered by scripts/render-icon.sh)
+!App/Assets.xcassets/**/*.png
 
 # Release artifacts (built by scripts/release.sh)
 dist/

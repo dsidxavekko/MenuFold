@@ -48,13 +48,32 @@ public struct FinderFolderStyle: Codable, Hashable, Sendable {
     }
 }
 
+/// A category made by the user. Apps join it through `Layout.categoryOverrides` (bundle ID → `id`).
+public struct CustomCategory: Identifiable, Codable, Hashable, Sendable {
+    /// Always starts with `AppCategory.customPrefix`, so it never clashes with a system category.
+    public let id: String
+    public var name: String
+
+    public init(id: String = AppCategory.customPrefix + UUID().uuidString, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    public var category: AppCategory { AppCategory(id: id, displayName: name) }
+}
+
 /// Everything persisted to layout.json.
 public struct Layout: Codable, Equatable, Sendable {
     public static let currentVersion = 1
     public var version: Int
     public var folders: [Folder]
-    /// bundleID → category id (overrides Info.plist).
+    /// bundleID → category id (overrides Info.plist). May point at a `customCategories` id.
     public var categoryOverrides: [String: String]
+    /// User-made categories, in creation order.
+    public var customCategories: [CustomCategory]
+    /// Category ids (system or custom) in the tab order the user set. Empty → default order.
+    /// Ids missing from it (new categories) follow the listed ones, in default order.
+    public var categoryOrder: [String]
     /// Bundle IDs hidden by the user.
     public var hidden: Set<String>
     /// Finder folder path → user style.
@@ -69,7 +88,8 @@ public struct Layout: Codable, Equatable, Sendable {
 
     public init(version: Int = Layout.currentVersion, folders: [Folder] = [], categoryOverrides: [String: String] = [:], hidden: Set<String> = [],
                 finderStyles: [String: FinderFolderStyle] = [:], ignoredFinderFolders: Set<String> = [], finderExclusions: Set<String> = [],
-                finderAdditions: [String: String] = [:]) {
+                finderAdditions: [String: String] = [:], customCategories: [CustomCategory] = [],
+                categoryOrder: [String] = []) {
         self.version = version
         self.folders = folders
         self.categoryOverrides = categoryOverrides
@@ -78,6 +98,8 @@ public struct Layout: Codable, Equatable, Sendable {
         self.ignoredFinderFolders = ignoredFinderFolders
         self.finderExclusions = finderExclusions
         self.finderAdditions = finderAdditions
+        self.customCategories = customCategories
+        self.categoryOrder = categoryOrder
     }
 }
 
@@ -136,7 +158,7 @@ extension Folder {
 }
 
 extension Layout {
-    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions }
+    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -148,6 +170,8 @@ extension Layout {
         ignoredFinderFolders = try decodePresent(Set<String>.self, c, CodingKeys.ignoredFinderFolders, default: [])
         finderExclusions = try decodePresent(Set<String>.self, c, CodingKeys.finderExclusions, default: [])
         finderAdditions = try decodePresent([String: String].self, c, CodingKeys.finderAdditions, default: [:])
+        customCategories = try decodePresent([CustomCategory].self, c, CodingKeys.customCategories, default: [])
+        categoryOrder = try decodePresent([String].self, c, CodingKeys.categoryOrder, default: [])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -161,6 +185,8 @@ extension Layout {
         try c.encode(ignoredFinderFolders.sorted(), forKey: .ignoredFinderFolders)
         try c.encode(finderExclusions.sorted(), forKey: .finderExclusions)
         try c.encode(finderAdditions, forKey: .finderAdditions)
+        try c.encode(customCategories, forKey: .customCategories)
+        try c.encode(categoryOrder, forKey: .categoryOrder)
     }
 }
 
@@ -174,6 +200,8 @@ extension Layout {
     /// - `finderPath` must be absolute, without "."/".." components, and not the filesystem root.
     /// - Finder-folder keyed entries (`finderStyles`, `ignoredFinderFolders`) must be valid too,
     ///   since they are paths as well.
+    /// - Custom categories need a `custom.` id and a name; overrides and `categoryOrder` entries for
+    ///   unknown custom ids are dropped.
     func droppingInvalidFolders() -> Layout {
         var copy = self
         var seenIDs = Set<UUID>()
@@ -187,6 +215,26 @@ extension Layout {
         copy.finderStyles = finderStyles.filter { Self.isValidFolderPath($0.key) }
         copy.ignoredFinderFolders = ignoredFinderFolders.filter(Self.isValidFolderPath)
         copy.finderAdditions = finderAdditions.filter { Self.isValidFolderPath($0.value) }
+        // Custom categories: a real `custom.` id, a non-blank name, first one with an id wins.
+        var seenCategories = Set<String>()
+        copy.customCategories = customCategories.filter { category in
+            category.id.hasPrefix(AppCategory.customPrefix)
+                && category.id.count > AppCategory.customPrefix.count
+                && !category.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && seenCategories.insert(category.id).inserted
+        }
+        // An override pointing at a custom category that no longer exists would only fall back to
+        // the automatic category anyway; drop it so it is not carried around forever.
+        copy.categoryOverrides = categoryOverrides.filter { _, id in
+            !id.hasPrefix(AppCategory.customPrefix) || seenCategories.contains(id)
+        }
+        // Tab order: no blanks, no repeats, no deleted custom categories.
+        var seenOrder = Set<String>()
+        copy.categoryOrder = categoryOrder.filter { id in
+            !id.isEmpty
+                && (!id.hasPrefix(AppCategory.customPrefix) || seenCategories.contains(id))
+                && seenOrder.insert(id).inserted
+        }
         return copy
     }
 

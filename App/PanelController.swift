@@ -17,6 +17,8 @@ final class MenuFoldPanel: NSPanel {
 extension Notification.Name {
     /// Posted right before Esc closes an open folder, so an in-progress title edit can be reverted.
     static let menuFoldFolderEscape = Notification.Name("MenuFoldFolderEscape")
+    /// Esc while a category tab is being renamed: the tab reverts its name and ends editing.
+    static let menuFoldCategoryEscape = Notification.Name("MenuFoldCategoryEscape")
 }
 
 /// Owns the Stack-like panel: window chrome (Liquid Glass), placement, show/hide and the
@@ -135,10 +137,13 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.animationBehavior = .none
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.delegate = self
-        // Esc closes an open folder first (the search field can swallow SwiftUI's onKeyPress), then the panel.
+        // Esc cancels a tab rename, then closes an open folder (the search field can swallow SwiftUI's
+        // onKeyPress), then the panel.
         panel.onCancel = { [weak self] in
             guard let self else { return }
-            if self.model.openFolderID != nil {
+            if self.model.renamingCategoryID != nil {
+                NotificationCenter.default.post(name: .menuFoldCategoryEscape, object: nil)
+            } else if self.model.openFolderID != nil {
                 NotificationCenter.default.post(name: .menuFoldFolderEscape, object: nil)
                 withAnimation(Theme.morph) { self.model.openFolderID = nil }
             } else {
