@@ -30,9 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let panel: PanelController
     private lazy var settings = SettingsWindowController(model: model)
     private var launchedAsLoginItem = false
+    private var launchObserver: NSObjectProtocol?
+
+    /// UserDefaults key of the "Часті" row switch (Settings writes it together with the model).
+    static let showsFrequentKey = "showsFrequent"
 
     override init() {
-        let model = GridModel(catalog: SpotlightAppCatalog(), store: LayoutStore())
+        let model = GridModel(catalog: SpotlightAppCatalog(), store: LayoutStore(), usageStore: UsageStore())
+        model.frequentLimit = GridMetrics.columns
+        model.showsFrequent = UserDefaults.standard.object(forKey: Self.showsFrequentKey) as? Bool ?? true
         self.model = model
         self.panel = PanelController(model: model)
         super.init()
@@ -40,6 +46,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onLaunched = { [weak self] in self?.panel.hide(reason: .appLaunched) }
         model.onLaunchFailed = { [weak self] app, message in self?.showLaunchFailure(app: app, message: message) }
         observeApps()
+        observeLaunches()
+    }
+
+    /// Any app launch (Dock, Spotlight, Finder, MenuFold itself) counts towards the "Часті" row.
+    /// A launch from MenuFold is reported here too; `UsageStats` ignores the duplicate.
+    private func observeLaunches() {
+        launchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard let id = app?.bundleIdentifier else { return }
+            MainActor.assumeIsolated { self?.model.recordUse(appID: id) }
+        }
     }
 
     /// The panel is already gone when a launch fails, so without this the click would do nothing

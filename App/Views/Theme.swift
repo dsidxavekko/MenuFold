@@ -50,4 +50,24 @@ enum Theme {
     static let hoverScale: CGFloat = 1.06
     static let pressScale: CGFloat = 0.92
     static let dropTargetScale: CGFloat = 1.12
+
+    // MARK: Keyboard selection
+    /// Accent ring around the selected tile's icon (drawn just outside the icon).
+    static let selectionRingWidth: CGFloat = 2
+    static let selectionRingOpacity: Double = 0.75
+    static let selectionRingInset: CGFloat = -4
+
+    // MARK: Running dot (Dock-like, under the label)
+    static let runningDotSize: CGFloat = 4
+    static let runningDotColor = Color.primary.opacity(0.55)
+
+    // MARK: "Часті" row
+    /// Gap above and below the divider between the "Часті" row and the grid.
+    static let frequentDividerSpacing: CGFloat = 8
+
+    // MARK: Trash confirmation card
+    static let cardCorner: CGFloat = 24
+    static let cardWidth: CGFloat = 340
+    /// Dim over the panel behind the card (stronger than a folder's: the card is modal).
+    static let cardBackdropDim: Double = 0.18
 }

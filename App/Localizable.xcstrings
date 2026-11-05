@@ -131,6 +131,16 @@
         }
       }
     },
+    "Її можна буде повернути з Кошика.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can put it back from the Trash."
+          }
+        }
+      }
+    },
     "Автоматично": {
       "localizations": {
         "en": {
@@ -359,6 +369,26 @@
         }
       }
     },
+    "Завершити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit"
+          }
+        }
+      }
+    },
+    "Завершити примусово": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force Quit"
+          }
+        }
+      }
+    },
     "Загальне": {
       "localizations": {
         "en": {
@@ -385,6 +415,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Startup"
+          }
+        }
+      }
+    },
+    "Запущено": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
           }
         }
       }
@@ -783,6 +823,16 @@
         }
       }
     },
+    "Очистити історію запусків": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Launch History"
+          }
+        }
+      }
+    },
     "Папка": {
       "comment": "MenuFoldCore (looked up with L())",
       "extractionState": "manual",
@@ -851,6 +901,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rename"
+          }
+        }
+      }
+    },
+    "Перемістити": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash"
+          }
+        }
+      }
+    },
+    "Перемістити «%@» у Кошик?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move “%@” to the Trash?"
+          }
+        }
+      }
+    },
+    "Перемістити в Кошик…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash…"
           }
         }
       }
@@ -955,6 +1035,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show in Finder"
+          }
+        }
+      }
+    },
+    "Показувати часті програми": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show frequently used apps"
           }
         }
       }
@@ -1197,6 +1287,16 @@
         }
       }
     },
+    "Ряд над сіткою на вкладці «Все».": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A row above the grid on the All tab."
+          }
+        }
+      }
+    },
     "Своє зображення або значок іншої програми.": {
       "localizations": {
         "en": {
@@ -1223,6 +1323,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Blue"
+          }
+        }
+      }
+    },
+    "Системну програму не можна перемістити в Кошик.": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System apps can't be moved to the Trash."
           }
         }
       }
@@ -1295,6 +1407,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Social Networking"
+          }
+        }
+      }
+    },
+    "Спершу завершіть програму.": {
+      "comment": "MenuFoldCore (looked up with L())",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit the app first."
           }
         }
       }
@@ -1467,6 +1591,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "This file couldn't be read as an image."
+          }
+        }
+      }
+    },
+    "Часті": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequent"
           }
         }
       }

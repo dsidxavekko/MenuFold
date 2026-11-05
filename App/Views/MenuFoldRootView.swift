@@ -1,7 +1,7 @@
 import MenuFoldCore
 import SwiftUI
 
-/// Panel content: search, category tabs, grid, and the expanded folder overlay.
+/// Panel content: search, category tabs, grid, the expanded folder overlay and the trash card.
 /// Transparent: the shell draws the window chrome (rounded glass/vibrancy background).
 struct MenuFoldRootView: View {
     @Bindable var model: GridModel
@@ -20,6 +20,11 @@ struct MenuFoldRootView: View {
         model.openFolderID.flatMap { model.folder(id: $0) }
     }
 
+    /// App waiting for the "move to Trash" confirmation (nil once it is gone from the catalog).
+    private var trashApp: AppEntry? {
+        model.pendingTrashAppID.flatMap { id in model.apps.first { $0.id == id } }
+    }
+
     private var showsTabs: Bool {
         model.query.isEmpty && model.availableTabs.count > 1
     }
@@ -32,6 +37,8 @@ struct MenuFoldRootView: View {
     var body: some View {
         let folder = openFolder
         let isOpen = folder != nil
+        let trashApp = trashApp
+        let isModal = trashApp != nil
         ZStack {
             VStack(spacing: 0) {
                 SearchField(model: model)
@@ -54,9 +61,10 @@ struct MenuFoldRootView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 4)
             .animation(Theme.content, value: showsTabs)
-            .blur(radius: isOpen ? Theme.backdropBlur : 0)
+            .blur(radius: isOpen || isModal ? Theme.backdropBlur : 0)
             .animation(backdropMotion(opening: isOpen), value: isOpen)
-            .allowsHitTesting(!isOpen)
+            .animation(backdropMotion(opening: isModal), value: isModal)
+            .allowsHitTesting(!isOpen && !isModal)
 
             // Dim over the whole panel (the window clips it to the rounded chrome).
             Color.black
@@ -67,14 +75,42 @@ struct MenuFoldRootView: View {
             if let folder {
                 FolderOverlayView(folder: folder, model: model, namespace: folderNamespace)
                     .id(folder.id)
+                    .blur(radius: isModal ? Theme.backdropBlur : 0)
+                    .animation(backdropMotion(opening: isModal), value: isModal)
+                    .allowsHitTesting(!isModal)
                     .zIndex(1)
                     .transition(.opacity)
             }
+
+            if let trashApp {
+                // Modal: a click outside the card cancels, nothing underneath takes clicks.
+                Color.black
+                    .opacity(Theme.cardBackdropDim)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if !model.isTrashing { model.pendingTrashAppID = nil } }
+                    .zIndex(2)
+                    .transition(.opacity)
+                TrashConfirmationCard(app: trashApp, model: model)
+                    .id(trashApp.id)
+                    .zIndex(3)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+            }
+        }
+        .animation(backdropMotion(opening: isModal), value: model.pendingTrashAppID)
+        // The app was trashed or uninstalled meanwhile: drop the request (the key monitor swallows
+        // typing while one is pending).
+        .onChange(of: model.pendingTrashAppID != nil && trashApp == nil) { _, stale in
+            if stale { model.pendingTrashAppID = nil }
         }
         .frame(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight)
         .onKeyPress(.escape) {
             // Esc cancels a tab rename, then closes an open folder; otherwise let it through to the
-            // shell (closes panel).
+            // shell (closes panel). An open trash card is dismissed before anything else.
+            if model.pendingTrashAppID != nil {
+                // While the system is trashing, the card stays so its result is seen.
+                if !model.isTrashing { model.pendingTrashAppID = nil }
+                return .handled
+            }
             if model.renamingCategoryID != nil {
                 NotificationCenter.default.post(name: .menuFoldCategoryEscape, object: nil)
                 return .handled

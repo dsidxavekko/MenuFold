@@ -69,6 +69,10 @@ struct FolderTileView: View {
     @State private var isTargeted = false
 
     private var isOpen: Bool { model.openFolderID == folder.id }
+    /// Keyboard selection (`GridItem` id "folder:…").
+    private var isSelected: Bool {
+        model.selectedItemID == MenuFoldCore.GridItem.folder(folder, apps: apps).id
+    }
     /// Drops into Finder folders are virtual (files are not moved).
     private var canAcceptDrops: Bool { acceptsDrops }
 
@@ -89,6 +93,7 @@ struct FolderTileView: View {
                             apps: apps,
                             namespace: namespace,
                             isHovered: isHovered,
+                            isSelected: isSelected,
                             isTargeted: isTargeted
                         )
                     }
@@ -110,6 +115,8 @@ struct FolderTileView: View {
         .onHover { isHovered = $0 }
         .animation(Theme.snappy, value: isHovered)
         .animation(Theme.snappy, value: isTargeted)
+        .animation(Theme.snappy, value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .help(folder.isFinder ? String(localized: "\(folder.name) — папка з Finder") : folder.name)
         .accessibilityLabel(folder.isFinder ? String(localized: "Папка \(folder.name), з Finder") : String(localized: "Папка \(folder.name)"))
         .appDropDestination(isEnabled: canAcceptDrops) { targeted in
@@ -131,6 +138,7 @@ private struct FolderTileArtwork: View {
     let apps: [AppEntry]
     let namespace: Namespace.ID?
     let isHovered: Bool
+    let isSelected: Bool
     let isTargeted: Bool
 
     @Environment(\.isTilePressed) private var isPressed
@@ -140,12 +148,12 @@ private struct FolderTileArtwork: View {
         if reduceMotion { return 1 }
         if isTargeted { return Theme.dropTargetScale }
         if isPressed { return Theme.pressScale }
-        if isHovered { return Theme.hoverScale }
+        if isHovered || isSelected { return Theme.hoverScale }
         return 1
     }
 
     var body: some View {
-        let lifted = isHovered && !isPressed && !isTargeted
+        let lifted = (isHovered || isSelected) && !isPressed && !isTargeted
         FolderArtwork(
             folder: folder,
             apps: apps,
@@ -160,6 +168,8 @@ private struct FolderTileArtwork: View {
                 RoundedRectangle(cornerRadius: GridMetrics.iconSize * 0.23, style: .continuous)
                     .strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5)
                     .transition(.opacity)
+            } else if isSelected {
+                SelectionRing(cornerRadius: GridMetrics.iconSize * 0.23)
             }
         }
         .shadow(color: .black.opacity(lifted ? 0.2 : 0), radius: lifted ? 6 : 0, y: lifted ? 3 : 0)

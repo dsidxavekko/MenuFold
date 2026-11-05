@@ -19,6 +19,8 @@ extension Notification.Name {
     static let menuFoldFolderEscape = Notification.Name("MenuFoldFolderEscape")
     /// Esc while a category tab is being renamed: the tab reverts its name and ends editing.
     static let menuFoldCategoryEscape = Notification.Name("MenuFoldCategoryEscape")
+    /// Return while the in-panel "move to Trash" card is up: the card runs its default button.
+    static let menuFoldTrashConfirm = Notification.Name("MenuFoldTrashConfirm")
 }
 
 /// Owns the Stack-like panel: window chrome (Liquid Glass), placement, show/hide and the
@@ -65,6 +67,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var inDragEnd = false
 
     private var activationObserver: NSObjectProtocol?
+    private var keyMonitor: Any?
     private var dragWatchdog: Timer?
     private var deferredHideRetryTask: Task<Void, Never>?
 
@@ -101,6 +104,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         configurePanel()
         observeAppDrags()
+        installKeyMonitor()
         // Coming back to MenuFold (Dock click, ⌘-Tab) ends any "this click came from the Dock" guess.
         // `didBecomeActiveNotification` is the ObjC `NSApplicationDidBecomeActiveNotification`.
         activationObserver = NotificationCenter.default.addObserver(
@@ -112,6 +116,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     deinit {
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         dragWatchdog?.invalidate()
         deferredHideRetryTask?.cancel()
     }
@@ -135,7 +140,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         // onKeyPress), then the panel.
         panel.onCancel = { [weak self] in
             guard let self else { return }
-            if self.model.renamingCategoryID != nil {
+            if self.model.pendingTrashAppID != nil {
+                // While the system is trashing, the card stays so its result is seen.
+                if !self.model.isTrashing { self.model.pendingTrashAppID = nil }
+            } else if self.model.renamingCategoryID != nil {
                 NotificationCenter.default.post(name: .menuFoldCategoryEscape, object: nil)
             } else if self.model.openFolderID != nil {
                 NotificationCenter.default.post(name: .menuFoldFolderEscape, object: nil)
@@ -177,6 +185,111 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var contentSize: NSSize {
         let fitting = hostingView.fittingSize
         return fitting.width > 10 && fitting.height > 10 ? fitting : Self.fallbackSize
+    }
+
+    // MARK: Keyboard
+
+    /// Arrow keys, Return, ⌘R and ⌘⌫ for the keyboard selection. A local monitor, because the search
+    /// field (first responder) swallows them before SwiftUI's `onKeyPress` would see them.
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Local monitors run on the main thread. Only a Bool crosses the isolation boundary
+            // (NSEvent isn't Sendable).
+            nonisolated(unsafe) let event = event
+            let handled = MainActor.assumeIsolated { self?.handleKeyDown(event) ?? false }
+            return handled ? nil : event
+        }
+    }
+
+    private enum KeyCode {
+        static let r: UInt16 = 15
+        static let returnKey: UInt16 = 36
+        static let delete: UInt16 = 51
+        static let escape: UInt16 = 53
+        static let keypadEnter: UInt16 = 76
+        static let left: UInt16 = 123
+        static let right: UInt16 = 124
+        static let down: UInt16 = 125
+        static let up: UInt16 = 126
+    }
+
+    /// The pressed letter for shortcut matching: the typed character on a Latin layout (so Dvorak
+    /// works), the key's US-QWERTY letter on a non-Latin one (⌘R on the Ukrainian "к" key).
+    private func latinKey(_ event: NSEvent) -> String? {
+        if let chars = event.charactersIgnoringModifiers?.lowercased(), chars.count == 1,
+           chars.unicodeScalars.allSatisfy(\.isASCII) {
+            return chars
+        }
+        let qwerty: [UInt16: String] = [KeyCode.r: "r", 12: "q", 13: "w", 4: "h", 43: ","]
+        return qwerty[event.keyCode]
+    }
+
+    /// True when the event was used (and must not reach the first responder).
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        guard event.window === panel, panel.isKeyWindow, isShown else { return false }
+        // An input method is composing (candidate list, Return to commit): the keys are its own.
+        if (panel.firstResponder as? NSTextView)?.hasMarkedText() == true { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        let isReturn = event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.keypadEnter
+
+        // Trash card up: Return runs its default button, Esc reaches `onCancel`, the app-level
+        // ⌘Q/⌘W/⌘H/⌘, keep working, and everything else is swallowed so the hidden search query
+        // can't change underneath (typing, ⌘V, ⌘Z, ⌘⌫…).
+        if model.pendingTrashAppID != nil {
+            if isReturn, modifiers.isEmpty {
+                NotificationCenter.default.post(name: .menuFoldTrashConfirm, object: nil)
+                return true
+            }
+            if event.keyCode == KeyCode.escape { return false }
+            let appShortcuts: Set<String> = ["q", "w", "h", ","]
+            if modifiers == .command, let key = latinKey(event), appShortcuts.contains(key) { return false }
+            return true
+        }
+        // Inline renames own the keyboard: a category tab, or the open folder's title (the search
+        // field is disabled while a folder is open, so a field editor there is the title's).
+        if model.renamingFolderID != nil || model.renamingCategoryID != nil { return false }
+        if model.openFolderID != nil, panel.firstResponder is NSText { return false }
+
+        let columns = model.openFolderID != nil ? GridMetrics.folderColumns : GridMetrics.columns
+        if modifiers.isEmpty {
+            switch event.keyCode {
+            case KeyCode.down:
+                model.moveSelection(.down, columns: columns)
+                return true
+            case KeyCode.up:
+                model.moveSelection(.up, columns: columns)
+                return true
+            case KeyCode.left, KeyCode.right:
+                // Without a selection the caret moves in the search field.
+                guard model.selectedItemID != nil else { return false }
+                model.moveSelection(event.keyCode == KeyCode.left ? .left : .right, columns: columns)
+                return true
+            case KeyCode.returnKey, KeyCode.keypadEnter:
+                // No selection: the search field's onSubmit launches the first app.
+                guard model.selectedItemID != nil else { return false }
+                // Opening a folder morphs like a click on its tile.
+                let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) {
+                    _ = model.activateSelection()
+                }
+                return true
+            default:
+                return false
+            }
+        }
+        if modifiers == .command {
+            if latinKey(event) == "r", let app = model.selectedApp {
+                model.revealInFinder(app)
+                return true
+            }
+            // With text in the search field ⌘⌫ keeps deleting the line, as in any text field.
+            if event.keyCode == KeyCode.delete, model.query.isEmpty,
+               let app = model.selectedApp, model.canTrash(app) {
+                model.pendingTrashAppID = app.id
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: Show / hide

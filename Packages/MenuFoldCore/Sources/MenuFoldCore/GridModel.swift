@@ -51,10 +51,26 @@ public final class GridModel {
     /// True when an unusable layout could not be moved aside: saving is blocked to protect it.
     public var quarantineFailedInPlace: Bool { store?.lastQuarantineFailed ?? false }
 
-    public var tab: GridTab = .all
-    public var query: String = ""
+    public var tab: GridTab = .all { didSet { if tab != oldValue { selectedItemID = nil } } }
+    public var query: String = "" { didSet { if query != oldValue { selectedItemID = nil } } }
     /// Folder currently expanded over the grid.
-    public var openFolderID: UUID?
+    public var openFolderID: UUID? { didSet { if openFolderID != oldValue { selectedItemID = nil } } }
+    /// Keyboard selection: a `GridItem.id` ("app:…" / "folder:…"), or `frequentSelectionID(_:)` for
+    /// a tile of the "Часті" row. Inside an open folder it is the "app:…" id of one of its apps.
+    /// Reset when `tab`, `query` or `openFolderID` change, and on `panelDidOpen`.
+    public var selectedItemID: String?
+    /// App waiting for the in-panel "move to Trash" confirmation; nil when none is shown.
+    public var pendingTrashAppID: String?
+
+    /// Launch statistics behind `frequentApps`.
+    public internal(set) var usage = UsageStats()
+    /// Shows the "Часті" row (a Settings switch; the app persists it).
+    public var showsFrequent = true { didSet { if showsFrequent != oldValue { clearSelectionIfGone() } } }
+    /// True while `moveToTrash` is waiting for the system: the confirmation card must stay up
+    /// (Esc and clicks outside don't close it) so the result reaches the user.
+    public internal(set) var isTrashing = false
+    /// How many apps the "Часті" row holds (one grid row).
+    public var frequentLimit = 7
     /// Set right after `createFolder` so UI can start inline rename; UI clears it.
     public var renamingFolderID: UUID?
     /// Custom category whose tab is being renamed inline. Unlike `renamingFolderID` this stays set
@@ -69,6 +85,9 @@ public final class GridModel {
 
     @ObservationIgnored private let catalog: AppCatalogProviding
     @ObservationIgnored private let store: LayoutStore?
+    @ObservationIgnored let usageStore: UsageStore?
+    /// Current time (injectable for tests).
+    @ObservationIgnored var now: () -> Date = Date.init
     /// Home directory used to find ~/Applications (injectable for tests).
     @ObservationIgnored private let homeDirectory: String
     /// Finder folder path → display name (injectable for tests; results are cached).
@@ -77,15 +96,18 @@ public final class GridModel {
     /// Folder that holds custom icon files. Without a store (previews, tests) a private temp folder.
     @ObservationIgnored public let iconsDirectory: URL
 
-    public convenience init(catalog: AppCatalogProviding, store: LayoutStore?) {
-        self.init(catalog: catalog, store: store,
+    public convenience init(catalog: AppCatalogProviding, store: LayoutStore?, usageStore: UsageStore? = nil) {
+        self.init(catalog: catalog, store: store, usageStore: usageStore,
                   homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
                   finderNameResolver: FinderFolders.displayName(atPath:))
     }
 
-    init(catalog: AppCatalogProviding, store: LayoutStore?, homeDirectory: String, finderNameResolver: @escaping (String) -> String) {
+    init(catalog: AppCatalogProviding, store: LayoutStore?, usageStore: UsageStore? = nil,
+         homeDirectory: String, finderNameResolver: @escaping (String) -> String) {
         self.catalog = catalog
         self.store = store
+        self.usageStore = usageStore
+        self.usage = usageStore?.load() ?? UsageStats()
         self.homeDirectory = homeDirectory
         self.finderNameResolver = finderNameResolver
         self.iconsDirectory = store?.iconsDirectory
@@ -124,6 +146,7 @@ public final class GridModel {
         // Layout is kept intact (apps come back on reinstall); only close a folder that became empty.
         closeOpenFolderIfGone()
         validateTab()
+        clearSelectionIfGone()
     }
 
     // MARK: Queries
@@ -513,6 +536,9 @@ public final class GridModel {
         guard l.hidden.insert(appID).inserted else { return }
         commit(l)
         closeOpenFolderIfGone()
+        if selectedItemID == "app:" + appID || selectedItemID == Self.frequentSelectionID(appID) {
+            selectedItemID = nil
+        }
     }
 
     public func unhide(_ appID: String) {
@@ -601,6 +627,7 @@ public final class GridModel {
             NSLog("%@", "MenuFold: failed to launch \(app.url.path): \(message)")
             Task { @MainActor in self?.onLaunchFailed?(app, message) }
         }
+        recordUse(appID: app.id)
         onLaunched?()
     }
 
@@ -616,6 +643,8 @@ public final class GridModel {
         renamingFolderID = nil
         renamingCategoryID = nil
         tab = .all
+        selectedItemID = nil
+        pendingTrashAppID = nil
     }
 
     // MARK: Helpers
@@ -649,6 +678,12 @@ public final class GridModel {
         }
     }
 
+    /// Clears `selectedItemID` when the item it points to is no longer shown.
+    func clearSelectionIfGone() {
+        guard let id = selectedItemID else { return }
+        if !navigableSections.contains(where: { $0.contains(id) }) { selectedItemID = nil }
+    }
+
     /// Guarantees `tab ∈ availableTabs`.
     private func validateTab() {
         if case .category = tab, !availableTabs.contains(tab) { tab = .all }
@@ -663,6 +698,8 @@ public final class GridModel {
         guard committed != layout else { return }
         layout = committed
         validateTab()
+        // A folder made/dissolved or a category changed can take the selected tile out of view.
+        clearSelectionIfGone()
         guard let store else { return }
         do { try store.save(committed) } catch {
             NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")

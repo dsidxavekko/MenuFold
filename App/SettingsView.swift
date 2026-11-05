@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var dockIconWriteFailed = false
     /// Bumped when the custom Dock picture changes, so its preview redraws.
     @State private var dockIconRevision = 0
+    @State private var showsFrequent = UserDefaults.standard.object(forKey: AppDelegate.showsFrequentKey) as? Bool ?? true
 
     var body: some View {
         Group {
@@ -110,6 +111,28 @@ struct SettingsView: View {
                 }
             } header: {
                 Label("Значок у Dock", systemImage: "dock.rectangle")
+            }
+
+            Section {
+                Toggle("Показувати часті програми", isOn: Binding(
+                    get: { showsFrequent },
+                    set: { on in
+                        showsFrequent = on
+                        UserDefaults.standard.set(on, forKey: AppDelegate.showsFrequentKey)
+                        model.showsFrequent = on
+                    }
+                ))
+                HStack {
+                    Text("Ряд над сіткою на вкладці «Все».")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Очистити історію запусків") { model.clearUsage() }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                }
+                .font(.callout)
+            } header: {
+                Label("Часті", systemImage: "clock.arrow.circlepath")
             }
 
             Section {

@@ -3,7 +3,7 @@ import MenuFoldCore
 import SwiftUI
 
 /// One app tile: 64pt icon + two-line label, hover lift, press shrink, launch pulse,
-/// drop-target halo, AppKit drag source, context menu.
+/// drop-target halo, keyboard-selection ring, running dot, AppKit drag source, context menu.
 struct AppIconView: View {
     let app: AppEntry
     @Bindable var model: GridModel
@@ -11,12 +11,21 @@ struct AppIconView: View {
     var insideFolder: Bool = false
     /// Accept app-onto-app drops (creates a folder).
     var acceptsFolderDrops: Bool = false
+    /// Keyboard-selection id of this tile; nil → its `GridItem` id ("app:…"). The "Часті" row passes
+    /// `GridModel.frequentSelectionID(_:)`, so the same app can be selected there or in the grid.
+    var selectionID: String?
 
     @State private var isHovered = false
     @State private var isTargeted = false
     @State private var launchPulse = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isSelected: Bool {
+        model.selectedItemID == (selectionID ?? MenuFoldCore.GridItem.app(app).id)
+    }
 
     var body: some View {
+        let isRunning = RunningAppsMonitor.shared.isRunning(app.id)
         Button {
             launchPulse += 1
             model.launch(app)
@@ -25,9 +34,22 @@ struct AppIconView: View {
                 AppIconArtwork(
                     image: IconCache.shared.icon(for: app),
                     isHovered: isHovered,
+                    isSelected: isSelected,
                     isTargeted: isTargeted,
                     launchPulse: launchPulse
                 )
+                // Dock-like dot in the gap under the icon; it takes no layout space.
+                .overlay(alignment: .bottom) {
+                    if isRunning {
+                        Circle()
+                            .fill(Theme.runningDotColor)
+                            .frame(width: Theme.runningDotSize, height: Theme.runningDotSize)
+                            .offset(y: Theme.runningDotSize + 1)
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.2).combined(with: .opacity))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isRunning)
                 Text(app.name)
                     .font(Theme.labelFont)
                     .foregroundStyle(.primary)
@@ -56,8 +78,11 @@ struct AppIconView: View {
         .onHover { isHovered = $0 }
         .animation(Theme.snappy, value: isHovered)
         .animation(Theme.snappy, value: isTargeted)
+        .animation(Theme.snappy, value: isSelected)
         .help(app.name)
         .accessibilityLabel(app.name)
+        .accessibilityValue(isRunning ? String(localized: "Запущено") : "")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .appDropDestination(isEnabled: acceptsFolderDrops, isKnownApp: { id in
             model.apps.contains { $0.id == id }
         }) { targeted in
@@ -72,11 +97,13 @@ struct AppIconView: View {
     }
 }
 
-/// The icon part of a tile: scales on hover/press/drop-target (the label stays), soft shadow,
-/// glass halo while an app is dragged over it, and a quick pulse on launch.
+/// The icon part of a tile: scales on hover/selection/press/drop-target (the label stays), soft
+/// shadow, accent ring when selected with the keyboard, glass halo while an app is dragged over it,
+/// and a quick pulse on launch.
 private struct AppIconArtwork: View {
     let image: NSImage
     let isHovered: Bool
+    let isSelected: Bool
     let isTargeted: Bool
     let launchPulse: Int
 
@@ -87,13 +114,13 @@ private struct AppIconArtwork: View {
         if reduceMotion { return 1 }
         if isTargeted { return Theme.dropTargetScale }
         if isPressed { return Theme.pressScale }
-        if isHovered { return Theme.hoverScale }
+        if isHovered || isSelected { return Theme.hoverScale }
         return 1
     }
 
     var body: some View {
         let size = GridMetrics.iconSize
-        let lifted = isHovered && !isPressed
+        let lifted = (isHovered || isSelected) && !isPressed
         Image(nsImage: image)
             .resizable()
             .interpolation(.high)
@@ -103,6 +130,11 @@ private struct AppIconArtwork: View {
                 radius: lifted ? 6 : 0,
                 y: lifted ? 3 : 0
             )
+            .overlay {
+                if isSelected && !isTargeted {
+                    SelectionRing(cornerRadius: GridMetrics.tileCorner)
+                }
+            }
             .background {
                 if isTargeted {
                     // Drop target halo: a tinted glass square with an accent ring behind the icon.
@@ -133,6 +165,20 @@ private struct AppIconArtwork: View {
     }
 }
 
+/// Accent ring around a keyboard-selected tile's artwork.
+struct SelectionRing: View {
+    let cornerRadius: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius - Theme.selectionRingInset, style: .continuous)
+            .strokeBorder(Color.accentColor.opacity(Theme.selectionRingOpacity), lineWidth: Theme.selectionRingWidth)
+            .padding(Theme.selectionRingInset)
+            .allowsHitTesting(false)
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+    }
+}
+
 /// Context menu for an app tile.
 struct AppContextMenu: View {
     let app: AppEntry
@@ -142,6 +188,13 @@ struct AppContextMenu: View {
     var body: some View {
         Button("Відкрити") { model.launch(app) }
         Button("Показати у Finder") { model.revealInFinder(app) }
+            .keyboardShortcut("r", modifiers: .command)
+        if RunningAppsMonitor.shared.isRunning(app.id) {
+            Button("Завершити") { RunningAppsMonitor.shared.quit(app.id) }
+                .modifierKeyAlternate(.option) {
+                    Button("Завершити примусово") { RunningAppsMonitor.shared.quit(app.id, force: true) }
+                }
+        }
         Button("Змінити значок…") { CustomIconPicker.choose(for: app, model: model) }
         if model.customIconURL(for: app.id) != nil {
             Button("Стандартний значок") { model.resetCustomIcon(for: app.id) }
@@ -190,6 +243,12 @@ struct AppContextMenu: View {
         Divider()
         Button("Приховати") {
             withAnimation(Theme.content) { model.hide(app.id) }
+        }
+        if model.canTrash(app) {
+            Divider()
+            // Asks first, in the panel (`TrashConfirmationCard`).
+            Button("Перемістити в Кошик…") { model.pendingTrashAppID = app.id }
+                .keyboardShortcut(.delete, modifiers: .command)
         }
     }
 }

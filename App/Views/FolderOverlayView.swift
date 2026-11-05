@@ -107,19 +107,27 @@ struct FolderOverlayView: View {
             title
                 .frame(height: 40)
 
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(Array(apps.enumerated()), id: \.element.id) { index, app in
-                        AppIconView(app: app, model: model, insideFolder: true)
-                            .scaleEffect(iconsShown || reduceMotion ? 1 : 0.8)
-                            .opacity(iconsShown ? 1 : 0)
-                            .animation(staggered(index), value: iconsShown)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        // Identified by the selection id ("app:…"), so `scrollTo` finds the tile.
+                        ForEach(Array(apps.enumerated()), id: \.element.id) { index, app in
+                            AppIconView(app: app, model: model, insideFolder: true)
+                                .id(MenuFoldCore.GridItem.app(app).id)
+                                .scaleEffect(iconsShown || reduceMotion ? 1 : 0.8)
+                                .opacity(iconsShown ? 1 : 0)
+                                .animation(staggered(index), value: iconsShown)
+                        }
                     }
+                    .padding(.bottom, 8)
                 }
-                .padding(.bottom, 8)
+                .scrollIndicators(.automatic)
+                .autoScrollsWhileDragging()
+                .onChange(of: model.selectedItemID) { _, id in
+                    guard let id else { return }
+                    withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id) }
+                }
             }
-            .scrollIndicators(.automatic)
-            .autoScrollsWhileDragging()
 
             if !apps.isEmpty {
                 Text("Перетягніть програму за межі папки, щоб вийняти її")
