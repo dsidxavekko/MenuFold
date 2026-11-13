@@ -4,10 +4,34 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.4.2
+
+- Fixed: a layout file that could not be read (permissions, a lock) is no longer overwritten by the
+  first action in the panel — your folders, categories and hidden apps survive, and the unreadable
+  file is kept as a backup.
+- Fixed: if opening the freshly installed copy from the disk image fails, MenuFold now tells you and
+  keeps running instead of sitting invisible.
+- Running MenuFold from an external volume no longer shows the "move to Applications" offer on every
+  launch — only a real read-only disk image gets it.
+- Apps can now be pinned to the Dock by dragging from MenuFold even when the Dock sits on the left or
+  right edge of the screen.
+- Settings show current values every time the window is opened: the login item, layout health, the
+  Dock icon and the update settings used to go stale until relaunch.
+- The "last update check" row now updates right after the check finishes.
+- Failed launches no longer pollute the "Frequent apps" row; custom app icons survive a failed save;
+  an app updated in place gets its new icon without a restart.
+- Small fixes: the keyboard selection survives a category rename, the wallet copy button no longer
+  flickers, Esc closes a folder with the same animation everywhere, the panel closes cleanly when the
+  display setup changes, and the app bundle is not modified while it is quarantined.
+
 ## 0.4.1
 
 - **Support MenuFold.** Settings → About now lists crypto addresses (BTC, ETH, SOL, TRX) for donations,
   with a copy button and a QR code for each.
+
+## 0.3.1
+
+- Re-release of 0.3.0 with a bumped build number; no functional changes.
 
 ## 0.4.0
 

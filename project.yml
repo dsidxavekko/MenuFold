@@ -48,7 +48,7 @@ targets:
         # Lets Xcode keep App/Localizable.xcstrings in sync with the strings in the code.
         SWIFT_EMIT_LOC_STRINGS: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "0.4.1"
+        MARKETING_VERSION: "0.4.2"
         # Debug builds only: scripts/release.sh sets the build number to the commit count, which
         # Sparkle compares to decide whether an update is newer.
         CURRENT_PROJECT_VERSION: "6"
