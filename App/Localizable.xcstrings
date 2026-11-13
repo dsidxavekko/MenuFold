@@ -117,6 +117,16 @@
         }
       }
     },
+    "MenuFold продовжить працювати звідси. Спробуйте відкрити копію з папки «Програми» вручну. (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MenuFold will keep running from here. Try opening the copy from the Applications folder manually. (%@)"
+          }
+        }
+      }
+    },
     "MenuFold раз на день звертається до GitHub, щоб дізнатися, чи вийшла нова версія. Інших даних він не надсилає.": {
       "localizations": {
         "en": {
@@ -761,6 +771,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't open “%@”"
+          }
+        }
+      }
+    },
+    "Не вдалося відкрити копію в «Програмах»": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open the copy in “Applications”"
           }
         }
       }

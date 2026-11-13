@@ -75,8 +75,11 @@ struct SearchField: View {
             if id == nil { focusSoon() }
         }
         // Panel re-shown (query may already be empty, so onChange wouldn't fire).
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            if model.openFolderID == nil { focusSoon() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+            // Only the panel matters: another window (Settings) must not steal the focus from a
+            // hidden panel's field.
+            guard note.object is NSPanel, model.openFolderID == nil else { return }
+            focusSoon()
         }
     }
 

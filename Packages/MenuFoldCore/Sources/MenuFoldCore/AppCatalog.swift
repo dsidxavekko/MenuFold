@@ -95,9 +95,11 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         }
     }
 
-    /// Publishes a result. The first delivery always fires `onChange` (even if empty/unchanged).
+    /// Publishes a result. Every debounced refresh delivers, even when the recomputed list equals
+    /// the current one: an app updated in place keeps its bundle id and names, so an equal list is
+    /// the only signal that its (new) icon must be re-read — the app layer flushes its icon cache
+    /// on each delivery, which is cheap (an NSCache, repopulated lazily).
     private func deliver(_ entries: [AppEntry]) {
-        guard !isLoaded || entries != apps else { return }
         apps = entries
         isLoaded = true
         onChange?(entries)

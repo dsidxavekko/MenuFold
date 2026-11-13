@@ -96,7 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (Placement falls back to screen center if the mouse is not near the Dock.)
         // A login-item launch must not pop the panel up at every login.
         // Running straight from the mounted DMG: offer to copy MenuFold into /Applications first.
-        if InstallLocation.offerMoveIfNeeded() { return }
+        // The offer either quits this instance after opening the copy, or — if opening failed —
+        // shows the alert and this instance opens its panel as usual.
+        if InstallLocation.offerMoveIfNeeded(onOpenFailed: { [weak self] in self?.panel.show() }) { return }
         if !launchedAsLoginItem { panel.show() }
         #if DEBUG
         // `open MenuFold.app --args -openSettings about` opens Settings on a tab, for checking it
@@ -154,8 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    /// Drops cached icons whenever the app list changes (an app updated in place may have a new icon).
-    /// `withObservationTracking` fires once, so it is re-armed after each change.
+    /// Drops cached icons whenever the catalog delivers: an app updated in place keeps its bundle id
+    /// and name, so its list may be unchanged while the icon is new. The cache is an NSCache, so a
+    /// flush costs only a re-read on the next display.
     private func observeApps() {
         withObservationTracking {
             _ = model.apps

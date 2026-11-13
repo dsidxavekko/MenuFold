@@ -48,7 +48,9 @@ import Testing
         let m = makeModel()
         let c = m.createCategory(named: "Old", assigning: "xcode")
         m.tab = .category(c)
+        m.selectedItemID = "app:xcode"
         m.renameCategory(id: c.id, to: "  New ")
+        #expect(m.selectedItemID == "app:xcode")
         #expect(m.tab == .category(AppCategory(id: c.id, displayName: "New")))
         #expect(m.category(of: sample[2]).displayName == "New")
         m.renameCategory(id: c.id, to: "   ")

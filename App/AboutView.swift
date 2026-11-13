@@ -101,6 +101,8 @@ private struct WalletRow: View {
     let wallet: CryptoWallet
     @State private var copied = false
     @State private var showsQR = false
+    /// The pending "Скопійовано" reset; cancelled when the wallet is copied again.
+    @State private var resetTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -164,8 +166,12 @@ private struct WalletRow: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(wallet.address, forType: .string)
         withAnimation(reduceMotion ? nil : Theme.crossfade) { copied = true }
-        Task {
+        // A second tap cancels the first tap's pending reset, so the label doesn't flicker back and
+        // forth when the wallet is copied twice in a row.
+        resetTask?.cancel()
+        resetTask = Task {
             try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : Theme.crossfade) { copied = false }
         }
     }

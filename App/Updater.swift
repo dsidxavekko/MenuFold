@@ -7,17 +7,31 @@ import Sparkle
 /// latest GitHub release by `scripts/release.sh`), and every update archive is checked against
 /// `SUPublicEDKey`, so updates work with the ad-hoc code signature.
 ///
+/// `Updater` is also Sparkle's delegate: every finished check (update found, none found, or a fetch
+/// failure) is re-posted as `didCheckNotification`, so Settings can refresh the "last checked" row —
+/// Sparkle stamps `lastUpdateCheckDate` asynchronously after `checkForUpdates()`.
+///
 /// Debug builds never start the updater (their build number is not a release one, so every check
 /// would offer to replace the dev build). Pass `--args -enableUpdates YES` to try it anyway.
 ///
 /// `scripts/typecheck-app.sh` has no Sparkle module when nothing was built yet; it then checks the
 /// no-op branch below.
 @MainActor
-final class Updater {
+final class Updater: NSObject {
+    /// Posted after any finished update check (update found, none found, or fetch failed), so
+    /// Settings can refresh the "last checked" row — Sparkle stamps `lastUpdateCheckDate`
+    /// asynchronously after `checkForUpdates()`.
+    static let didCheckNotification = Notification.Name("menuFoldUpdaterDidCheck")
+
     static let shared = Updater()
 
     #if canImport(Sparkle)
-    private let controller: SPUStandardUpdaterController
+    /// Lazy so the initializer is done before the delegate (`self`) is referenced — an init that
+    /// passed `self` before `super.init` would not compile. The updater starts on the first access
+    /// (`Self.isEnabled` decides whether it runs at all).
+    private lazy var controller: SPUStandardUpdaterController = {
+        SPUStandardUpdaterController(startingUpdater: Self.isEnabled, updaterDelegate: self, userDriverDelegate: nil)
+    }()
     #endif
 
     /// False in Debug builds: the menu item and the Settings section are hidden.
@@ -31,10 +45,8 @@ final class Updater {
 
     var isEnabled: Bool { Self.isEnabled }
 
-    private init() {
-        #if canImport(Sparkle)
-        controller = SPUStandardUpdaterController(startingUpdater: Self.isEnabled, updaterDelegate: nil, userDriverDelegate: nil)
-        #endif
+    private override init() {
+        super.init()
     }
 
     /// "Перевірити оновлення…": Sparkle shows its own window (progress, "you're up to date" or the update).
@@ -86,3 +98,21 @@ final class Updater {
         #endif
     }
 }
+
+#if canImport(Sparkle)
+extension Updater: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        NotificationCenter.default.post(name: Self.didCheckNotification, object: nil)
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        NotificationCenter.default.post(name: Self.didCheckNotification, object: nil)
+    }
+
+    // Sparkle 2 has no `updater:failedToFetchAppcastWithError:` (a Sparkle 1.x method): a failed
+    // appcast fetch aborts the update driver, which reports through `updater:didAbortWithError:`.
+    func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        NotificationCenter.default.post(name: Self.didCheckNotification, object: nil)
+    }
+}
+#endif

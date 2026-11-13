@@ -42,9 +42,14 @@ enum SettingsTab: Int, CaseIterable {
 /// Owning the window here makes every entry point (⌘,, app menu, Dock menu) a plain method call.
 @MainActor
 final class SettingsWindowController {
+    /// Posted whenever the Settings window becomes key: tab views are created once and cached, so
+    /// their `onAppear` never fires again — views listen for this to refresh their state instead.
+    static let contentDidBecomeKey = Notification.Name("menuFoldSettingsContentDidBecomeKey")
+
     private let model: GridModel
     private var window: NSWindow?
     private var tabs: NSTabViewController?
+    private var keyObserver: NSObjectProtocol?
 
     init(model: GridModel) {
         self.model = model
@@ -77,6 +82,14 @@ final class SettingsWindowController {
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
+        // App-lifetime controller: the observer lives as long as the cached window.
+        keyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                NotificationCenter.default.post(name: SettingsWindowController.contentDidBecomeKey, object: nil)
+            }
+        }
         self.tabs = tabs
         self.window = window
         return window

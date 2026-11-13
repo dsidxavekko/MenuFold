@@ -126,7 +126,7 @@ import Testing
         #expect(m.folder(id: web)?.appIDs == ["safari", "chess", "mail"])
     }
 
-    @Test func dropOntoTargetWithOtherFolderMembersIsRejected() throws {
+    @Test func dropOntoTargetInAFolderJoinsThatFolder() throws {
         // The contract for a target that already sits in a manual folder: dropping onto it means
         // "join that folder" (CLAUDE.md), so the returned id is the existing folder and the other
         // members keep their home. A drop must never dissolve or rename the folder either way.

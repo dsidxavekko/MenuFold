@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  # PRs run their own `pull_request` pass; pushing other branches does not need a second run.
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 

@@ -68,6 +68,24 @@ enum DockGeometry {
         return point.y - screenFrame.minY <= thickness + dockProximity
     }
 
+    /// Whether `point` is near the Dock band of its screen for DRAG purposes (pinning to the Dock).
+    /// Unlike `isNearDock` — the reopen guard, bottom-only on purpose — this honours `orientation`:
+    /// with a side Dock the drag mask must offer `.generic`, or the Dock rejects the drop and
+    /// nothing can be pinned. A false positive costs nothing: the CGWindowList probe in
+    /// `AppDragSource.isDockWindow` is authoritative, and the Dock simply rejects a drop that is
+    /// not on it. (Which screen hosts the Dock is not resolved here; a side Dock on another
+    /// display's edge just gets the wider mask for nothing.)
+    @MainActor
+    static func isNearDockForDrag(_ point: NSPoint = NSEvent.mouseLocation) -> Bool {
+        let band = dockBand + dockProximity
+        guard let screen = screen(containing: point) else { return false }
+        switch orientation {
+        case .bottom: return point.y - screen.frame.minY <= band
+        case .left:   return point.x - screen.frame.minX <= band
+        case .right:  return screen.frame.maxX - point.x <= band
+        }
+    }
+
     /// Frame for a panel of `size` on the screen under the current mouse location.
     @MainActor
     static func panelFrame(size: NSSize, anchor: NSPoint = NSEvent.mouseLocation) -> NSRect {

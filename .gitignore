@@ -19,3 +19,9 @@ build-release/
 
 # README screenshots
 !docs/screenshots/*.png
+
+# Scratch binaries and assistant tooling
+/DonationAddresses
+.agents/
+.claude/
+.zcode/

@@ -83,14 +83,16 @@ jobs:
           echo "macOS SDK in use: $sdk_version"
           echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
           if [[ "${sdk_version%%.*}" -lt 26 ]]; then
-            echo "::warning title=Release skipped::macOS SDK $sdk_version cannot target macOS 26; skipping the release. It needs a runner with Xcode 27+ (macos-26 with Xcode 27 selected)."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error title=SDK too old::macOS SDK $sdk_version cannot target macOS 26. Release aborted — the tag exists, so fix the runner (needs Xcode 27+ / macos-26 image) and re-run the workflow."
+            exit 1
           fi
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Install xcodegen
         if: steps.sdk.outputs.ok == 'true'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: brew install xcodegen
 
       - name: Build, verify and package
@@ -124,8 +126,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # The zip is re-downloaded from the workflow artifacts so the published file is byte-for-byte
-      # what the build job produced (and what the local script produces).
+      # The publish step uploads the dist/ files the build step produced in this same job
+      # (same workspace, same disk) — no artifact re-download in between.
       - name: Publish the GitHub release
         if: steps.sdk.outputs.ok == 'true'
         env:
@@ -168,7 +170,7 @@ jobs:
             echo "   later versions install through **Check for Updates…**."
             echo "3. Keep it in the Dock: right-click its icon → **Options → Keep in Dock**."
             echo
-            echo "Already on 0.3 or older? Install this version from the DMG once; it updates itself after that."
+            echo "An older installed copy? Install this version from the DMG once; later versions update themselves."
             echo
             echo "### Verify the download"
             echo '```'
@@ -179,9 +181,7 @@ jobs:
           gh release create "$TAG" "${assets[@]}" \
             --title "MenuFold ${VERSION}" \
             --notes-file notes.md \
-            --verify-tag || gh release create "$TAG" "${assets[@]}" \
-            --title "MenuFold ${VERSION}" \
-            --notes-file notes.md
+            --verify-tag
 
       - name: Summary
         env:

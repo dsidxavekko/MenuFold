@@ -92,7 +92,12 @@ import Testing
         let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
         try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
         for name in ["kept.png", "orphan.png"] {
-            try Data([1]).write(to: store.iconsDirectory.appendingPathComponent(name))
+            let url = store.iconsDirectory.appendingPathComponent(name)
+            try Data([1]).write(to: url)
+            // The prune keeps files written less than a minute ago (another MenuFold instance may
+            // have just written an icon this process has not read): age the fixtures past it.
+            try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-120)],
+                                                  ofItemAtPath: url.path)
         }
         try store.save(Layout(customIcons: ["mail": "kept.png", "notes": "../escape.png", "x": ".hidden.png"]))
 
@@ -102,6 +107,22 @@ import Testing
 
         model.resetLayout()
         #expect(iconFiles(store.iconsDirectory).isEmpty)
+    }
+
+    /// An unused icon file written less than a minute ago survives the prune: another MenuFold
+    /// instance (two copies can run at once) may have just written an icon for a layout this
+    /// process has not read, and deleting it would lose that icon.
+    @Test func freshUnusedIconFilesAreKept() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
+        try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent("fresh.png"))
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent("used.png"))
+        try store.save(Layout(customIcons: ["mail": "used.png"]))
+
+        _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
+        #expect(iconFiles(store.iconsDirectory) == ["fresh.png", "used.png"])
     }
 
     /// After a quarantine the old file still points at the icons, so they must survive.

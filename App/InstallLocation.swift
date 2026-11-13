@@ -11,10 +11,12 @@ enum InstallLocation {
     private static let applications = URL(filePath: "/Applications", directoryHint: .isDirectory)
 
     /// Returns true when MenuFold is about to quit because its copy in /Applications is opening.
-    static func offerMoveIfNeeded() -> Bool {
+    static func offerMoveIfNeeded(onOpenFailed: @escaping () -> Void = {}) -> Bool {
         let bundle = Bundle.main.bundleURL.standardizedFileURL
-        if bundle.path.hasPrefix("/Volumes/") {
-            return offerMove(from: bundle)
+        // A deliberately installed copy on an external/secondary volume lives in /Volumes too, but
+        // its volume is writable — only a mounted disk image (read-only) gets the move offer.
+        if bundle.path.hasPrefix("/Volumes/"), !volumeIsWritable(at: bundle) {
+            return offerMove(from: bundle, onOpenFailed: onOpenFailed)
         }
         if bundle.path.contains("/AppTranslocation/") {
             explainTranslocation()
@@ -22,7 +24,15 @@ enum InstallLocation {
         return false
     }
 
-    private static func offerMove(from source: URL) -> Bool {
+    /// False when it cannot be determined: falling back to the move offer keeps the old behavior.
+    /// There is no "volume is writable" resource key, so test the bundle's own directory: a mounted
+    /// disk image is read-only, while an app deliberately placed on an external volume sits in a
+    /// folder the user can write.
+    private static func volumeIsWritable(at bundle: URL) -> Bool {
+        FileManager.default.isWritableFile(atPath: bundle.path)
+    }
+
+    private static func offerMove(from source: URL, onOpenFailed: @escaping () -> Void) -> Bool {
         let destination = applications.appending(path: source.lastPathComponent, directoryHint: .isDirectory)
         let replacing = FileManager.default.fileExists(atPath: destination.path)
 
@@ -50,10 +60,22 @@ enum InstallLocation {
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: destination, configuration: configuration) { _, error in
             Task { @MainActor in
-                if error == nil {
+                guard let error else {
                     ejectWhenGone(volumeOf: source)
                     NSApp.terminate(nil)
+                    return
                 }
+                // Opening the fresh copy failed (Gatekeeper refusal, LaunchServices, the copy vanished):
+                // say so and keep running from here, or the process would sit invisible with no panel.
+                NSLog("%@", "MenuFold: could not open the Applications copy: \(error.localizedDescription)")
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = String(localized: "Не вдалося відкрити копію в «Програмах»")
+                alert.informativeText = String(localized: "MenuFold продовжить працювати звідси. Спробуйте відкрити копію з папки «Програми» вручну. (\(error.localizedDescription))")
+                alert.addButton(withTitle: "OK")
+                NSApp.activate()
+                alert.runModal()
+                onOpenFailed()
             }
         }
         return true

@@ -11,6 +11,8 @@ public enum LoadOutcome: Equatable, Sendable {
     case quarantined(URL)
     /// The file could not be read (permissions, lock, I/O) or is of an unreasonably large size.
     /// A read error is NOT corruption: the file was left untouched, so the next launch can retry.
+    /// Saving refuses to overwrite such a file (or quarantines it first once it became readable
+    /// again), so the data cannot be destroyed by a save.
     case unreadable(cause: String)
     /// Written by a newer MenuFold with a higher schema version. It was quarantined rather than
     /// rewritten in an older schema.
@@ -21,7 +23,9 @@ public enum LoadOutcome: Equatable, Sendable {
 /// A file that cannot be DECODED (or comes from a newer app version) is moved aside to
 /// `layout.corrupt-<yyyyMMdd-HHmmss>.json`, so the next save can't destroy the user's data, and an
 /// empty layout is returned; the caller gets the details from `loadWithOutcome()`.
-/// A file that cannot be READ (permissions, lock, I/O) is left untouched and retried next launch.
+/// A file that cannot be READ (permissions, lock, I/O) is left untouched and retried next launch;
+/// saving refuses to overwrite such a file (or quarantines it first once it became readable again),
+/// so the data cannot be destroyed by a save.
 public final class LayoutStore: @unchecked Sendable {
     public let fileURL: URL
 
@@ -40,6 +44,12 @@ public final class LayoutStore: @unchecked Sendable {
     /// `@unchecked Sendable`: only the main actor touches this store (see `GridModel`), while the
     /// file I/O itself is guarded by the filesystem's atomic writes.
     public private(set) var lastQuarantineFailed = false
+
+    /// True when `loadWithOutcome()` left a file in place that it could not read (see
+    /// `LoadOutcome.unreadable`, except the oversized-file case: a readable junk file may be
+    /// overwritten freely). `save` then refuses to overwrite it, or quarantines it first if it
+    /// became readable again.
+    public private(set) var hasUnreadFileInPlace = false
 
     /// Whether the file may be renamed to a `layout.corrupt-…` backup. Injectable for tests: moving
     /// files out of $TMPDIR may be denied under SIP, and the failure path must be testable anyway.
@@ -64,6 +74,7 @@ public final class LayoutStore: @unchecked Sendable {
     public func loadWithOutcome() -> (layout: Layout, outcome: LoadOutcome) {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory) else {
+            hasUnreadFileInPlace = false
             return (Layout(), .missing)
         }
 
@@ -72,11 +83,13 @@ public final class LayoutStore: @unchecked Sendable {
             // An entry that exists but cannot be opened is a read error, not corruption.
             guard !isDirectory.boolValue, access(fileURL.path, R_OK) == 0 else {
                 NSLog("%@", "MenuFold: layout exists but cannot be read; leaving it untouched")
+                hasUnreadFileInPlace = true
                 return (Layout(), .unreadable(cause: "cannot be opened"))
             }
             data = try Data(contentsOf: fileURL)
         } catch {
             NSLog("%@", "MenuFold: could not read layout, leaving it untouched: \(error.localizedDescription)")
+            hasUnreadFileInPlace = true
             return (Layout(), .unreadable(cause: error.localizedDescription))
         }
         guard data.count <= Self.maxFileSize else {
@@ -100,17 +113,30 @@ public final class LayoutStore: @unchecked Sendable {
 
         var layout = decoded.droppingInvalidFolders()
         layout.version = Layout.currentVersion
+        hasUnreadFileInPlace = false
         return (layout, .loaded)
     }
 
     // MARK: Save
 
     public func save(_ layout: Layout) throws {
-        // Only a failed quarantine blocks saving: writing over the one copy of data we could not
-        // read (or move) would destroy it. Writability is left to the write itself — asking whether
-        // the file "is deletable" says nothing about whether the app may write it, and would make
-        // the app silently stop saving in folders where writing works fine.
+        // A failed quarantine blocks saving: writing over the one copy of data we could not move
+        // aside would destroy it. Writability is left to the write itself — asking whether the file
+        // "is deletable" says nothing about whether the app may write it, and would make the app
+        // silently stop saving in folders where writing works fine.
         guard !lastQuarantineFailed else { throw LayoutStoreError.quarantinePending(fileURL) }
+        // A file we could not read must never be overwritten: the atomic write below is a
+        // rename-over, which succeeds whenever the directory is writable and would destroy the
+        // only copy of the data. Refuse while it stays unreadable; if it became readable again
+        // before the first save, move it aside first (the data is kept as a `layout.corrupt-…`
+        // backup, same as a corrupt file).
+        if hasUnreadFileInPlace, FileManager.default.fileExists(atPath: fileURL.path) {
+            guard access(fileURL.path, R_OK) == 0 else {
+                throw LayoutStoreError.unreadablePending(fileURL)
+            }
+            _ = quarantine(.unreadable)
+            guard !lastQuarantineFailed else { throw LayoutStoreError.quarantinePending(fileURL) }
+        }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -125,6 +151,7 @@ public final class LayoutStore: @unchecked Sendable {
     private enum QuarantineReason {
         case corrupt(String)
         case incompatible
+        case unreadable
     }
 
     /// Renames the current file to `layout.corrupt-<yyyyMMdd-HHmmss>.json` in the same directory.
@@ -151,8 +178,10 @@ public final class LayoutStore: @unchecked Sendable {
             lastQuarantineFailed = true
             return .quarantined(fileURL)
         }
+        // The file is gone from its original path, so nothing unread can be overwritten there.
+        hasUnreadFileInPlace = false
         switch reason {
-        case .corrupt: return .quarantined(dest)
+        case .corrupt, .unreadable: return .quarantined(dest)
         case .incompatible: return .incompatible(dest)
         }
     }
@@ -162,10 +191,15 @@ public enum LayoutStoreError: Error, LocalizedError, Equatable {
     /// A corrupt file could not be moved aside; saving would overwrite the user's data.
     case quarantinePending(URL)
 
+    /// A file that could not be read is still in place; saving would overwrite it (see `save`).
+    case unreadablePending(URL)
+
     public var errorDescription: String? {
         switch self {
         case .quarantinePending(let url):
             return "The layout at \(url.path) could not be moved aside, so it was not overwritten."
+        case .unreadablePending(let url):
+            return "The layout at \(url.path) could not be read, so it was not overwritten. Fix its permissions and restart MenuFold."
         }
     }
 }

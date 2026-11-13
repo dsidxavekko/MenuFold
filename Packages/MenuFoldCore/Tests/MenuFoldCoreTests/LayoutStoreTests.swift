@@ -280,6 +280,8 @@ import Testing
     }
 
     /// An absurdly large file is never a layout: refuse it instead of reading it into memory.
+    /// It is still readable junk, so unlike an unreadable file (see
+    /// `unreadableFileIsNotOverwritten`) a save may overwrite it freely.
     @Test func oversizedFileIsNotRead() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -296,6 +298,37 @@ import Testing
             return
         }
         #expect(FileManager.default.fileExists(atPath: store.fileURL.path))
+        #expect(!store.hasUnreadFileInPlace)
+        // Readable junk does not block saving: the round-trip proves it can be overwritten.
+        try store.save(Layout(hidden: ["z"]))
+        #expect(store.load().hidden == ["z"])
+    }
+
+    /// A file that exists but cannot be read must never be overwritten: an atomic write is a
+    /// rename-over that would succeed in a writable directory and destroy the only copy of the data.
+    /// Once the file is readable again, a save quarantines it first, keeping the bytes.
+    @Test func unreadableFileIsNotOverwritten() throws {
+        let (store, dir) = try storeWithFile("real user data")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // Make the file unreadable (tests do not run as root, so mode 000 works) before loading:
+        // a readable file would be decoded, and "real user data" quarantined as corrupt instead.
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.fileURL.path)
+        guard case .unreadable = store.loadWithOutcome().outcome else {
+            Issue.record("expected .unreadable"); return
+        }
+        #expect(store.hasUnreadFileInPlace)
+        #expect(throws: LayoutStoreError.unreadablePending(store.fileURL)) {
+            try store.save(Layout(hidden: ["a"]))
+        }
+        #expect(!store.lastQuarantineFailed)
+        // Recover: readable again → the next save moves the old bytes aside and writes the new layout.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: store.fileURL.path)
+        try store.save(Layout(hidden: ["a"]))
+        let backups = try directoryEntries(dir).filter { $0.hasPrefix("layout.corrupt-") }
+        #expect(backups.count == 1)
+        #expect(try String(contentsOf: dir.appendingPathComponent(backups[0]), encoding: .utf8) == "real user data")
+        #expect(store.load().hidden == ["a"])
+        #expect(!store.hasUnreadFileInPlace)
     }
 }
 

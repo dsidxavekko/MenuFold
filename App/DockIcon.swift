@@ -7,7 +7,9 @@ import MenuFoldCore
 /// changes at once) and as a custom icon on the .app bundle itself (`NSWorkspace.setIcon`, the same
 /// as Finder's "Get Info → paste icon"), so the Dock keeps it while MenuFold is closed. The bundle
 /// write can be refused by macOS App Management; `select` reports that so Settings can say so.
-/// An app update replaces the bundle and drops the custom icon, so launch puts it back.
+/// A quarantined bundle is never written to (see `bundleIsQuarantined`): the icon file would break
+/// its sealed resources. An app update replaces the bundle and drops the custom icon, so launch
+/// puts it back.
 enum DockIconStyle: String, CaseIterable, Identifiable {
     /// MenuFold's own logo (the bundle icon).
     case menuFold
@@ -129,9 +131,21 @@ enum DockIconStyle: String, CaseIterable, Identifiable {
         FileManager.default.fileExists(atPath: Bundle.main.bundlePath + "/Icon\r")
     }
 
+    /// True while the app bundle still carries the quarantine attribute (e.g. an app unzipped from
+    /// the GitHub archive; the DMG flow strips it at install time). Writing a custom icon into such
+    /// a bundle would break its sealed resources and can make Gatekeeper refuse the next launch.
+    private static var bundleIsQuarantined: Bool {
+        let url = URL(fileURLWithPath: Bundle.main.bundlePath)
+        return (try? url.resourceValues(forKeys: [.quarantinePropertiesKey]).quarantineProperties) != nil
+    }
+
     @MainActor
     @discardableResult
     private static func writeBundleIcon(_ style: DockIconStyle) -> Bool {
+        if bundleIsQuarantined {
+            NSLog("%@", "MenuFold: bundle is quarantined; not writing a custom Dock icon")
+            return false
+        }
         let path = Bundle.main.bundlePath
         // nil removes the custom icon, which brings back the bundle's own MenuFold logo.
         let image: NSImage? = style == .menuFold ? nil : style.dockImage

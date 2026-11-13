@@ -128,9 +128,12 @@ if [[ -n "${GITHUB_ACTIONS:-}" && "$branch" != "real" ]]; then
     exit 1
 fi
 
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
+trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
+log="$scratch/typecheck.log"
+
 echo "== building $pkg ($toolchain) =="
-build_log="$pkg/.build/typecheck-build.log"
-mkdir -p "$(dirname "$build_log")"
+build_log="$scratch/build.log"
 (cd "$pkg" && swift build) >"$build_log" 2>&1 || fail "swift build failed" "$build_log"
 grep -E "Build complete" "$build_log" || true
 
@@ -172,15 +175,13 @@ for fw in build/SourcePackages/artifacts/sparkle/Sparkle/Sparkle.xcframework/mac
     fi
 done
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/menufold-typecheck.XXXXXX")"
-trap 'if [[ -z "$verbose" ]]; then rm -rf "$scratch"; else echo "scratch: $scratch"; fi' EXIT
-log="$scratch/typecheck.log"
-
 if [[ "$branch" == "real" ]]; then
     echo "== typechecking App/ with Xcode =="
+    declare -a app_sources=()
+    while IFS= read -r -d '' f; do app_sources+=("$f"); done < <(find App -name '*.swift' -print0)
     xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 \
         -target "arm64-apple-macosx$min_sdk_major.0" \
-        "${import_args[@]}" $(find App -name '*.swift') >"$log" 2>&1 \
+        "${import_args[@]}" "${app_sources[@]}" >"$log" 2>&1 \
         || fail "App/ does not typecheck" "$log"
 else
     echo "== typechecking App/ without Xcode (scratch copy) =="
@@ -265,9 +266,11 @@ import SwiftUI
 }
 SWIFT
 
+    declare -a shim_sources=()
+    while IFS= read -r -d '' f; do shim_sources+=("$f"); done < <(find "$scratch/App" -name '*.swift' -print0)
     xcrun swiftc -typecheck -warnings-as-errors -parse-as-library -swift-version 5 \
         -target "arm64-apple-macosx$min_sdk_major.0" \
-        "${import_args[@]}" "$scratch/StateShim.swift" $(find "$scratch/App" -name '*.swift') \
+        "${import_args[@]}" "$scratch/StateShim.swift" "${shim_sources[@]}" \
         >"$log" 2>&1 || fail "App/ does not typecheck (shimmed copy)" "$log"
 fi
 

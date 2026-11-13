@@ -220,6 +220,8 @@ struct FolderOverlayView: View {
         // Wait for the overlay to be in the window before taking focus.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
+            // The folder may be gone within the wait (dissolved, Esc): do not focus the removed field.
+            guard model.openFolderID == folder.id else { return }
             titleFocused = true
         }
     }

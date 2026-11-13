@@ -332,11 +332,7 @@ public final class GridModel {
     /// If the target already sits in a manual folder, the dropped app joins that folder (its id is returned, no rename).
     /// A target that is only in a Finder folder gets a new manual folder (manual wins over Finder).
     ///
-    /// Dropping the app may dissolve the folder it left (≤1 app) but never the folder the target is in:
-    /// taking the target out of a folder with other apps left would delete those apps' home (name,
-    /// colour, symbol), so the drop is rejected instead and the user can join that folder with `add`.
-    /// Only a target that is the sole member of its folder (a folder of ≤1 would be dissolved anyway)
-    /// moves into the new folder.
+    /// Dropping the app may dissolve the folder it left (≤1 app).
     @discardableResult
     public func createFolder(dropping appID: String, onto targetAppID: String) -> UUID? {
         guard appID != targetAppID,
@@ -348,24 +344,12 @@ public final class GridModel {
             renamingFolderID = nil
             return existing.id
         }
-        // The folder the target is in, if any. Counting is on stored appIDs (uninstalled apps keep
-        // their id), so "has other apps" means the folder would still be a folder after the move.
-        // Unpacked step by step on purpose: as a single `map { filter } ?? []` expression the
-        // optimizer folded the guard away in test builds, and the drop silently created a folder
-        // for a target that already had one instead of joining/being rejected.
-        var leftOthers: [String] = []
-        if let targetFolder = manualFolderContaining(appID: targetAppID) {
-            leftOthers = targetFolder.appIDs.filter { $0 != targetAppID && $0 != appID }
-        }
-        // Moving the target out of a folder that keeps other apps would dissolve or rename that
-        // folder — a drop never deletes a folder the user made. Reject it: the target's tile offers
-        // the folder itself as a drop destination, which joins it.
-        guard leftOthers.isEmpty else { return rejectFolderDrop() }
         var l = layout
         let newID = UUID()
         Self.detach(appID, from: &l)
-        // Exactly the two apps the user sees paired. The target's old folder (if any) had no other
-        // members, so it is emptied here and dissolved by the sweep below.
+        // Exactly the two apps the user sees paired. The target sits in no manual folder here
+        // (that case joined above); the sweep below dissolves the folder the dragged app left
+        // if it now has ≤1 app.
         l.folders.append(Folder(id: newID, name: L("Нова папка"), appIDs: [targetAppID, appID]))
         Self.dissolveSingleAppFolders(&l)
         commit(l)
@@ -485,9 +469,16 @@ public final class GridModel {
         var l = layout
         l.customCategories[idx].name = trimmed
         // The tab value carries the display name: keep the selection on the renamed category.
-        let followsTab = tab == .category(layout.customCategories[idx].category)
+        // Read both before commit: commit's validateTab() sees the OLD name gone, resets `tab` to
+        // `.all` and its didSet clears the selection; restore both after the new tab is set.
+        let renamedOld = layout.customCategories[idx].category
+        let oldTab = tab
+        let selection = selectedItemID
         commit(l)
-        if followsTab { tab = .category(l.customCategories[idx].category) }
+        if oldTab == .category(renamedOld) {
+            tab = .category(l.customCategories[idx].category)
+            selectedItemID = selection
+        }
     }
 
     /// Sets the tab order from category ids (as the tabs show them, without `.all`). Unknown ids and
@@ -602,6 +593,7 @@ public final class GridModel {
     /// Uses `source` as the icon of `appID`: an image file as is, any other file (e.g. another app)
     /// by its Finder icon. The picture is copied as a PNG, so the original may be moved or deleted.
     /// Each change gets a new file name, so caches keyed by the file never show the old picture.
+    /// The previous icon file is deleted only after the save succeeded, so a failure keeps it.
     public func setCustomIcon(for appID: String, from source: URL) throws {
         let data = try CustomIcons.pngData(from: source)
         try FileManager.default.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
@@ -610,29 +602,42 @@ public final class GridModel {
         let old = layout.customIcons[appID]
         var l = layout
         l.customIcons[appID] = name
-        commit(l)
+        try commitPersisting(l)
         if let old { try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old)) }
     }
 
-    /// Goes back to the app's own icon.
+    /// Goes back to the app's own icon. The old icon file is deleted only after the save succeeded,
+    /// so a failed save keeps the bytes it still points at.
     public func resetCustomIcon(for appID: String) {
         var l = layout
         guard let old = l.customIcons.removeValue(forKey: appID) else { return }
-        commit(l)
-        try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old))
+        do {
+            try commitPersisting(l)
+            try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old))
+        } catch {
+            NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")
+        }
     }
 
     /// Deletes icon files that no layout entry points at (left over after a reset or a crash).
+    /// Files modified less than a minute ago are kept: another MenuFold instance (two copies can
+    /// run at once) may have just written an icon for a layout this process has not read yet.
     private func removeUnusedIconFiles() {
         let used = Set(layout.customIcons.values)
+        let fresh = Date().addingTimeInterval(-60)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: iconsDirectory.path)) ?? []
         for file in files where file.hasSuffix(".png") && !used.contains(file) {
-            try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(file))
+            let url = iconsDirectory.appendingPathComponent(file)
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+               let modified = attrs[.modificationDate] as? Date, modified > fresh { continue }
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
     /// Opens app via NSWorkspace, then calls `onLaunched` right away (the panel closes without
-    /// waiting). A failure is reported later through `onLaunchFailed`.
+    /// waiting). A failure is reported later through `onLaunchFailed`. Usage is not recorded here:
+    /// the app's did-launch observer (`AppDelegate.observeLaunches`) counts only launches that
+    /// actually succeeded, so a failed launch does not pollute "Часті".
     public func launch(_ app: AppEntry) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
@@ -642,7 +647,6 @@ public final class GridModel {
             NSLog("%@", "MenuFold: failed to launch \(app.url.path): \(message)")
             Task { @MainActor in self?.onLaunchFailed?(app, message) }
         }
-        recordUse(appID: app.id)
         onLaunched?()
     }
 
@@ -705,9 +709,10 @@ public final class GridModel {
     }
 
     /// Applies and saves a layout. The version is normalized first, because `LayoutStore.save` writes
-    /// `Layout.currentVersion` to disk: without it the in-memory `layout.version` would drift from the file.
-    /// Comparing after normalizing keeps repeated identical intents from rewriting the file.
-    private func commit(_ newLayout: Layout) {
+    /// `Layout.currentVersion` to disk: without it the in-memory `layout.version` would drift from the
+    /// file. Comparing after normalizing keeps repeated identical intents from rewriting the file.
+    /// Throws when the save failed (the in-memory layout is still updated).
+    private func commitPersisting(_ newLayout: Layout) throws {
         var committed = newLayout
         committed.version = Layout.currentVersion
         guard committed != layout else { return }
@@ -716,7 +721,14 @@ public final class GridModel {
         // A folder made/dissolved or a category changed can take the selected tile out of view.
         clearSelectionIfGone()
         guard let store else { return }
-        do { try store.save(committed) } catch {
+        try store.save(committed)
+        // The store refuses to save while the layout file is unreadable; a successful save means
+        // the file is gone or readable again, so a load-time warning is stale now.
+        if case .unreadable = layoutOutcome { layoutOutcome = .loaded }
+    }
+
+    private func commit(_ newLayout: Layout) {
+        do { try commitPersisting(newLayout) } catch {
             NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")
         }
     }

@@ -67,6 +67,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var inDragEnd = false
 
     private var activationObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var dragWatchdog: Timer?
     private var deferredHideRetryTask: Task<Void, Never>?
@@ -112,10 +113,22 @@ final class PanelController: NSObject, NSWindowDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.lastHideWasDockClick = false }
         }
+        // Unplugging a display or changing resolution can leave a visible panel stranded off-centre or
+        // on a gone screen (display changes do not resign key). Re-placement happens only in `show()`,
+        // so a shown panel is hidden instead.
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isShown else { return }
+                self.hide()
+            }
+        }
     }
 
     deinit {
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         dragWatchdog?.invalidate()
         deferredHideRetryTask?.cancel()
@@ -147,7 +160,10 @@ final class PanelController: NSObject, NSWindowDelegate {
                 NotificationCenter.default.post(name: .menuFoldCategoryEscape, object: nil)
             } else if self.model.openFolderID != nil {
                 NotificationCenter.default.post(name: .menuFoldFolderEscape, object: nil)
-                withAnimation(Theme.morph) { self.model.openFolderID = nil }
+                // Same motion as the SwiftUI Esc path (MenuFoldRootView): whichever responder sees the key
+                // first, the folder closes with the same curve.
+                let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                withAnimation(reduceMotion ? Theme.crossfade : Theme.folderClose) { self.model.openFolderID = nil }
             } else {
                 self.hide()
             }
@@ -603,8 +619,14 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     private func setDragPassthrough(_ on: Bool) {
-        if on { dragInProgress = true }
-        startDragWatchdog()
+        if on {
+            dragInProgress = true
+            startDragWatchdog()
+        } else {
+            // Passthrough ends: stop the watchdog too, or it would tick forever when this runs after
+            // `endDragState` cleared the drag (nothing else would ever stop it).
+            stopDragWatchdog()
+        }
         dragPassthrough = on
         panel.ignoresMouseEvents = on
         // Overrides a running open fade (the window animator keeps one alpha animation); a fade-out

@@ -104,9 +104,10 @@ final class AppDragSession {
     }
 
     /// True when `point` (AppKit screen coordinates) is over a visible window of the Dock process
-    /// at the Dock window level. Cheap pre-check on the Dock band first.
+    /// at the Dock window level. Cheap pre-check on the Dock band first (any orientation — the
+    /// probe below is authoritative).
     private static func isDockWindow(at point: NSPoint) -> Bool {
-        guard DockGeometry.isNearDock(point) else { return false }
+        guard DockGeometry.isNearDockForDrag(point) else { return false }
         guard let primary = NSScreen.screens.first,
               let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]
         else { return false }

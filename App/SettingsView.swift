@@ -3,7 +3,9 @@ import MenuFoldCore
 import ServiceManagement
 import SwiftUI
 
-/// Content of one Settings tab. `SettingsWindowController` hosts one instance per tab.
+/// Content of one Settings tab. `SettingsWindowController` hosts one instance per tab; the tab views
+/// are created once and cached, so `@State` refreshes via `refreshAll()` on appear and whenever the
+/// window becomes key.
 struct SettingsView: View {
     let model: GridModel
     let tab: SettingsTab
@@ -12,7 +14,7 @@ struct SettingsView: View {
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
     @State private var confirmReset = false
-    /// Layout-file health, refreshed when the window appears and after a reset.
+    /// Layout-file health, refreshed when the window appears or becomes key, and after a reset.
     @State private var layoutHealth = LayoutHealth.ok
     @State private var dockIcon = DockIconStyle.current
     @State private var dockIconWriteFailed = false
@@ -33,12 +35,9 @@ struct SettingsView: View {
             case .about: AboutView()
             }
         }
-        .onAppear {
-            refreshLoginStatus()
-            refreshLayoutHealth()
-            autoChecksUpdates = Updater.shared.automaticallyChecks
-            autoDownloadsUpdates = Updater.shared.automaticallyDownloads
-            lastUpdateCheck = Updater.shared.lastCheckDate
+        .onAppear(perform: refreshAll)
+        .onReceive(NotificationCenter.default.publisher(for: SettingsWindowController.contentDidBecomeKey)) { _ in
+            refreshAll()
         }
     }
 
@@ -202,13 +201,17 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 Spacer()
                 Button("Перевірити зараз") {
+                    // Sparkle stamps `lastUpdateCheckDate` asynchronously; the row refreshes via
+                    // `Updater.didCheckNotification`.
                     Updater.shared.checkForUpdates()
-                    lastUpdateCheck = Updater.shared.lastCheckDate
                 }
                 .buttonStyle(.glass)
                 .controlSize(.small)
             }
             .font(.callout)
+            .onReceive(NotificationCenter.default.publisher(for: Updater.didCheckNotification)) { _ in
+                lastUpdateCheck = Updater.shared.lastCheckDate
+            }
         } header: {
             Label("Оновлення", systemImage: "arrow.triangle.2.circlepath")
         } footer: {
@@ -442,6 +445,20 @@ struct SettingsView: View {
             loginError = String(localized: "Не вдалося змінити: \(error.localizedDescription)")
         }
         refreshLoginStatus()
+    }
+
+    /// Re-reads every value the settings rows show: the tab views are cached for the window's
+    /// lifetime, so state that changes behind the window's back (login status, layout health, the
+    /// updater toggles and date, the Dock icon, the hidden tabs) would otherwise go stale.
+    private func refreshAll() {
+        refreshLoginStatus()
+        refreshLayoutHealth()
+        autoChecksUpdates = Updater.shared.automaticallyChecks
+        autoDownloadsUpdates = Updater.shared.automaticallyDownloads
+        lastUpdateCheck = Updater.shared.lastCheckDate
+        showsFrequent = UserDefaults.standard.object(forKey: AppDelegate.showsFrequentKey) as? Bool ?? true
+        showsRunningTab = UserDefaults.standard.object(forKey: AppDelegate.showsRunningTabKey) as? Bool ?? true
+        dockIcon = DockIconStyle.current
     }
 
     private func refreshLoginStatus() {
