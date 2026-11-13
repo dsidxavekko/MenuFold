@@ -24,7 +24,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Show toolchain
         run: |
@@ -33,7 +33,7 @@ jobs:
           xcrun --sdk macosx --show-sdk-version
 
       - name: Cache SwiftPM build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: Packages/MenuFoldCore/.build
           key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/MenuFoldCore/Package.swift') }}
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 20
     needs: [core]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Show toolchain and SDK
         id: toolchain
@@ -74,7 +74,7 @@ jobs:
 
       - name: Cache SwiftPM build
         if: steps.toolchain.outputs.can == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: Packages/MenuFoldCore/.build
           key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/MenuFoldCore/Package.swift') }}
@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 40
     needs: [core]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Show toolchain and SDK
         id: sdk
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload the app bundle
         if: steps.sdk.outputs.ok == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: MenuFold-app
           path: build/Build/Products/Debug/MenuFold.app
