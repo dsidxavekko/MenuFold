@@ -10,15 +10,21 @@ public struct AppCandidate: Hashable, Sendable {
     public var alternateName: String?
     public var infoCategory: String?
     public var modificationDate: Date?
+    /// Spotlight's `kMDItemLastUsedDate`, carried into `AppEntry.lastUsedDate`.
+    public var lastUsedDate: Date?
+    /// Spotlight's `kMDItemAppStoreAdamID`, carried into `AppEntry.appStoreID`.
+    public var appStoreID: String?
 
     public init(path: String, bundleID: String?, name: String, alternateName: String? = nil,
-                infoCategory: String?, modificationDate: Date?) {
+                infoCategory: String?, modificationDate: Date?, lastUsedDate: Date? = nil, appStoreID: String? = nil) {
         self.path = path
         self.bundleID = bundleID
         self.name = name
         self.alternateName = alternateName
         self.infoCategory = infoCategory
         self.modificationDate = modificationDate
+        self.lastUsedDate = lastUsedDate
+        self.appStoreID = appStoreID
     }
 }
 
@@ -66,7 +72,8 @@ public enum AppFilter {
         }
         return best.values
             .map { c in
-                AppEntry(id: c.bundleID!, name: c.name, alternateName: c.alternateName, url: URL(fileURLWithPath: c.path, isDirectory: true), infoCategory: c.infoCategory)
+                AppEntry(id: c.bundleID!, name: c.name, alternateName: c.alternateName, url: URL(fileURLWithPath: c.path, isDirectory: true), infoCategory: c.infoCategory,
+                         lastUsedDate: c.lastUsedDate, appStoreID: c.appStoreID)
             }
             .sorted { lhs, rhs in
                 let r = lhs.name.localizedStandardCompare(rhs.name)

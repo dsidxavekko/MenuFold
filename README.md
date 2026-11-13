@@ -33,21 +33,35 @@ Accessibility or Screen Recording permission.
 - **Every app in one grid.** Apps are found through Spotlight, so new installs show up on their own. Copies
   inside other bundles, helper apps under `/Library` and duplicates are skipped.
 - **Folders.** Drop one app onto another to make a folder, just like on iPhone. You can rename a folder and
-  pick its colour and an SF Symbol. Subfolders of `/Applications` (such as Utilities) appear as folders too.
+  pick its colour, an SF Symbol or an emoji. Folder tiles show how many apps they hold, and "Open All"
+  launches every app in a folder. Subfolders of `/Applications` (such as Utilities) appear as folders too.
   MenuFold never moves any files.
 - **Category tabs.** Apps are sorted into tabs by their App Store category. You can move an app to another
   category, make your own categories, and drag tabs into any order.
-- **Running tab.** The apps that are open right now, with a Dock-style dot under each one that is running.
-- **Frequent apps.** The apps you open most often sit in a row above the grid.
-- **Search.** Type to find an app, including apps inside folders. Names match in the system language and
-  in English, so both «Калькулятор» and "Calculator" work.
-- **Keyboard.** Use the arrow keys to move, Return to launch, ⌘R to show in Finder and ⌘⌫ to move to the
-  Trash. Esc closes a folder, then the panel.
-- **Per-app actions.** Right-click an app to open it, show it in Finder, quit it, hide it from the grid,
-  give it a custom icon, change its category or move it to the Trash (MenuFold asks first).
+  Drop an app onto a tab to move it there; popular apps without a category are sorted automatically.
+- **Running and Recent tabs.** The apps that are open right now, with a Dock-style dot under each one that
+  is running, and the apps you opened last.
+- **Pinned and frequent apps.** Pin the apps you want at hand; the ones you open most often sit in a row
+  above the grid. Newly installed apps get a dot until you open them.
+- **Your own order.** Drop an app on the edge of another tile to arrange "All" yourself, or keep it
+  alphabetical. ⌘Z undoes any layout change.
+- **Search.** Results are ranked, with initials ("vsc") and fuzzy matches, and a query typed in the wrong
+  keyboard layout still works. Names match in the system language and in English, folders and categories
+  are found by name, and System Settings panes open right from the results.
+- **Keyboard.** Use the arrow keys to move, Return to launch, ⌘1…⌘9 or ⌃Tab to switch tabs, ⌘R to show in
+  Finder and ⌘⌫ to move to the Trash. Esc closes a folder, then the panel.
+- **More ways to open it.** A global shortcut, an optional menu bar icon, `menufold://` links, Shortcuts
+  actions, and a Dock icon menu with your pinned apps, frequent apps and folders.
+- **Per-app actions.** Right-click an app to open it (or a new instance), pin it, show it in Finder or its
+  package contents, copy its path, quit it, hide it from the grid, give it a custom icon, change its
+  category or move it to the Trash together with its support files (MenuFold asks first).
+- **Your data.** Export and import the layout, restore one of the daily backups, or keep it in iCloud Drive
+  or Dropbox to share folders and categories between Macs. Settings also list apps you haven't opened in a
+  long time, with their size.
 - **Dock icon.** Choose the MenuFold logo, the macOS launcher icon, the Applications folder icon or your own
   picture.
-- **English and Ukrainian** interface.
+- **Grid size.** Choose the number of columns and rows.
+- **Six languages:** English, Ukrainian, German, Polish, French and Spanish.
 
 <table>
   <tr>

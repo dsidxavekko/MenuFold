@@ -58,26 +58,84 @@ extension FolderColor {
     }
 }
 
+/// Grid geometry. Columns and visible rows come from `AppPreferences` (Settings); the defaults
+/// (7 × 4) give the system Apps launcher's panel size (measured on macOS 27: 844 × 577 pt).
+@MainActor
 enum GridMetrics {
     static let iconSize: CGFloat = 64
     static let tileWidth: CGFloat = 108
     static let tileCorner: CGFloat = 15
-    static let columns = 7
+    static var columns: Int { AppPreferences.shared.columns }
     static let folderColumns = 6
-    /// Same size as the system Apps launcher panel (measured on macOS 27: 844 × 577 pt).
-    static let panelWidth: CGFloat = 844
-    static let panelHeight: CGFloat = 577
+    /// Height of one grid row (tile + spacing), used to size the panel for `rows`.
+    static let rowHeight: CGFloat = 116
+    static var panelWidth: CGFloat { 844 + CGFloat(columns - 7) * tileWidth }
+    static var panelHeight: CGFloat { 577 + CGFloat(AppPreferences.shared.rows - 4) * rowHeight }
     static let folderWidth: CGFloat = 680
     static let folderHeight: CGFloat = 450
 }
 
-/// SF Symbols offered for folders in the "Іконка" menu.
+/// Icons offered for folders in the "Іконка" menu: SF Symbols in groups, plus a fixed emoji palette.
+///
+/// `Folder.symbol` stays a plain string so the core needs no schema change: an SF Symbol name, or
+/// `"emoji:<text>"` for an emoji. A text field (popover/sheet) would take key status and close the
+/// panel, so emoji come from a fixed palette in a submenu instead of free input.
 enum FolderSymbols {
-    static let all: [String] = [
-        "folder", "hammer", "gamecontroller", "paintbrush", "music.note",
-        "briefcase", "globe", "wrench.and.screwdriver", "camera", "book",
-        "terminal", "chart.bar",
+    /// SF Symbols by theme, in menu order. Titles are localized when shown.
+    static let groups: [(title: LocalizedStringResource, symbols: [String])] = [
+        ("Робота", ["folder", "briefcase", "doc.text", "tray.full", "calendar", "envelope",
+                     "chart.bar", "chart.pie", "list.bullet.clipboard", "signature"]),
+        ("Розробка", ["hammer", "terminal", "wrench.and.screwdriver", "chevron.left.forwardslash.chevron.right",
+                       "cpu", "server.rack", "ladybug", "shippingbox"]),
+        ("Творчість", ["paintbrush", "paintpalette", "pencil.and.ruler", "camera", "photo",
+                        "film", "music.note", "waveform", "mic"]),
+        ("Інше", ["gamecontroller", "globe", "book", "graduationcap", "message", "person.2",
+                   "cart", "creditcard", "heart", "star", "lock.shield", "gearshape", "cloud", "leaf"]),
     ]
+
+    /// Every offered SF Symbol, flat.
+    static let all: [String] = groups.flatMap(\.symbols)
+
+    /// Emoji offered in the "Емодзі" submenu (stored as `emojiPrefix + emoji`).
+    static let emoji: [String] = [
+        "📁", "⭐️", "❤️", "🔥", "🎮", "🎵", "🎨", "📷",
+        "🎬", "📚", "💼", "💻", "🛠️", "🧪", "📈", "💬",
+        "🌍", "✈️", "🏠", "🛒", "💰", "🔒", "⚙️", "🚀",
+    ]
+
+    static let emojiPrefix = "emoji:"
+
+    /// The emoji a stored folder symbol stands for, or nil when it is an SF Symbol name.
+    static func emoji(in symbol: String) -> String? {
+        guard symbol.hasPrefix(emojiPrefix) else { return nil }
+        let text = String(symbol.dropFirst(emojiPrefix.count))
+        return text.isEmpty ? nil : text
+    }
+
+    /// Stored form of an emoji folder icon.
+    static func symbol(forEmoji emoji: String) -> String { emojiPrefix + emoji }
+}
+
+/// Draws a folder's `symbol`: the emoji text for "emoji:…", otherwise the SF Symbol. The one place
+/// that interprets the stored string, so the tile, the open folder and menus stay consistent.
+struct FolderSymbolImage: View {
+    let symbol: String
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        if let emoji = FolderSymbols.emoji(in: symbol) {
+            Text(verbatim: emoji)
+                .font(.system(size: size * 1.15))
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(color)
+                .symbolRenderingMode(.hierarchical)
+                .accessibilityHidden(true)
+        }
+    }
 }
 
 extension View {
@@ -192,7 +250,8 @@ extension LayoutHealth {
     @MainActor
     static func current(model: GridModel) -> LayoutHealth {
         from(outcome: model.layoutOutcome,
-             fileURL: LayoutStore.defaultURL,
+             // The file this session really loaded (a custom data folder may hold it), not the default.
+             fileURL: model.layoutFileURL ?? LayoutStore.defaultURL,
              quarantineFailedInPlace: model.quarantineFailedInPlace)
     }
 }

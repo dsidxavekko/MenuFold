@@ -73,12 +73,15 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
     private func refresh() {
         guard let q = query else { return }
         q.disableUpdates()
-        var paths: [String] = []
-        paths.reserveCapacity(q.resultCount)
+        var items: [SpotlightItem] = []
+        items.reserveCapacity(q.resultCount)
         for i in 0..<q.resultCount {
             if let item = q.result(at: i) as? NSMetadataItem,
                let path = item.value(forAttribute: NSMetadataItemPathKey) as? String {
-                paths.append(path)
+                items.append(SpotlightItem(
+                    path: path,
+                    lastUsedDate: item.value(forAttribute: "kMDItemLastUsedDate") as? Date,
+                    appStoreID: Self.storeID(item.value(forAttribute: "kMDItemAppStoreAdamID"))))
             }
         }
         q.enableUpdates()
@@ -87,12 +90,36 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         let gen = generation
         Task.detached(priority: .userInitiated) {
             let languages = BundleReader.systemLanguages()
-            let entries = AppFilter.filter(paths.compactMap { BundleReader.candidate(atPath: $0, languages: languages) })
+            let entries = AppFilter.filter(items.compactMap { item -> AppCandidate? in
+                guard var c = BundleReader.candidate(atPath: item.path, languages: languages) else { return nil }
+                c.lastUsedDate = item.lastUsedDate
+                c.appStoreID = item.appStoreID
+                return c
+            })
             await MainActor.run { [weak self] in
                 guard let self, gen == self.generation else { return }
                 self.deliver(entries)
             }
         }
+    }
+
+    /// What the query result says about one bundle (read on the main actor, where the query lives).
+    private struct SpotlightItem: Sendable {
+        let path: String
+        let lastUsedDate: Date?
+        let appStoreID: String?
+    }
+
+    /// `kMDItemAppStoreAdamID` comes as a number on most systems, as a string on some; 0 means none.
+    static func storeID(_ value: Any?) -> String? {
+        let text: String?
+        switch value {
+        case let n as NSNumber: text = n.int64Value > 0 ? n.stringValue : nil
+        case let s as String: text = s.trimmingCharacters(in: .whitespaces)
+        default: text = nil
+        }
+        guard let text, !text.isEmpty, text != "0" else { return nil }
+        return text
     }
 
     /// Publishes a result. Every debounced refresh delivers, even when the recomputed list equals

@@ -32,7 +32,9 @@ extension Notification.Name {
 @MainActor
 final class PanelController: NSObject, NSWindowDelegate {
     static let cornerRadius: CGFloat = Theme.panelCorner
-    static let fallbackSize = NSSize(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight)
+    /// The panel's size: follows the grid columns/rows in Settings (`GridMetrics`), so it is
+    /// re-read on every show and when the preferences change.
+    static var panelSize: NSSize { NSSize(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight) }
 
     /// A Dock click can first resign key (→ hide) and then call reopen (→ toggle). A reopen that
     /// arrives within this window after a Dock-caused hide is therefore the *same* click.
@@ -43,6 +45,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// If a drag stops reporting and the mouse button has been up for this long, its end callback
     /// was lost: restore the panel state (nothing else can clear a click-through panel).
     private static let dragWatchdogDelay: TimeInterval = 2
+    /// Input events that end the keep-open grace (a mouse click or a key press anywhere).
+    private static let userInputEventTypes: [CGEventType] = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
+    /// Clock slack between an event's timestamp and the HID system's "last event" time.
+    private static let inputClockSlack: TimeInterval = 0.05
+    /// System Settings: opening a pane from the search must let the user see it (no keep-open grace).
+    private static let systemSettingsBundleID = "com.apple.systempreferences"
 
     private let model: GridModel
     private let panel: MenuFoldPanel
@@ -69,6 +77,16 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var activationObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
     private var keyMonitor: Any?
+    /// Records `lastPanelInput` (mouse-downs and key presses in the panel).
+    private var panelInputMonitor: Any?
+    private var preferencesObserver: NSObjectProtocol?
+    private var launchObserver: NSObjectProtocol?
+    /// System uptime of the last mouse-down / key press in the panel (the click or Return that
+    /// launched an app, in keep-open mode). `NSEvent.timestamp` uses the same clock.
+    private var lastPanelInput: TimeInterval = -.infinity
+    /// System uptime at which an app launched while the panel was up (keep-open mode); `-infinity`
+    /// when no launch is pending. Only counts while it is newer than `lastPanelInput`.
+    private var lastLaunchFromPanel: TimeInterval = -.infinity
     private var dragWatchdog: Timer?
     private var deferredHideRetryTask: Task<Void, Never>?
 
@@ -97,7 +115,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         hostingView.sizingOptions = [.intrinsicContentSize]
 
         panel = MenuFoldPanel(
-            contentRect: NSRect(origin: .zero, size: Self.fallbackSize),
+            contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.borderless],
             backing: .buffered,
             defer: true
@@ -124,12 +142,23 @@ final class PanelController: NSObject, NSWindowDelegate {
                 self.hide()
             }
         }
+        // Columns/rows changed in Settings: a visible panel takes the new size right away (centred
+        // again on its screen), a hidden one picks it up in `show()`.
+        preferencesObserver = NotificationCenter.default.addObserver(
+            forName: .menuFoldPreferencesChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resizeIfNeeded() }
+        }
+        observeLaunchesForKeepOpen()
     }
 
     deinit {
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        if let preferencesObserver { NotificationCenter.default.removeObserver(preferencesObserver) }
+        if let launchObserver { NSWorkspace.shared.notificationCenter.removeObserver(launchObserver) }
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let panelInputMonitor { NSEvent.removeMonitor(panelInputMonitor) }
         dragWatchdog?.invalidate()
         deferredHideRetryTask?.cancel()
     }
@@ -171,7 +200,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         // A plain container as the window's content view: AppKit manages the geometry of the
         // content view's own layer, so the animated layer is one level down (the glass view).
-        let container = NSView(frame: NSRect(origin: .zero, size: Self.fallbackSize))
+        let container = NSView(frame: NSRect(origin: .zero, size: Self.panelSize))
         container.wantsLayer = true
         container.autoresizingMask = [.width, .height]
 
@@ -198,9 +227,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.contentView = container
     }
 
-    private var contentSize: NSSize {
-        let fitting = hostingView.fittingSize
-        return fitting.width > 10 && fitting.height > 10 ? fitting : Self.fallbackSize
+    /// Re-sizes a visible panel to `panelSize`, centred on the screen it is on.
+    private func resizeIfNeeded() {
+        let size = Self.panelSize
+        guard isShown, panel.frame.size != size else { return }
+        let anchor = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        panel.setFrame(DockGeometry.panelFrame(size: size, anchor: anchor), display: true)
     }
 
     // MARK: Keyboard
@@ -208,6 +240,17 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// Arrow keys, Return, ⌘R and ⌘⌫ for the keyboard selection. A local monitor, because the search
     /// field (first responder) swallows them before SwiftUI's `onKeyPress` would see them.
     private func installKeyMonitor() {
+        // Passive: only notes when the user last clicked or typed in the panel (keep-open grace).
+        panelInputMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]
+        ) { [weak self] event in
+            nonisolated(unsafe) let event = event
+            MainActor.assumeIsolated {
+                guard let self, event.window === self.panel else { return }
+                self.lastPanelInput = max(self.lastPanelInput, event.timestamp)
+            }
+            return event
+        }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             // Local monitors run on the main thread. Only a Bool crosses the isolation boundary
             // (NSEvent isn't Sendable).
@@ -219,6 +262,8 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private enum KeyCode {
         static let r: UInt16 = 15
+        static let z: UInt16 = 6
+        static let tab: UInt16 = 48
         static let returnKey: UInt16 = 36
         static let delete: UInt16 = 51
         static let escape: UInt16 = 53
@@ -236,7 +281,7 @@ final class PanelController: NSObject, NSWindowDelegate {
            chars.unicodeScalars.allSatisfy(\.isASCII) {
             return chars
         }
-        let qwerty: [UInt16: String] = [KeyCode.r: "r", 12: "q", 13: "w", 4: "h", 43: ","]
+        let qwerty: [UInt16: String] = [KeyCode.r: "r", KeyCode.z: "z", 12: "q", 13: "w", 4: "h", 43: ","]
         return qwerty[event.keyCode]
     }
 
@@ -267,6 +312,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         if model.openFolderID != nil, panel.firstResponder is NSText { return false }
 
         let columns = model.openFolderID != nil ? GridMetrics.folderColumns : GridMetrics.columns
+        // ⌃Tab / ⌃⇧Tab: next / previous tab, as in browsers. Not inside an open folder (no tabs there).
+        if event.keyCode == KeyCode.tab, model.openFolderID == nil,
+           modifiers == .control || modifiers == [.control, .shift] {
+            withAnimation(Self.contentAnimation) { model.cycleTab(by: modifiers.contains(.shift) ? -1 : 1) }
+            return true
+        }
         if modifiers.isEmpty {
             switch event.keyCode {
             case KeyCode.down:
@@ -293,6 +344,23 @@ final class PanelController: NSObject, NSWindowDelegate {
                 return false
             }
         }
+        if modifiers == .command, model.openFolderID == nil, let digit = Self.digit(event) ?? Int(latinKey(event) ?? ""),
+           (1...9).contains(digit) {
+            // ⌘1…⌘9: the n-th tab, like browser tabs.
+            withAnimation(Self.contentAnimation) { model.selectTab(at: digit - 1) }
+            return true
+        }
+        // ⌘Z / ⇧⌘Z undo layout changes, but only while the search field is empty: with text in it
+        // the keys stay the field's own text undo. (Inline renames returned above.)
+        if latinKey(event) == "z", model.query.isEmpty,
+           modifiers == .command || modifiers == [.command, .shift] {
+            let redo = modifiers.contains(.shift)
+            guard redo ? model.canRedo : model.canUndo else { return false }
+            withAnimation(Self.contentAnimation) {
+                if redo { model.redo() } else { model.undo() }
+            }
+            return true
+        }
         if modifiers == .command {
             if latinKey(event) == "r", let app = model.selectedApp {
                 model.revealInFinder(app)
@@ -308,12 +376,26 @@ final class PanelController: NSObject, NSWindowDelegate {
         return false
     }
 
+    /// Tab switches and undo re-flow the grid; Reduce Motion gets a crossfade.
+    private static var contentAnimation: Animation {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? Theme.crossfade : Theme.content
+    }
+
+    /// Digit of the physical number-row key (key codes are layout-independent), so ⌘1…⌘9 also work
+    /// where the row types symbols without Shift (AZERTY).
+    private static func digit(_ event: NSEvent) -> Int? {
+        let row: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
+        return row[event.keyCode]
+    }
+
     // MARK: Show / hide
 
-    func toggle() {
+    /// `bypassingDockGuard`: the global hotkey, the menu bar icon, URLs and Shortcuts are never the
+    /// tail of a Dock click, so the reopen guard must not swallow them.
+    func toggle(bypassingDockGuard: Bool = false) {
         if isShown {
             hide()
-        } else if !wasHiddenByThisDockClick {
+        } else if bypassingDockGuard || !wasHiddenByThisDockClick {
             // A Dock click can first resign key (→ hide) and then call reopen (→ toggle);
             // don't immediately reopen in that case.
             show()
@@ -333,11 +415,19 @@ final class PanelController: NSObject, NSWindowDelegate {
         return true
     }
 
+    /// Opens the panel with a fresh state. Idempotent: on a panel that is already up (URLs,
+    /// Shortcuts, a launch-time show racing a command) it only brings it to the front, without
+    /// resetting the query/folder/tab or replaying the open motion.
     func show() {
+        if isShown {
+            NSApp.activate()
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
         let anchor = NSEvent.mouseLocation
         model.panelDidOpen()
 
-        let size = contentSize
+        let size = Self.panelSize
         let frame = DockGeometry.panelFrame(size: size, anchor: anchor)
 
         // Reopening is the newer intent, so a hide that is still waiting for a drag to end is dropped.
@@ -349,6 +439,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.ignoresMouseEvents = false
         hideInFlight = false
         lastHideWasDockClick = false
+        lastLaunchFromPanel = -.infinity
 
         panel.setFrame(frame, display: false)
         // Normally 0 for the fade-in. On a reopen that interrupts a fade-out stay at the current alpha:
@@ -402,8 +493,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// Classifies a resign-key hide as "the user clicked the Dock". See `wasHiddenByThisDockClick`.
     private static func isDockClickHide(reason: HideReason) -> Bool {
         guard reason == .resignedKey else { return false }
-        // A left/right Dock is not detected (see `DockGeometry.isNearDock`), so the guard stays off.
-        guard DockGeometry.orientation == .bottom else { return false }
+        // Any Dock orientation: `isNearDock` checks the Dock's edge and that a Dock window is under
+        // the pointer, so a side Dock arms the guard only on the display that shows it.
         guard DockGeometry.isNearDock(NSEvent.mouseLocation) else { return false }
         // Only a mouse click counts: that is what takes focus away from the panel. Key equivalents,
         // Cmd-Tab and programmatic resigns leave `currentEvent` as something else. The mouse-down is
@@ -699,6 +790,72 @@ final class PanelController: NSObject, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
+        if shouldStayOpenAfterLaunch() {
+            // The app just launched from the panel took focus; keep the panel up and key so the next
+            // app can be clicked or typed for. Next turn: AppKit is still inside the resign.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isShown, !self.panel.isKeyWindow else { return }
+                NSApp.activate()
+                self.panel.makeKeyAndOrderFront(nil)
+            }
+            return
+        }
         hide(reason: .resignedKey)
+    }
+
+    // MARK: Keep open after launch
+
+    /// In keep-open mode, an app launched from the panel may activate itself when it finishes
+    /// launching (`GridModel.launch` launches without activating, but many apps don't care), which
+    /// makes the panel resign key. That activation is undone, but only until the user's next input:
+    /// a click or key press anywhere after the launch means a later resign-key is the user leaving.
+    private func observeLaunchesForKeepOpen() {
+        launchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let bundleID = app?.bundleIdentifier
+            let isRegular = app?.activationPolicy == .regular
+            MainActor.assumeIsolated {
+                guard let self, self.isShown, isRegular, bundleID != Self.systemSettingsBundleID else { return }
+                self.noteLaunchFromPanel()
+            }
+        }
+    }
+
+    /// Arms the keep-open grace for an app launch that happened while the panel was up.
+    func noteLaunchFromPanel() {
+        guard model.keepsPanelOpenAfterLaunch else { return }
+        lastLaunchFromPanel = ProcessInfo.processInfo.systemUptime
+    }
+
+    /// System uptime of the user's latest click or key press anywhere (HID level, so other apps'
+    /// windows and the Dock count too; needs no permission).
+    private static var lastUserInput: TimeInterval {
+        let since = userInputEventTypes
+            .map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }
+            .min() ?? .infinity
+        return ProcessInfo.processInfo.systemUptime - since
+    }
+
+    /// True when this resign-key is an app launched from the panel activating itself: keep-open mode,
+    /// a launch after the user's last input in the panel, and no click or key press since that input
+    /// (anything else means the user moved on). System Settings is never treated so (see
+    /// `systemSettingsBundleID`), and an app that was already running hides the panel through
+    /// `onLaunched` instead.
+    private func shouldStayOpenAfterLaunch() -> Bool {
+        guard isShown, model.keepsPanelOpenAfterLaunch, !dragInProgress else { return false }
+        guard Self.lastUserInput <= lastPanelInput + Self.inputClockSlack else { return false }
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.bundleIdentifier == Self.systemSettingsBundleID { return false }
+        if lastLaunchFromPanel >= lastPanelInput { return true }
+        // The launched app may activate before its launch notification arrives.
+        let now = Date()
+        if let front, front.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+           let launched = front.launchDate {
+            let launchedUptime = ProcessInfo.processInfo.systemUptime - now.timeIntervalSince(launched)
+            return launchedUptime >= lastPanelInput - Self.inputClockSlack
+        }
+        return false
     }
 }

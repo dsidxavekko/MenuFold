@@ -9,6 +9,10 @@ import SwiftUI
 ///
 /// States: running → "quit first" with a Завершити button; otherwise the confirmation; after a
 /// failure → the system's message with Показати у Finder.
+///
+/// Uninstaller: the app's support files in ~/Library (`GridModel.leftovers(for:)`) are looked up
+/// after the card is on screen and offered as a checkbox (on by default) with a list of the paths,
+/// so the user sees exactly what else goes to the Trash.
 struct TrashConfirmationCard: View {
     let app: AppEntry
     @Bindable var model: GridModel
@@ -17,6 +21,10 @@ struct TrashConfirmationCard: View {
     @State private var isBusy = false
     @State private var isQuitting = false
     @State private var errorMessage: String?
+    /// Support files found for the app; nil while still looking.
+    @State private var leftovers: [Leftover]?
+    @State private var includesLeftovers = true
+    @State private var showsLeftoverPaths = false
 
     private var isRunning: Bool { RunningAppsMonitor.shared.isRunning(app.id) }
 
@@ -38,6 +46,11 @@ struct TrashConfirmationCard: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if errorMessage == nil, !isRunning, let leftovers, !leftovers.isEmpty {
+                leftoversSection(leftovers)
+                    .transition(.opacity)
+            }
+
             HStack(spacing: 10) {
                 Button("Скасувати", action: cancel)
                     .buttonStyle(.glass)
@@ -53,6 +66,9 @@ struct TrashConfirmationCard: View {
         .shadow(color: .black.opacity(0.18), radius: 22, y: 8)
         .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isRunning)
         .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: errorMessage)
+        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: leftovers)
+        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: showsLeftoverPaths)
+        .task(id: app.id) { await findLeftovers() }
         .onChange(of: isRunning) { _, running in
             if !running { isQuitting = false }
         }
@@ -72,6 +88,72 @@ struct TrashConfirmationCard: View {
         } else {
             Text("Її можна буде повернути з Кошика.").foregroundStyle(.secondary)
         }
+    }
+
+    private func leftoversSection(_ leftovers: [Leftover]) -> some View {
+        let total = leftovers.reduce(Int64(0)) { $0 + max($1.size, 0) }
+        let size = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Toggle(isOn: $includesLeftovers) {
+                    Text("Також видалити файли підтримки (\(leftovers.count), \(size))")
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .toggleStyle(.checkbox)
+                Spacer(minLength: 0)
+                Button {
+                    showsLeftoverPaths.toggle()
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .rotationEffect(.degrees(showsLeftoverPaths ? 90 : 0))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(showsLeftoverPaths ? String(localized: "Сховати список") : String(localized: "Показати список"))
+                .accessibilityLabel(showsLeftoverPaths ? String(localized: "Сховати список") : String(localized: "Показати список"))
+            }
+            if showsLeftoverPaths {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(leftovers) { leftover in
+                            Text((leftover.url.path as NSString).abbreviatingWithTildeInPath)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(leftover.url.path)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(maxHeight: 110)
+                .transition(.opacity)
+            }
+        }
+        .disabled(isBusy)
+    }
+
+    /// Looks for support files once the card is shown, off the main actor (see below). It waits
+    /// a moment first, so the card appears (and animates in) before the disk scan starts.
+    private func findLeftovers() async {
+        // Apps under /System can't be trashed at all; nothing to offer.
+        guard !app.url.path.hasPrefix("/System/") else { leftovers = []; return }
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }
+        // The same lookup as `model.leftovers(for:)`, but off the main actor: sizing a large
+        // container or cache folder can take a while and must not freeze the panel.
+        let others = Set(model.apps.map(\.id)).subtracting([app.id])
+        let id = app.id, url = app.url
+        let found = await Task.detached(priority: .userInitiated) {
+            AppLeftovers().find(bundleID: id, appURL: url, otherBundleIDs: others)
+        }.value
+        guard !Task.isCancelled else { return }
+        leftovers = found
+        includesLeftovers = !found.isEmpty
     }
 
     @ViewBuilder
@@ -94,7 +176,7 @@ struct TrashConfirmationCard: View {
             Button(role: .destructive, action: primaryAction) {
                 HStack(spacing: 6) {
                     if isBusy { ProgressView().controlSize(.small) }
-                    Text("Перемістити")
+                    Text("У Кошик")
                 }
             }
             .buttonStyle(.glassProminent)
@@ -129,7 +211,11 @@ struct TrashConfirmationCard: View {
         isBusy = true
         Task { @MainActor in
             do {
-                try await model.moveToTrash(app)
+                if includesLeftovers, let leftovers, !leftovers.isEmpty {
+                    try await model.moveToTrash(app, leftovers: leftovers.map(\.url))
+                } else {
+                    try await model.moveToTrash(app)
+                }
                 // Only close this card, never one opened for another app meanwhile.
                 if model.pendingTrashAppID == app.id { model.pendingTrashAppID = nil }
             } catch TrashError.running {

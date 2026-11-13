@@ -4,13 +4,15 @@ import SwiftUI
 
 /// Tabs of the Settings window, in toolbar order.
 enum SettingsTab: Int, CaseIterable {
-    case general, categories, apps, about
+    case general, appearance, categories, apps, data, about
 
     var title: String {
         switch self {
         case .general: String(localized: "Загальне")
+        case .appearance: String(localized: "Вигляд")
         case .categories: String(localized: "Категорії")
         case .apps: String(localized: "Програми")
+        case .data: String(localized: "Дані")
         case .about: String(localized: "Про програму")
         }
     }
@@ -18,8 +20,10 @@ enum SettingsTab: Int, CaseIterable {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "paintbrush"
         case .categories: "tag"
         case .apps: "square.grid.2x2"
+        case .data: "externaldrive"
         case .about: "info.circle"
         }
     }
@@ -27,9 +31,11 @@ enum SettingsTab: Int, CaseIterable {
     /// Fixed content size per tab; the window resizes when the tab changes.
     var size: NSSize {
         switch self {
-        case .general: NSSize(width: 520, height: Updater.isEnabled ? 680 : 530)
-        case .categories: NSSize(width: 520, height: 380)
-        case .apps: NSSize(width: 520, height: 460)
+        case .general: NSSize(width: 520, height: Updater.isEnabled ? 720 : 600)
+        case .appearance: NSSize(width: 520, height: 600)
+        case .categories: NSSize(width: 520, height: 480)
+        case .apps: NSSize(width: 560, height: 600)
+        case .data: NSSize(width: 520, height: 600)
         case .about: NSSize(width: 520, height: CryptoWallet.visible.isEmpty ? 360 : 470 + CGFloat(CryptoWallet.visible.count) * 36)
         }
     }

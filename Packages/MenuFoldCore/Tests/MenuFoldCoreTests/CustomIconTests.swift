@@ -50,17 +50,29 @@ import Testing
         try FileManager.default.removeItem(at: source)
         #expect(FileManager.default.fileExists(atPath: first.path))
 
-        // Replacing gives a new file name and deletes the old file.
+        // Replacing gives a new file name; the old file stays for undo.
         let other = try writePNG(in: dir.appendingPathComponent("src2"))
         try model.setCustomIcon(for: "mail", from: other)
         let second = try #require(model.customIconURL(for: "mail"))
         #expect(second != first)
-        #expect(iconFiles(store.iconsDirectory) == [second.lastPathComponent])
+        #expect(Set(iconFiles(store.iconsDirectory)) == [first.lastPathComponent, second.lastPathComponent])
 
         model.resetCustomIcon(for: "mail")
         #expect(model.customIconURL(for: "mail") == nil)
-        #expect(iconFiles(store.iconsDirectory).isEmpty)
+        #expect(iconFiles(store.iconsDirectory).count == 2)
         #expect(store.load().customIcons.isEmpty)
+        // Undo finds the file again.
+        model.undo()
+        #expect(model.customIconURL(for: "mail") == second)
+
+        // The next launch removes what nothing uses (files aged past the one-minute grace).
+        for name in iconFiles(store.iconsDirectory) { age(store.iconsDirectory.appendingPathComponent(name)) }
+        _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
+        #expect(iconFiles(store.iconsDirectory) == [second.lastPathComponent])
+    }
+
+    func age(_ url: URL) {
+        try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-120)], ofItemAtPath: url.path)
     }
 
     @Test func anyFileUsesItsFinderIcon() throws {
@@ -91,7 +103,8 @@ import Testing
         defer { try? FileManager.default.removeItem(at: dir) }
         let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
         try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
-        for name in ["kept.png", "orphan.png"] {
+        let kept = UUID().uuidString + ".png", orphan = UUID().uuidString + ".png"
+        for name in [kept, orphan, "foreign.png", "notes.txt"] {
             let url = store.iconsDirectory.appendingPathComponent(name)
             try Data([1]).write(to: url)
             // The prune keeps files written less than a minute ago (another MenuFold instance may
@@ -99,14 +112,39 @@ import Testing
             try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-120)],
                                                   ofItemAtPath: url.path)
         }
-        try store.save(Layout(customIcons: ["mail": "kept.png", "notes": "../escape.png", "x": ".hidden.png"]))
+        try store.save(Layout(customIcons: ["mail": kept, "notes": "../escape.png", "x": ".hidden.png"]))
 
         let model = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
-        #expect(model.layout.customIcons == ["mail": "kept.png"])
-        #expect(iconFiles(store.iconsDirectory) == ["kept.png"])
+        #expect(model.layout.customIcons == ["mail": kept])
+        // Only MenuFold's own `<UUID>.png` names are ever deleted: foreign files survive.
+        #expect(Set(iconFiles(store.iconsDirectory)) == [kept, "foreign.png", "notes.txt"])
 
+        // A reset deletes nothing (undo may map the file again).
         model.resetLayout()
-        #expect(iconFiles(store.iconsDirectory).isEmpty)
+        #expect(Set(iconFiles(store.iconsDirectory)) == [kept, "foreign.png", "notes.txt"])
+    }
+
+    /// In a shared (synced) folder the cleanup never runs: another Mac's icon may arrive before
+    /// the layout.json that uses it.
+    @Test func sharedFolderSkipsIconCleanup() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
+        store.isShared = true
+        try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
+        let orphan = UUID().uuidString + ".png"
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent(orphan))
+        age(store.iconsDirectory.appendingPathComponent(orphan))
+        try store.save(Layout(hidden: ["x"]))
+        _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
+        #expect(iconFiles(store.iconsDirectory) == [orphan])
+    }
+
+    @Test func ownIconFileNames() {
+        #expect(GridModel.isOwnIconFileName(UUID().uuidString + ".png"))
+        #expect(!GridModel.isOwnIconFileName(UUID().uuidString + ".jpg"))
+        #expect(!GridModel.isOwnIconFileName("kept.png"))
+        #expect(!GridModel.isOwnIconFileName(".png"))
     }
 
     /// An unused icon file written less than a minute ago survives the prune: another MenuFold
@@ -117,12 +155,13 @@ import Testing
         defer { try? FileManager.default.removeItem(at: dir) }
         let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
         try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
-        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent("fresh.png"))
-        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent("used.png"))
-        try store.save(Layout(customIcons: ["mail": "used.png"]))
+        let fresh = UUID().uuidString + ".png", used = UUID().uuidString + ".png"
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent(fresh))
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent(used))
+        try store.save(Layout(customIcons: ["mail": used]))
 
         _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
-        #expect(iconFiles(store.iconsDirectory) == ["fresh.png", "used.png"])
+        #expect(Set(iconFiles(store.iconsDirectory)) == [fresh, used])
     }
 
     /// After a quarantine the old file still points at the icons, so they must survive.
@@ -131,9 +170,11 @@ import Testing
         defer { try? FileManager.default.removeItem(at: dir) }
         let store = LayoutStore(fileURL: dir.appendingPathComponent("layout.json"))
         try FileManager.default.createDirectory(at: store.iconsDirectory, withIntermediateDirectories: true)
-        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent("a.png"))
+        let a = UUID().uuidString + ".png"
+        try Data([1]).write(to: store.iconsDirectory.appendingPathComponent(a))
+        age(store.iconsDirectory.appendingPathComponent(a))
         try Data("{ not json".utf8).write(to: store.fileURL)
         _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
-        #expect(iconFiles(store.iconsDirectory) == ["a.png"])
+        #expect(iconFiles(store.iconsDirectory) == [a])
     }
 }

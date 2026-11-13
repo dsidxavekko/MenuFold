@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 #if canImport(Sparkle)
 import Sparkle
 #endif
@@ -17,7 +18,12 @@ import Sparkle
 /// `scripts/typecheck-app.sh` has no Sparkle module when nothing was built yet; it then checks the
 /// no-op branch below.
 @MainActor
+@Observable
 final class Updater: NSObject {
+    /// Version string of an update Sparkle found and the user has not installed yet; nil when none.
+    /// Drives the "є оновлення" pill in the panel and the Dock-menu item. (CONTRACT, set by the Shell agent.)
+    var availableUpdateVersion: String?
+
     /// Posted after any finished update check (update found, none found, or fetch failed), so
     /// Settings can refresh the "last checked" row — Sparkle stamps `lastUpdateCheckDate`
     /// asynchronously after `checkForUpdates()`.
@@ -29,7 +35,7 @@ final class Updater: NSObject {
     /// Lazy so the initializer is done before the delegate (`self`) is referenced — an init that
     /// passed `self` before `super.init` would not compile. The updater starts on the first access
     /// (`Self.isEnabled` decides whether it runs at all).
-    private lazy var controller: SPUStandardUpdaterController = {
+    @ObservationIgnored private lazy var controller: SPUStandardUpdaterController = {
         SPUStandardUpdaterController(startingUpdater: Self.isEnabled, updaterDelegate: self, userDriverDelegate: nil)
     }()
     #endif
@@ -102,11 +108,18 @@ final class Updater: NSObject {
 #if canImport(Sparkle)
 extension Updater: SPUUpdaterDelegate {
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        availableUpdateVersion = item.displayVersionString
         NotificationCenter.default.post(name: Self.didCheckNotification, object: nil)
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        availableUpdateVersion = nil
         NotificationCenter.default.post(name: Self.didCheckNotification, object: nil)
+    }
+
+    /// The update is being applied: this copy is about to quit, so the badge must not linger.
+    func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        availableUpdateVersion = nil
     }
 
     // Sparkle 2 has no `updater:failedToFetchAppcastWithError:` (a Sparkle 1.x method): a failed

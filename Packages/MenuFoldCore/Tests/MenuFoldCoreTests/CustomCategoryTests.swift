@@ -30,6 +30,24 @@ import Testing
         #expect(m.availableTabs.last == .category(.other))
     }
 
+    @Test func batchSetCategoryIsOneUndoStep() {
+        let m = makeModel()
+        let work = m.createCategory(named: "Робота")
+        let steps = m.undoStack.count
+        m.setCategory(work, for: ["mail", "notes", "xcode"])
+        #expect(ids(m.items(tab: .category(work), query: "")) == ["app:mail", "app:notes", "app:xcode"])
+        #expect(m.undoStack.count == steps + 1)
+        m.setCategory(nil, for: ["mail", "notes"])
+        #expect(ids(m.items(tab: .category(work), query: "")) == ["app:xcode"])
+        m.undo()
+        #expect(ids(m.items(tab: .category(work), query: "")).count == 3)
+        // A deleted custom category is refused.
+        m.deleteCategory(id: work.id)
+        let before = m.layout
+        m.setCategory(work, for: ["safari"])
+        #expect(m.layout == before)
+    }
+
     @Test func emptyCustomCategoryStillHasATab() {
         let m = makeModel()
         let empty = m.createCategory(named: "Порожня")

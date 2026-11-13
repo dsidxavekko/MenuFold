@@ -14,6 +14,9 @@ public enum GridTab: Hashable, Sendable {
     case all
     /// Apps running right now (`GridModel.runningAppIDs`). Fixed right after "Все", not reorderable.
     case running
+    /// Recently launched apps, newest first (`GridModel.recentApps`). Right after "Запущені", not
+    /// reorderable; `showsRecentTab` hides it.
+    case recent
     case category(AppCategory)
 }
 
@@ -49,6 +52,9 @@ public final class GridModel {
     /// What `LayoutStore.loadWithOutcome()` found at launch, so Settings can tell the user (see
     /// `LayoutHealth.from(outcome:fileURL:quarantineFailedInPlace:)`). `.missing` without a store.
     public private(set) var layoutOutcome: LoadOutcome = .missing
+
+    /// The layout.json this model reads and writes (nil without a store: previews, tests).
+    public var layoutFileURL: URL? { store?.fileURL }
 
     /// True when an unusable layout could not be moved aside: saving is blocked to protect it.
     public var quarantineFailedInPlace: Bool { store?.lastQuarantineFailed ?? false }
@@ -89,6 +95,30 @@ public final class GridModel {
     /// while the field is being edited; the UI clears it when editing ends.
     public var renamingCategoryID: String?
 
+    /// Shows the "Недавні" tab (a Settings switch; off by default here, like `showsRunningTab`).
+    public var showsRecentTab = false {
+        didSet { if showsRecentTab != oldValue { validateTab() } }
+    }
+    /// Shows the "Закріплені" row on "Все" (a Settings switch the app persists).
+    public var showsPinned = true { didSet { if showsPinned != oldValue { clearSelectionIfGone() } } }
+    /// `panelDidOpen` keeps the current tab instead of going back to "Все" (a Settings switch).
+    public var rememberLastTab = false
+    /// Launch apps in the background and don't close the panel (a Settings switch): for opening
+    /// several apps in a row. `onLaunched` is not called then.
+    public var keepsPanelOpenAfterLaunch = false
+
+    /// First-seen / last-launched dates per app (new-app dots, "Недавні", unused apps). See `AppHistory`.
+    public internal(set) var history = AppHistory()
+    /// Layouts before the last changes, newest last (`undo()`); see GridModel+Arrange.swift.
+    public internal(set) var undoStack: [Layout] = []
+    /// Layouts undone, newest last (`redo()`).
+    public internal(set) var redoStack: [Layout] = []
+    /// True while `undo()`/`redo()` commit, so the commit does not record itself.
+    @ObservationIgnored var isRestoringUndo = false
+    /// history.json exists but could not be read (permissions, I/O): nothing is saved over it until
+    /// a later read succeeds, and the catalog is not treated as a first run. See GridModel+Data.swift.
+    @ObservationIgnored var historyUnreadable = false
+
     /// Called after an app was launched (Shell closes the panel).
     @ObservationIgnored public var onLaunched: (() -> Void)?
     /// Called on the main actor when a launch from `launch(_:)` fails (app removed since the last
@@ -98,6 +128,9 @@ public final class GridModel {
     @ObservationIgnored private let catalog: AppCatalogProviding
     @ObservationIgnored private let store: LayoutStore?
     @ObservationIgnored let usageStore: UsageStore?
+    @ObservationIgnored let historyStore: AppHistoryStore?
+    /// The store, for the data features in GridModel+Data.swift (backups, reload, export).
+    @ObservationIgnored var layoutStore: LayoutStore? { store }
     /// Current time (injectable for tests).
     @ObservationIgnored var now: () -> Date = Date.init
     /// Home directory used to find ~/Applications (injectable for tests).
@@ -108,18 +141,23 @@ public final class GridModel {
     /// Folder that holds custom icon files. Without a store (previews, tests) a private temp folder.
     @ObservationIgnored public let iconsDirectory: URL
 
-    public convenience init(catalog: AppCatalogProviding, store: LayoutStore?, usageStore: UsageStore? = nil) {
-        self.init(catalog: catalog, store: store, usageStore: usageStore,
+    public convenience init(catalog: AppCatalogProviding, store: LayoutStore?, usageStore: UsageStore? = nil,
+                            historyStore: AppHistoryStore? = nil) {
+        self.init(catalog: catalog, store: store, usageStore: usageStore, historyStore: historyStore,
                   homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
                   finderNameResolver: FinderFolders.displayName(atPath:))
     }
 
     init(catalog: AppCatalogProviding, store: LayoutStore?, usageStore: UsageStore? = nil,
+         historyStore: AppHistoryStore? = nil,
          homeDirectory: String, finderNameResolver: @escaping (String) -> String) {
         self.catalog = catalog
         self.store = store
         self.usageStore = usageStore
+        self.historyStore = historyStore
         self.usage = usageStore?.load() ?? UsageStats()
+        self.history = historyStore?.load() ?? AppHistory()
+        self.historyUnreadable = historyStore?.lastLoadUnreadable ?? false
         self.homeDirectory = homeDirectory
         self.finderNameResolver = finderNameResolver
         self.iconsDirectory = store?.iconsDirectory
@@ -132,20 +170,31 @@ public final class GridModel {
         // (the old copy is kept as layout.corrupt-…json). If the move failed, `save` refuses to run
         // and the user's unreadable file stays untouched (surfaced through `quarantineFailedInPlace`).
         // `.incompatible` works the same way: the newer file was moved aside, so a fresh one is needed.
-        if case .quarantined = layoutOutcome, let store {
-            do { try store.save(layout) } catch {
-                NSLog("%@", "MenuFold: could not write a fresh layout after quarantine: \(error.localizedDescription)")
-            }
-        } else if case .incompatible = layoutOutcome, let store {
-            do { try store.save(layout) } catch {
-                NSLog("%@", "MenuFold: could not write a fresh layout after an incompatible file: \(error.localizedDescription)")
+        //
+        // Not in a shared (synced) folder: there a fresh empty file would sync to every other Mac and
+        // wipe their layout too. The empty layout stays in memory only; the file is written by the
+        // first change the user makes (or replaced by a valid one another Mac syncs in, which
+        // `reloadLayoutFromDisk` picks up).
+        if let store, !store.isShared {
+            if case .quarantined = layoutOutcome {
+                do { try store.save(layout) } catch {
+                    NSLog("%@", "MenuFold: could not write a fresh layout after quarantine: \(error.localizedDescription)")
+                }
+            } else if case .incompatible = layoutOutcome {
+                do { try store.save(layout) } catch {
+                    NSLog("%@", "MenuFold: could not write a fresh layout after an incompatible file: \(error.localizedDescription)")
+                }
             }
         }
         // Only a layout that was really read says which icon files are in use; after a quarantine
         // the old file still refers to them, so they are kept.
-        if case .loaded = layoutOutcome { removeUnusedIconFiles() }
+        if case .loaded = layoutOutcome {
+            removeUnusedIconFiles()
+            makeLaunchBackup()
+        }
         self.apps = catalog.apps
         self.isLoaded = catalog.isLoaded
+        if isLoaded { noteCatalogApps() }
         catalog.onChange = { [weak self] apps in
             self?.catalogDidChange(apps)
         }
@@ -155,6 +204,7 @@ public final class GridModel {
     private func catalogDidChange(_ newApps: [AppEntry]) {
         apps = newApps
         isLoaded = true
+        noteCatalogApps()
         // Layout is kept intact (apps come back on reinstall); only close a folder that became empty.
         closeOpenFolderIfGone()
         validateTab()
@@ -174,7 +224,8 @@ public final class GridModel {
             let l = rank[lhs.element.id] ?? Int.max, r = rank[rhs.element.id] ?? Int.max
             return l != r ? l < r : lhs.offset < rhs.offset
         }
-        return [.all] + (showsRunningTab ? [.running] : []) + ordered.map { .category($0.element) }
+        return [.all] + (showsRunningTab ? [.running] : []) + (showsRecentTab ? [.recent] : [])
+            + ordered.map { .category($0.element) }
     }
 
     /// Categories shown as tabs, in the default order (see `availableTabs`).
@@ -207,7 +258,7 @@ public final class GridModel {
     /// Items for current `tab` / `query`.
     public var visibleItems: [GridItem] { items(tab: tab, query: query) }
 
-    /// Non-empty query → flat list of matching apps (including ones inside folders), ignoring tab.
+    /// Non-empty query → `searchItems(query:)` (GridModel+Search.swift), ignoring tab.
     /// `.all` → folders (manual + Finder) + apps not in any folder, alphabetical (localized, case-insensitive).
     /// `.category` → flat alphabetical list of apps in that category (folders ignored).
     /// `.running` → flat alphabetical list of the running apps (folders ignored).
@@ -215,11 +266,13 @@ public final class GridModel {
     public func items(tab: GridTab, query: String) -> [GridItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            return Self.sorted(visibleApps.filter { $0.matches(q) }).map { .app($0) }
+            return searchItems(query: q)
         }
         switch tab {
         case .running:
             return Self.sorted(visibleApps.filter { runningAppIDs.contains($0.id) }).map { .app($0) }
+        case .recent:
+            return recentApps.map { .app($0) }
         case .category(let cat):
             return Self.sorted(visibleApps.filter { category(of: $0).id == cat.id }).map { .app($0) }
         case .all:
@@ -231,10 +284,11 @@ public final class GridModel {
                 if !fa.isEmpty { result.append(.folder(f, apps: fa)) }
             }
             result += visibleApps.filter { !inFolders.contains($0.id) }.map { .app($0) }
-            return result.sorted { lhs, rhs in
+            let alphabetical = result.sorted { lhs, rhs in
                 let r = lhs.title.localizedStandardCompare(rhs.title)
                 return r == .orderedSame ? lhs.id < rhs.id : r == .orderedAscending
             }
+            return applyManualOrder(alphabetical)
         }
     }
 
@@ -244,7 +298,7 @@ public final class GridModel {
             if !raw.hasPrefix(AppCategory.customPrefix) { return AppCategory.from(raw: raw) }
             if let custom = layout.customCategories.first(where: { $0.id == raw }) { return custom.category }
         }
-        return AppCategory.from(raw: app.infoCategory)
+        return AppCategory.automatic(for: app)
     }
 
     /// Manual or Finder folder by id.
@@ -270,7 +324,7 @@ public final class GridModel {
     // MARK: Finder folders
 
     /// Manual folders followed by synthesized Finder folders.
-    private var allFolders: [Folder] { layout.folders + finderFolders }
+    var allFolders: [Folder] { layout.folders + finderFolders }
 
     private func manualFolderContaining(appID: String) -> Folder? {
         layout.folders.first { $0.appIDs.contains(appID) }
@@ -314,11 +368,11 @@ public final class GridModel {
         return name
     }
 
-    private var visibleApps: [AppEntry] {
+    var visibleApps: [AppEntry] {
         apps.filter { !layout.hidden.contains($0.id) }
     }
 
-    private static func sorted(_ list: [AppEntry]) -> [AppEntry] {
+    static func sorted(_ list: [AppEntry]) -> [AppEntry] {
         list.sorted { lhs, rhs in
             let r = lhs.name.localizedStandardCompare(rhs.name)
             return r == .orderedSame ? lhs.id < rhs.id : r == .orderedAscending
@@ -352,6 +406,11 @@ public final class GridModel {
         // if it now has ≤1 app.
         l.folders.append(Folder(id: newID, name: L("Нова папка"), appIDs: [targetAppID, appID]))
         Self.dissolveSingleAppFolders(&l)
+        // In a manual "Все" order the new folder takes the target app's place, where the user dropped.
+        if var order = l.manualOrder, let idx = order.firstIndex(of: "app:" + targetAppID) {
+            order.insert("folder:" + newID.uuidString, at: idx)
+            l.manualOrder = order
+        }
         commit(l)
         renamingFolderID = newID
         return newID
@@ -444,6 +503,18 @@ public final class GridModel {
             l.categoryOverrides[appID] = category.id
         } else {
             guard l.categoryOverrides.removeValue(forKey: appID) != nil else { return }
+        }
+        commit(l)
+    }
+
+    /// `setCategory` for several apps as one change (one save, one ⌘Z step). nil → remove overrides.
+    public func setCategory(_ category: AppCategory?, for appIDs: [String]) {
+        var l = layout
+        if let category {
+            if category.isCustom, !l.customCategories.contains(where: { $0.id == category.id }) { return }
+            for id in appIDs where !id.isEmpty { l.categoryOverrides[id] = category.id }
+        } else {
+            for id in appIDs { l.categoryOverrides.removeValue(forKey: id) }
         }
         commit(l)
     }
@@ -570,12 +641,14 @@ public final class GridModel {
         commit(l)
     }
 
+    /// Back to an empty layout (undoable). Icon files are not deleted here: undo can bring their
+    /// mappings back, and undo lives in memory only, so the next launch's cleanup removes the ones
+    /// nothing uses any more.
     public func resetLayout() {
         openFolderID = nil
         renamingFolderID = nil
         renamingCategoryID = nil
         commit(Layout())
-        removeUnusedIconFiles()
     }
 
     // MARK: Custom icons
@@ -593,40 +666,40 @@ public final class GridModel {
     /// Uses `source` as the icon of `appID`: an image file as is, any other file (e.g. another app)
     /// by its Finder icon. The picture is copied as a PNG, so the original may be moved or deleted.
     /// Each change gets a new file name, so caches keyed by the file never show the old picture.
-    /// The previous icon file is deleted only after the save succeeded, so a failure keeps it.
+    /// The previous icon file is left on disk, so undo can bring it back; the next launch's cleanup
+    /// (`removeUnusedIconFiles`) deletes it once nothing points at it.
     public func setCustomIcon(for appID: String, from source: URL) throws {
         let data = try CustomIcons.pngData(from: source)
         try FileManager.default.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
         let name = UUID().uuidString + ".png"
         try data.write(to: iconsDirectory.appendingPathComponent(name), options: .atomic)
-        let old = layout.customIcons[appID]
         var l = layout
         l.customIcons[appID] = name
         try commitPersisting(l)
-        if let old { try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old)) }
     }
 
-    /// Goes back to the app's own icon. The old icon file is deleted only after the save succeeded,
-    /// so a failed save keeps the bytes it still points at.
+    /// Goes back to the app's own icon. The old file stays for undo (see `setCustomIcon`).
     public func resetCustomIcon(for appID: String) {
         var l = layout
-        guard let old = l.customIcons.removeValue(forKey: appID) else { return }
-        do {
-            try commitPersisting(l)
-            try? FileManager.default.removeItem(at: iconsDirectory.appendingPathComponent(old))
-        } catch {
-            NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")
-        }
+        guard l.customIcons.removeValue(forKey: appID) != nil else { return }
+        commit(l)
     }
 
-    /// Deletes icon files that no layout entry points at (left over after a reset or a crash).
+    /// Deletes icon files that no layout entry points at (left over after a reset, an icon change
+    /// or a crash). Runs only at launch after a real load: undo lives in memory, so after a relaunch
+    /// nothing can bring an unreferenced file back.
+    ///
+    /// Only files MenuFold names itself (`<UUID>.png`) are touched, so anything else a user or
+    /// another tool put into the folder survives. Nothing runs for a shared (synced) folder:
+    /// another Mac's new icon may arrive before the layout.json that refers to it.
     /// Files modified less than a minute ago are kept: another MenuFold instance (two copies can
     /// run at once) may have just written an icon for a layout this process has not read yet.
-    private func removeUnusedIconFiles() {
+    func removeUnusedIconFiles() {
+        guard store?.isShared != true else { return }
         let used = Set(layout.customIcons.values)
         let fresh = Date().addingTimeInterval(-60)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: iconsDirectory.path)) ?? []
-        for file in files where file.hasSuffix(".png") && !used.contains(file) {
+        for file in files where Self.isOwnIconFileName(file) && !used.contains(file) {
             let url = iconsDirectory.appendingPathComponent(file)
             if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
                let modified = attrs[.modificationDate] as? Date, modified > fresh { continue }
@@ -634,20 +707,49 @@ public final class GridModel {
         }
     }
 
+    /// `<UUID>.png`: the only names `setCustomIcon` and imports ever write.
+    static func isOwnIconFileName(_ name: String) -> Bool {
+        guard name.hasSuffix(".png") else { return false }
+        return UUID(uuidString: String(name.dropLast(".png".count))) != nil
+    }
+
     /// Opens app via NSWorkspace, then calls `onLaunched` right away (the panel closes without
-    /// waiting). A failure is reported later through `onLaunchFailed`. Usage is not recorded here:
+    /// waiting). With `keepsPanelOpenAfterLaunch` a new launch goes to the background and the panel
+    /// stays; an app that is already running is switched to as usual (activated, panel closed),
+    /// since bringing it forward is the only thing such a click can do. A failure is reported later through `onLaunchFailed`. Usage is not recorded here:
     /// the app's did-launch observer (`AppDelegate.observeLaunches`) counts only launches that
     /// actually succeeded, so a failed launch does not pollute "Часті".
-    public func launch(_ app: AppEntry) {
+    /// `newInstance`: open another copy even when the app is running ("Новий екземпляр").
+    public func launch(_ app: AppEntry, newInstance: Bool = false) {
+        let switchesToRunning = keepsPanelOpenAfterLaunch && !newInstance
+            && !NSRunningApplication.runningApplications(withBundleIdentifier: app.id).isEmpty
+        let staysOpen = keepsPanelOpenAfterLaunch && !switchesToRunning
         let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
+        config.activates = !staysOpen
+        config.createsNewApplicationInstance = newInstance
         NSWorkspace.shared.openApplication(at: app.url, configuration: config) { [weak self] _, error in
             guard let error else { return }
             let message = error.localizedDescription
             NSLog("%@", "MenuFold: failed to launch \(app.url.path): \(message)")
             Task { @MainActor in self?.onLaunchFailed?(app, message) }
         }
-        onLaunched?()
+        markSeen(app.id)
+        if !staysOpen { onLaunched?() }
+    }
+
+    /// "Відкрити всі" on a folder: launches every visible app in it (in the background but the last).
+    public func launchAll(in folder: Folder) {
+        let list = apps(in: folder)
+        guard !list.isEmpty else { return }
+        for app in list.dropLast() {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            NSWorkspace.shared.openApplication(at: app.url, configuration: config) { _, error in
+                if let error { NSLog("%@", "MenuFold: failed to launch \(app.url.path): \(error.localizedDescription)") }
+            }
+            markSeen(app.id)
+        }
+        launch(list[list.count - 1])
     }
 
     public func revealInFinder(_ app: AppEntry) {
@@ -655,13 +757,13 @@ public final class GridModel {
     }
 
     /// Shell calls this each time the panel opens: clears query, closes open folder, and goes back
-    /// to the "Все" tab (the panel always opens on all apps, not on the last category).
+    /// to the "Все" tab unless `rememberLastTab` is on.
     public func panelDidOpen() {
         query = ""
         openFolderID = nil
         renamingFolderID = nil
         renamingCategoryID = nil
-        tab = .all
+        if !rememberLastTab { tab = .all } else { validateTab() }
         selectedItemID = nil
         pendingTrashAppID = nil
     }
@@ -691,7 +793,7 @@ public final class GridModel {
         return nil
     }
 
-    private func closeOpenFolderIfGone() {
+    func closeOpenFolderIfGone() {
         if let id = openFolderID, folder(id: id).map({ apps(in: $0).isEmpty }) ?? true {
             openFolderID = nil
         }
@@ -704,7 +806,7 @@ public final class GridModel {
     }
 
     /// Guarantees `tab ∈ availableTabs`.
-    private func validateTab() {
+    func validateTab() {
         if tab != .all, !availableTabs.contains(tab) { tab = .all }
     }
 
@@ -712,10 +814,11 @@ public final class GridModel {
     /// `Layout.currentVersion` to disk: without it the in-memory `layout.version` would drift from the
     /// file. Comparing after normalizing keeps repeated identical intents from rewriting the file.
     /// Throws when the save failed (the in-memory layout is still updated).
-    private func commitPersisting(_ newLayout: Layout) throws {
+    func commitPersisting(_ newLayout: Layout) throws {
         var committed = newLayout
         committed.version = Layout.currentVersion
         guard committed != layout else { return }
+        if !isRestoringUndo { recordUndo(from: layout) }
         layout = committed
         validateTab()
         // A folder made/dissolved or a category changed can take the selected tile out of view.
@@ -727,7 +830,27 @@ public final class GridModel {
         if case .unreadable = layoutOutcome { layoutOutcome = .loaded }
     }
 
-    private func commit(_ newLayout: Layout) {
+    /// Applies a layout read from disk (another Mac changed the synced file) WITHOUT saving it:
+    /// writing back would bounce the change between Macs and could overwrite a newer file.
+    /// Undo/redo are cleared, since an undo across a sync would push stale state back out, and UI
+    /// state pointing into the old layout (open folder, inline renames, selection, tab) is reset
+    /// when its target is gone.
+    func applyLayoutWithoutSaving(_ newLayout: Layout) {
+        var applied = newLayout
+        applied.version = Layout.currentVersion
+        // An equal layout (usually the echo of this process's own save) changes nothing, undo included.
+        guard applied != layout else { return }
+        undoStack.removeAll()
+        redoStack.removeAll()
+        layout = applied
+        validateTab()
+        closeOpenFolderIfGone()
+        if let id = renamingFolderID, !layout.folders.contains(where: { $0.id == id }) { renamingFolderID = nil }
+        if let id = renamingCategoryID, !layout.customCategories.contains(where: { $0.id == id }) { renamingCategoryID = nil }
+        clearSelectionIfGone()
+    }
+
+    func commit(_ newLayout: Layout) {
         do { try commitPersisting(newLayout) } catch {
             NSLog("MenuFold: failed to save layout: \(error.localizedDescription)")
         }

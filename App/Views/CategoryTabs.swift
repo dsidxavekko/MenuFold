@@ -1,3 +1,4 @@
+import AppKit
 import MenuFoldCore
 import SwiftUI
 
@@ -18,6 +19,8 @@ struct CategoryTabs: View {
     @State private var draggingID: String?
     /// Tab frames in the strip's coordinate space, for finding the tab under the pointer.
     @State private var frames: [String: CGRect] = [:]
+    /// Category id of the tab an app is being dragged over (drop sets the app's category).
+    @State private var dropTargetID: String?
 
     private static let space = "category-tabs"
 
@@ -41,6 +44,11 @@ struct CategoryTabs: View {
                 guard let id else { return }
                 withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id, anchor: .center) }
             }
+            // A tab chosen from outside the strip (search chips, ⌘1…9) may be scrolled out of view.
+            .onChange(of: model.tab) { _, tab in
+                withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(tabID(tab)) }
+            }
+            .onAppear { proxy.scrollTo(tabID(model.tab)) }
         }
         .onChange(of: model.availableTabs) { _, tabs in
             // The selected category may disappear (last app hidden/recategorized, category deleted).
@@ -74,13 +82,31 @@ struct CategoryTabs: View {
             } else {
                 let ids = categoryIDs
                 let isDragged = draggingID == category.id
-                capsule(for: tab)
+                // Two independent drags: reordering is a SwiftUI gesture on the tab itself (no
+                // pasteboard), while an app tile's AppKit drag only reaches `appDropDestination`,
+                // which accepts nothing but the private app id type.
+                capsule(for: tab, isDropTarget: dropTargetID == category.id)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { frames[category.id] = $0 }
                     .simultaneousGesture(reorderGesture(for: category.id))
                     .scaleEffect(isDragged ? 1.08 : 1)
                     .opacity(isDragged ? 0.85 : 1)
                     .zIndex(isDragged ? 1 : 0)
                     .animation(reduceMotion ? nil : Theme.snappy, value: isDragged)
+                    .appDropDestination(isEnabled: draggingID == nil, isKnownApp: { id in
+                        model.apps.contains { $0.id == id }
+                    }) { targeted in
+                        if targeted {
+                            dropTargetID = category.id
+                        } else if dropTargetID == category.id {
+                            dropTargetID = nil
+                        }
+                    } perform: { appID in
+                        dropTargetID = nil
+                        withAnimation(reduceMotion ? Theme.crossfade : Theme.content) {
+                            model.setCategory(category, for: appID)
+                        }
+                        return true
+                    }
                     .contextMenu {
                         Button("Пересунути ліворуч") { move(category.id, by: -1) }
                             .disabled(ids.first == category.id)
@@ -100,9 +126,47 @@ struct CategoryTabs: View {
                         ? String(localized: "Власна категорія. Перетягніть, щоб змінити порядок; контекстне меню: перейменувати або видалити")
                         : String(localized: "Перетягніть, щоб змінити порядок"))
             }
+        } else if tab == .running {
+            capsule(for: tab)
+                .contextMenu {
+                    let ids = quittableRunningIDs
+                    Button("Завершити всі") { quitAll(ids, force: false) }
+                        .disabled(ids.isEmpty)
+                        .modifierKeyAlternate(.option) {
+                            Button("Завершити всі примусово") { quitAll(ids, force: true) }
+                                .disabled(ids.isEmpty)
+                        }
+                }
         } else {
             capsule(for: tab)
         }
+    }
+
+    /// Running apps shown on the "Запущені" tab that "Завершити всі" may quit: regular (Dock) apps
+    /// only, never Finder (the desktop and file windows would go away) or MenuFold itself (it would
+    /// close the panel the user is working in).
+    private var quittableRunningIDs: [String] {
+        let excluded: Set<String> = ["com.apple.finder", Bundle.main.bundleIdentifier ?? ""]
+        let regular = Set(NSWorkspace.shared.runningApplications.compactMap { app in
+            app.activationPolicy == .regular ? app.bundleIdentifier : nil
+        })
+        return model.items(tab: .running, query: "").compactMap { item in
+            if case .app(let app) = item, !excluded.contains(app.id), regular.contains(app.id) { app.id } else { nil }
+        }
+    }
+
+    /// A plain quit lets every app ask to save its documents; force-quitting loses unsaved work, so
+    /// it asks first.
+    private func quitAll(_ ids: [String], force: Bool) {
+        if force {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = String(localized: "Завершити примусово всі програми? Незбережені зміни буде втрачено.")
+            alert.addButton(withTitle: String(localized: "Завершити примусово"))
+            alert.addButton(withTitle: String(localized: "Скасувати"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        for id in ids { RunningAppsMonitor.shared.quit(id, force: force) }
     }
 
     private func move(_ id: String, by offset: Int) {
@@ -137,10 +201,11 @@ struct CategoryTabs: View {
             }
     }
 
-    private func capsule(for tab: GridTab) -> some View {
+    private func capsule(for tab: GridTab, isDropTarget: Bool = false) -> some View {
         TabCapsule(
             title: title(for: tab),
             isSelected: model.tab == tab,
+            isDropTarget: isDropTarget,
             namespace: selectionNamespace
         ) {
             withAnimation(reduceMotion ? nil : Theme.snappy) { model.tab = tab }
@@ -152,6 +217,7 @@ struct CategoryTabs: View {
         switch tab {
         case .all: "all"
         case .running: "running"
+        case .recent: "recent"
         case .category(let category): category.id
         }
     }
@@ -160,6 +226,7 @@ struct CategoryTabs: View {
         switch tab {
         case .all: String(localized: "Все")
         case .running: String(localized: "Запущені")
+        case .recent: String(localized: "Недавні")
         case .category(let category): category.displayName
         }
     }
@@ -229,10 +296,12 @@ private struct CategoryNameField: View {
 private struct TabCapsule: View {
     let title: String
     let isSelected: Bool
+    var isDropTarget = false
     let namespace: Namespace.ID
     let action: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let selectionID = "category-tab-selection"
 
@@ -249,11 +318,20 @@ private struct TabCapsule: View {
                     }
                 }
                 .modifier(SelectionGlass(isSelected: isSelected, namespace: namespace, id: Self.selectionID))
+                .overlay {
+                    // An app dragged over the tab: accent ring, like a folder drop target.
+                    Capsule()
+                        .strokeBorder(Color.accentColor.opacity(isDropTarget ? 0.8 : 0), lineWidth: 1.5)
+                        .background(Capsule().fill(Color.accentColor.opacity(isDropTarget && !isSelected ? 0.15 : 0)))
+                        .allowsHitTesting(false)
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .scaleEffect(isDropTarget && !reduceMotion ? Theme.hoverScale : 1)
         .onHover { isHovered = $0 }
         .animation(Theme.snappy, value: isHovered)
+        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isDropTarget)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

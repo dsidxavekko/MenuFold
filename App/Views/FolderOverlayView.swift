@@ -105,7 +105,12 @@ struct FolderOverlayView: View {
         let apps = model.apps(in: folder)
         return VStack(spacing: 14) {
             title
+                .frame(maxWidth: .infinity)
                 .frame(height: 40)
+                // At the trailing edge, so the title stays centered.
+                .overlay(alignment: .trailing) {
+                    if !apps.isEmpty { openAllButton }
+                }
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -167,7 +172,7 @@ struct FolderOverlayView: View {
                     .glassEffect(.regular, in: .capsule)
                     .fixedSize()
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 140) // room for the "Відкрити всі" button
             .help(folder.finderPath ?? "")
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Папка \(folder.name), з Finder")
@@ -199,7 +204,7 @@ struct FolderOverlayView: View {
                         titleFocused = false
                     }
             }
-            .frame(minWidth: 80, maxWidth: 440)
+            .frame(minWidth: 80, maxWidth: 360)
             .padding(.horizontal, 14)
             .frame(height: 36)
             .glassEffect(showsCapsule ? .regular : .identity, in: .capsule)
@@ -209,6 +214,21 @@ struct FolderOverlayView: View {
             .help("Назва папки. Enter — зберегти, Esc — скасувати.")
             .accessibilityLabel("Назва папки")
             .accessibilityHint("Enter зберігає нову назву, Esc повертає попередню")
+    }
+
+    /// "Відкрити всі": launches every app of the folder (the panel closes after the last one).
+    private var openAllButton: some View {
+        Button {
+            model.launchAll(in: folder)
+        } label: {
+            Label("Відкрити всі", systemImage: "arrow.up.forward.app")
+                .font(.callout)
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.regular)
+        .fixedSize()
+        .help("Відкрити всі програми з папки")
     }
 
     // MARK: Actions

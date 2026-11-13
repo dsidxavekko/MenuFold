@@ -46,44 +46,82 @@ enum DockGeometry {
             && p.y >= rect.minY - tolerance && p.y <= rect.maxY + tolerance
     }
 
-    /// Whether `point` (default: the current mouse location) is in the Dock area.
+    /// Whether `point` (default: the current mouse location) is in the Dock area, for any Dock
+    /// orientation.
     ///
-    /// Only the *bottom* edge is checked, on purpose. macOS keeps a left/right Dock on a single
-    /// display, but the app can't tell which display hosts it, so honouring `.left`/`.right` used to
-    /// arm the "clicked the Dock" logic on the matching edge of *every* screen (a false positive that
-    /// swallows the user's real Dock click). The bottom-only rule errs the other way: with a side
-    /// Dock the guard simply never arms, which costs at most one redundant reopen. `visibleFrame`
-    /// still measures a side Dock correctly, so nothing here is ever armed wrongly.
+    /// Two checks, both required:
+    /// 1. A band along the Dock's edge (bottom, left or right, from `orientation`) of the screen under
+    ///    the point. The band alone is not enough for a side Dock: macOS keeps a left/right Dock on one
+    ///    display only, and the band would also arm on the matching edge of every other screen.
+    /// 2. The point is over a visible window of the Dock process (`dockWindowFrames`). At the moment of
+    ///    a real Dock click the Dock is on screen (even with auto-hide, the pointer revealed it), so
+    ///    this tells the Dock's display from the others. If the probe finds no Dock window at all (it
+    ///    can't read the window list), only the band decides, but a bottom Dock is then the only one
+    ///    trusted, since a side band on the wrong display would swallow a real click.
     @MainActor
     static func isNearDock(_ point: NSPoint = NSEvent.mouseLocation) -> Bool {
         guard let screen = screen(containing: point) else { return false }
-        return isNearDock(point, screenFrame: screen.frame, visibleFrame: screen.visibleFrame, dockBand: dockBand)
+        let side = orientation
+        guard isNearDock(point, screenFrame: screen.frame, visibleFrame: screen.visibleFrame,
+                         orientation: side, dockBand: dockBand) else { return false }
+        let frames = dockWindowFrames()
+        if frames.isEmpty { return side == .bottom }
+        return frames.contains { contains($0, point, tolerance: dockProximity) }
     }
 
-    /// Bottom band of one screen: Dock thickness = the larger of the visible-frame inset (≈0 when the
-    /// Dock auto-hides) and `dockBand`, plus `dockProximity`. Both parts are clamped to `maxDockSize`.
-    static func isNearDock(_ point: NSPoint, screenFrame: NSRect, visibleFrame: NSRect, dockBand: CGFloat = 0) -> Bool {
-        let inset = visibleFrame.minY - screenFrame.minY
+    /// Band along the Dock edge of one screen: Dock thickness = the larger of the visible-frame inset
+    /// on that edge (≈0 when the Dock auto-hides) and `dockBand`, plus `dockProximity`. Both parts are
+    /// clamped to `maxDockSize`.
+    static func isNearDock(_ point: NSPoint, screenFrame: NSRect, visibleFrame: NSRect,
+                           orientation: Orientation = .bottom, dockBand: CGFloat = 0) -> Bool {
+        let inset: CGFloat
+        let distance: CGFloat
+        switch orientation {
+        case .bottom:
+            inset = visibleFrame.minY - screenFrame.minY
+            distance = point.y - screenFrame.minY
+        case .left:
+            inset = visibleFrame.minX - screenFrame.minX
+            distance = point.x - screenFrame.minX
+        case .right:
+            inset = screenFrame.maxX - visibleFrame.maxX
+            distance = screenFrame.maxX - point.x
+        }
         let thickness = min(max(inset.isFinite ? inset : 0, dockBand.isFinite ? dockBand : 0), maxDockSize)
-        return point.y - screenFrame.minY <= thickness + dockProximity
+        return distance <= thickness + dockProximity
+    }
+
+    /// Frames (AppKit screen coordinates) of the Dock process's visible windows at the Dock window
+    /// level. Window bounds and owner PIDs need no Screen Recording permission (only titles do).
+    @MainActor
+    static func dockWindowFrames() -> [NSRect] {
+        guard let primary = NSScreen.screens.first,
+              let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]
+        else { return [] }
+        let dockPIDs = Set(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
+            .map(\.processIdentifier))
+        let dockLevel = Int(CGWindowLevelForKey(.dockWindow))
+        return info.compactMap { window in
+            guard let pid = window[kCGWindowOwnerPID as String] as? pid_t, dockPIDs.contains(pid),
+                  let layer = window[kCGWindowLayer as String] as? Int, layer == dockLevel,
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let boundsDict = window[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary)
+            else { return nil }
+            // CG window bounds are top-left based on the primary screen.
+            return NSRect(x: bounds.minX, y: primary.frame.maxY - bounds.maxY,
+                          width: bounds.width, height: bounds.height)
+        }
     }
 
     /// Whether `point` is near the Dock band of its screen for DRAG purposes (pinning to the Dock).
-    /// Unlike `isNearDock` — the reopen guard, bottom-only on purpose — this honours `orientation`:
-    /// with a side Dock the drag mask must offer `.generic`, or the Dock rejects the drop and
-    /// nothing can be pinned. A false positive costs nothing: the CGWindowList probe in
-    /// `AppDragSource.isDockWindow` is authoritative, and the Dock simply rejects a drop that is
-    /// not on it. (Which screen hosts the Dock is not resolved here; a side Dock on another
-    /// display's edge just gets the wider mask for nothing.)
+    /// Band only, no window probe: the drag code runs its own authoritative CGWindowList probe
+    /// (`AppDragSource.isDockWindow`), and the Dock simply rejects a drop that is not on it.
     @MainActor
     static func isNearDockForDrag(_ point: NSPoint = NSEvent.mouseLocation) -> Bool {
-        let band = dockBand + dockProximity
         guard let screen = screen(containing: point) else { return false }
-        switch orientation {
-        case .bottom: return point.y - screen.frame.minY <= band
-        case .left:   return point.x - screen.frame.minX <= band
-        case .right:  return screen.frame.maxX - point.x <= band
-        }
+        return isNearDock(point, screenFrame: screen.frame, visibleFrame: screen.frame,
+                          orientation: orientation, dockBand: dockBand)
     }
 
     /// Frame for a panel of `size` on the screen under the current mouse location.

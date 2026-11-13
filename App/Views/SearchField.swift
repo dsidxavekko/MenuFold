@@ -3,7 +3,7 @@ import MenuFoldCore
 import SwiftUI
 
 /// Search field at the top of the panel. Focused on appear and whenever the query is reset;
-/// Enter launches the first visible app. While a folder is open the field is disabled and unfocused,
+/// Enter acts on the first result. While a folder is open the field is disabled and unfocused,
 /// so typing can't change the hidden query and Enter can't launch a grid app.
 /// Settings open from the app menu (⌘,) or the Dock icon's menu, not from the panel.
 struct SearchField: View {
@@ -44,6 +44,12 @@ struct SearchField: View {
                     reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity)
                 )
             }
+            if let version = Updater.shared.availableUpdateVersion {
+                UpdatePill(version: version)
+                    .transition(
+                        reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .trailing).combined(with: .opacity)
+                    )
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: Theme.searchHeight)
@@ -60,6 +66,7 @@ struct SearchField: View {
         .opacity(isDisabled ? 0.6 : 1)
         .animation(Theme.snappy, value: model.query.isEmpty)
         .animation(Theme.snappy, value: isFocused)
+        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: Updater.shared.availableUpdateVersion)
         .onAppear(perform: focusSoon)
         .onChange(of: model.query) { _, query in
             if query.isEmpty, model.openFolderID == nil { isFocused = true }
@@ -89,13 +96,17 @@ struct SearchField: View {
         }
     }
 
+    /// Enter acts on the first ranked result, like a click on it: an app launches, a folder opens
+    /// (same morph as its tile), and with no app or folder the first System Settings pane opens.
     private func launchFirst() {
         guard model.openFolderID == nil else { return }
-        for item in model.visibleItems {
-            if case .app(let app) = item {
-                model.launch(app)
-                return
-            }
+        switch model.visibleItems.first {
+        case .app(let app):
+            model.launch(app)
+        case .folder(let folder, _):
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) { model.openFolderID = folder.id }
+        case nil:
+            if let pane = model.settingsPaneResults.first { model.openSettingsPane(pane) }
         }
     }
 }

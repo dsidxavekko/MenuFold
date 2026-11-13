@@ -2,8 +2,10 @@ import AppKit
 import MenuFoldCore
 import SwiftUI
 
-/// Alphabetical grid of `model.visibleItems` (apps and folders) with empty states, under the
-/// "Часті" row (`model.frequentApps`, only on "Все" with an empty query).
+/// Grid of `model.visibleItems` (apps and folders) with empty states, under the "Закріплені"
+/// (`model.pinnedApps`) and "Часті" (`model.frequentApps`) rows, which the model only fills on "Все"
+/// with an empty query. While searching, matching tabs come as chips on top and System Settings
+/// panes as a section at the bottom.
 struct GridView: View {
     @Bindable var model: GridModel
     var namespace: Namespace.ID?
@@ -12,16 +14,23 @@ struct GridView: View {
     /// Drives the staggered fade/scale-in of the first rows each time the panel opens.
     @State private var isRevealed = false
 
-    private let columns = Array(
-        repeating: SwiftUI.GridItem(.flexible(), spacing: 4),
-        count: GridMetrics.columns
-    )
+    /// Column count from Settings. Read from `body` (through here), so a change re-renders the grid.
+    private var columnCount: Int { AppPreferences.shared.columns }
+
+    private var columns: [SwiftUI.GridItem] {
+        Array(repeating: SwiftUI.GridItem(.flexible(), spacing: 4), count: columnCount)
+    }
 
     /// Folder-making drops only on the manual layout (`.all`, no search), and never while a folder is
     /// open: the blurred grid behind the overlay is `allowsHitTesting(false)`, but SwiftUI still routes
     /// drops to it, so a drop on the overlay backdrop would land on the tile underneath.
+    /// Reordering by drag has the same conditions.
     private var allowsFolderDrops: Bool {
         model.tab == .all && model.query.isEmpty && model.openFolderID == nil
+    }
+
+    private var isSearching: Bool {
+        !model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Which of the grid's states is showing, so switching between them can crossfade.
@@ -29,9 +38,11 @@ struct GridView: View {
 
     var body: some View {
         let items = model.visibleItems
+        let panes = isSearching ? model.settingsPaneResults : []
         let phase: Phase = !model.isLoaded ? .loading
             : model.apps.isEmpty ? .noApps
-            : items.isEmpty ? .empty : .grid
+            // A search with only System Settings matches still shows them instead of "nothing found".
+            : items.isEmpty && panes.isEmpty ? .empty : .grid
         Group {
             switch phase {
             case .loading:
@@ -43,65 +54,18 @@ struct GridView: View {
                     systemImage: "square.grid.3x3"
                 )
             case .empty:
-                EmptyStateView(
-                    title: model.query.isEmpty ? String(localized: "Тут поки порожньо") : String(localized: "Нічого не знайдено"),
-                    subtitle: model.query.isEmpty ? nil : String(localized: "Спробуйте іншу назву."),
-                    systemImage: model.query.isEmpty ? "tray" : "magnifyingglass",
-                    effectTrigger: model.query
-                )
-            case .grid:
-                ScrollViewReader { proxy in
-                    let frequent = model.frequentApps
-                    // The "Часті" row cascades first; the grid's rows follow it.
-                    let revealOffset = frequent.isEmpty ? 0 : GridMetrics.columns
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            if !frequent.isEmpty {
-                                frequentRow(frequent)
-                                    .transition(.opacity)
-                            }
-                            LazyVGrid(columns: columns, spacing: 10) {
-                                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                    // The ForEach id ("app:…"/"folder:…") is the selection id.
-                                    tile(for: item)
-                                        .modifier(StaggeredReveal(
-                                            index: index + revealOffset,
-                                            columns: GridMetrics.columns,
-                                            isRevealed: isRevealed
-                                        ))
-                                        .transition(itemTransition)
-                                }
-                            }
-                            // Tab switch, search, folder created/dissolved: items fade/scale in and out.
-                            .animation(reduceMotion ? .easeInOut(duration: 0.15) : Theme.content,
-                                       value: items.map(\.id))
-                        }
-                        .padding(.vertical, 4)
-                        .id(ScrollTop.id)
-                        .animation(reduceMotion ? .easeInOut(duration: 0.15) : Theme.content,
-                                   value: frequent.map(\.id))
-                    }
-                    .scrollIndicators(.automatic)
-                    .autoScrollsWhileDragging(isEnabled: model.openFolderID == nil)
-                    .onChange(of: model.tab) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
-                    .onChange(of: model.query) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
-                    // Keyboard selection: keep the selected tile in view (inside an open folder the
-                    // overlay scrolls its own grid).
-                    .onChange(of: model.selectedItemID) { _, id in
-                        guard let id, model.openFolderID == nil else { return }
-                        withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id) }
-                    }
-                    // Every opening starts from the top: reset when the panel hides (so there is no
-                    // visible jump on the next open) and again when it is shown, without animation.
-                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
-                        guard note.object is NSPanel else { return }
-                        scrollToTopInstantly(proxy)
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-                        guard note.object is NSPanel else { return }
-                        scrollToTopInstantly(proxy)
-                    }
+                VStack(spacing: 0) {
+                    // Even with no app results a matching tab is one click away.
+                    if isSearching { TabChipsView(model: model) }
+                    EmptyStateView(
+                        title: model.query.isEmpty ? String(localized: "Тут поки порожньо") : String(localized: "Нічого не знайдено"),
+                        subtitle: model.query.isEmpty ? nil : String(localized: "Спробуйте іншу назву."),
+                        systemImage: model.query.isEmpty ? "tray" : "magnifyingglass",
+                        effectTrigger: model.query
+                    )
                 }
+            case .grid:
+                grid(items: items)
             }
         }
         .transition(.opacity)
@@ -116,6 +80,86 @@ struct GridView: View {
             withTransaction(hide) { isRevealed = false }
             reveal()
         }
+    }
+
+    @ViewBuilder
+    private func grid(items: [MenuFoldCore.GridItem]) -> some View {
+        let cols = columnCount
+        ScrollViewReader { proxy in
+            let pinned = model.pinnedApps
+            let frequent = model.frequentApps
+            // The "Закріплені" row cascades first, then "Часті", then the grid's rows.
+            let frequentOffset = Self.rowsSpan(pinned.count, columns: cols)
+            let gridOffset = frequentOffset + Self.rowsSpan(frequent.count, columns: cols)
+            ScrollView {
+                VStack(spacing: 0) {
+                    if isSearching {
+                        TabChipsView(model: model)
+                    }
+                    if !pinned.isEmpty {
+                        appRow(pinned, revealOffset: 0, selectionID: GridModel.pinnedSelectionID)
+                            .accessibilityLabel("Закріплені")
+                            .transition(.opacity)
+                    }
+                    if !frequent.isEmpty {
+                        appRow(frequent, revealOffset: frequentOffset, selectionID: GridModel.frequentSelectionID)
+                            .accessibilityLabel("Часті")
+                            .transition(.opacity)
+                    }
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            // The ForEach id ("app:…"/"folder:…") is the selection id.
+                            tile(for: item)
+                                .modifier(StaggeredReveal(
+                                    index: index + gridOffset,
+                                    columns: cols,
+                                    isRevealed: isRevealed
+                                ))
+                                .transition(itemTransition)
+                        }
+                    }
+                    // Tab switch, search, folder created/dissolved, reorder: items fade/scale/move.
+                    .animation(reduceMotion ? .easeInOut(duration: 0.15) : Theme.content,
+                               value: items.map(\.id))
+                    if isSearching {
+                        // Its tiles carry `GridModel.paneSelectionID` ids, so `scrollTo` finds them.
+                        SettingsPaneSection(model: model)
+                    }
+                }
+                .padding(.vertical, 4)
+                .id(ScrollTop.id)
+                .animation(reduceMotion ? .easeInOut(duration: 0.15) : Theme.content,
+                           value: pinned.map(\.id) + frequent.map(\.id))
+            }
+            .scrollIndicators(.automatic)
+            .autoScrollsWhileDragging(isEnabled: model.openFolderID == nil)
+            .onChange(of: model.tab) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
+            .onChange(of: model.query) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
+            // Keyboard selection: keep the selected tile in view (inside an open folder the
+            // overlay scrolls its own grid). Covers "app:", "folder:", "pinned:", "frequent:" and
+            // "pane:" ids alike.
+            .onChange(of: model.selectedItemID) { _, id in
+                guard let id, model.openFolderID == nil else { return }
+                withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id) }
+            }
+            // Every opening starts from the top: reset when the panel hides (so there is no
+            // visible jump on the next open) and again when it is shown, without animation.
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
+                guard note.object is NSPanel else { return }
+                scrollToTopInstantly(proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+                guard note.object is NSPanel else { return }
+                scrollToTopInstantly(proxy)
+            }
+        }
+    }
+
+    /// Reveal indices taken by a row of `count` tiles (whole grid rows, so the next section starts
+    /// its cascade on a new row).
+    private static func rowsSpan(_ count: Int, columns: Int) -> Int {
+        guard count > 0, columns > 0 else { return 0 }
+        return (count + columns - 1) / columns * columns
     }
 
     private func scrollToTopInstantly(_ proxy: ScrollViewProxy) {
@@ -136,44 +180,49 @@ struct GridView: View {
         Task { @MainActor in isRevealed = true }
     }
 
-    /// One row of the most used apps, laid out like the grid, then a divider. Its tiles never make
-    /// folders (dragging them out still works) and are selected by their own "frequent:…" ids.
-    private func frequentRow(_ apps: [AppEntry]) -> some View {
-        VStack(spacing: Theme.frequentDividerSpacing) {
+    /// A row of apps above the grid ("Закріплені" or "Часті"), laid out like the grid, then a
+    /// divider. Its tiles never make folders (dragging them out still works) and are selected by
+    /// their own ids ("pinned:…" / "frequent:…"), so the same app can be selected there or in the grid.
+    private func appRow(_ apps: [AppEntry], revealOffset: Int,
+                        selectionID: @escaping (String) -> String) -> some View {
+        let cols = columnCount
+        return VStack(spacing: Theme.frequentDividerSpacing) {
             LazyVGrid(columns: columns, spacing: 10) {
                 // Identified by the selection id, so `scrollTo` finds the tile.
                 let tiles = apps.enumerated().map { (index: $0.offset, app: $0.element,
-                                                     id: GridModel.frequentSelectionID($0.element.id)) }
+                                                     id: selectionID($0.element.id)) }
                 ForEach(tiles, id: \.id) { tile in
                     AppIconView(app: tile.app, model: model, acceptsFolderDrops: false, selectionID: tile.id)
                         .modifier(StaggeredReveal(
-                            index: tile.index,
-                            columns: GridMetrics.columns,
+                            index: revealOffset + tile.index,
+                            columns: cols,
                             isRevealed: isRevealed
                         ))
                         .transition(itemTransition)
                 }
             }
+            .animation(reduceMotion ? .easeInOut(duration: 0.15) : Theme.content, value: apps.map(\.id))
             Divider()
                 .padding(.horizontal, 12)
                 .padding(.bottom, Theme.frequentDividerSpacing)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Часті")
     }
 
     @ViewBuilder
     private func tile(for item: MenuFoldCore.GridItem) -> some View {
         switch item {
         case .app(let app):
-            AppIconView(app: app, model: model, acceptsFolderDrops: allowsFolderDrops)
+            AppIconView(app: app, model: model, acceptsFolderDrops: allowsFolderDrops,
+                        acceptsReorder: allowsFolderDrops)
         case .folder(let folder, let apps):
             FolderTileView(
                 folder: folder,
                 apps: apps,
                 model: model,
                 namespace: namespace,
-                acceptsDrops: allowsFolderDrops
+                acceptsDrops: allowsFolderDrops,
+                acceptsReorder: allowsFolderDrops
             )
         }
     }

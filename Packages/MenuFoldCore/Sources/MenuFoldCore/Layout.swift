@@ -88,11 +88,18 @@ public struct Layout: Codable, Equatable, Sendable {
     /// Bundle ID → file name of the user's icon in the icons folder (`LayoutStore.iconsDirectory`).
     /// Kept for uninstalled apps too, like folders, so the icon comes back on reinstall.
     public var customIcons: [String: String]
+    /// Bundle IDs pinned by the user ("Закріплені" row on "Все"), in the user's order.
+    /// Kept for uninstalled apps, like folders.
+    public var pinned: [String]
+    /// Manual order of the "Все" tab as `GridItem.id`s ("app:…" / "folder:…"); nil → alphabetical.
+    /// Items missing from it (new apps, new folders) follow the listed ones alphabetically.
+    public var manualOrder: [String]?
 
     public init(version: Int = Layout.currentVersion, folders: [Folder] = [], categoryOverrides: [String: String] = [:], hidden: Set<String> = [],
                 finderStyles: [String: FinderFolderStyle] = [:], ignoredFinderFolders: Set<String> = [], finderExclusions: Set<String> = [],
                 finderAdditions: [String: String] = [:], customCategories: [CustomCategory] = [],
-                categoryOrder: [String] = [], customIcons: [String: String] = [:]) {
+                categoryOrder: [String] = [], customIcons: [String: String] = [:],
+                pinned: [String] = [], manualOrder: [String]? = nil) {
         self.version = version
         self.folders = folders
         self.categoryOverrides = categoryOverrides
@@ -104,6 +111,8 @@ public struct Layout: Codable, Equatable, Sendable {
         self.customCategories = customCategories
         self.categoryOrder = categoryOrder
         self.customIcons = customIcons
+        self.pinned = pinned
+        self.manualOrder = manualOrder
     }
 }
 
@@ -162,7 +171,7 @@ extension Folder {
 }
 
 extension Layout {
-    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder, customIcons }
+    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder, customIcons, pinned, manualOrder }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -177,6 +186,8 @@ extension Layout {
         customCategories = try decodePresent([CustomCategory].self, c, CodingKeys.customCategories, default: [])
         categoryOrder = try decodePresent([String].self, c, CodingKeys.categoryOrder, default: [])
         customIcons = try decodePresent([String: String].self, c, CodingKeys.customIcons, default: [:])
+        pinned = try decodePresent([String].self, c, CodingKeys.pinned, default: [])
+        manualOrder = try decodePresent([String]?.self, c, CodingKeys.manualOrder, default: nil)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -193,6 +204,8 @@ extension Layout {
         try c.encode(customCategories, forKey: .customCategories)
         try c.encode(categoryOrder, forKey: .categoryOrder)
         try c.encode(customIcons, forKey: .customIcons)
+        try c.encode(pinned, forKey: .pinned)
+        try c.encodeIfPresent(manualOrder, forKey: .manualOrder)
     }
 }
 
@@ -209,6 +222,7 @@ extension Layout {
     /// - Custom categories need a `custom.` id and a name; overrides and `categoryOrder` entries for
     ///   unknown custom ids are dropped.
     /// - Custom icon file names must be plain names inside the icons folder (no path, no dot file).
+    /// - `pinned` and `manualOrder` lose empty and repeated ids.
     func droppingInvalidFolders() -> Layout {
         var copy = self
         var seenIDs = Set<UUID>()
@@ -243,7 +257,17 @@ extension Layout {
                 && seenOrder.insert(id).inserted
         }
         copy.customIcons = customIcons.filter { !$0.key.isEmpty && Self.isValidIconFileName($0.value) }
+        // Pinned apps and the manual "Все" order: no blanks, no repeats (a repeated id would give
+        // the row or the grid two tiles with one SwiftUI id). Unknown ids are kept, like folders do.
+        copy.pinned = Self.dedupedNonEmpty(pinned)
+        copy.manualOrder = manualOrder.map(Self.dedupedNonEmpty)
         return copy
+    }
+
+    /// The non-empty strings of `ids`, first occurrence kept, order preserved.
+    static func dedupedNonEmpty(_ ids: [String]) -> [String] {
+        var seen = Set<String>()
+        return ids.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     /// A bare file name: no separators, not hidden, so it cannot point outside the icons folder.

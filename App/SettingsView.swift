@@ -13,7 +13,6 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
-    @State private var confirmReset = false
     /// Layout-file health, refreshed when the window appears or becomes key, and after a reset.
     @State private var layoutHealth = LayoutHealth.ok
     @State private var dockIcon = DockIconStyle.current
@@ -25,13 +24,20 @@ struct SettingsView: View {
     @State private var autoChecksUpdates = Updater.shared.automaticallyChecks
     @State private var autoDownloadsUpdates = Updater.shared.automaticallyDownloads
     @State private var lastUpdateCheck = Updater.shared.lastCheckDate
+    /// Bulk category assignment sheet; the value is the category preselected as the target.
+    @State private var bulkTarget: BulkCategoryTarget?
+    /// App-level switches. `AppPreferences` is observable and the shell copies them into the model,
+    /// so rows bind to it directly and need no refresh.
+    @Bindable private var prefs = AppPreferences.shared
 
     var body: some View {
         Group {
             switch tab {
             case .general: generalTab
+            case .appearance: AppearanceSettingsView()
             case .categories: categoriesTab
             case .apps: appsTab
+            case .data: DataSettingsView(model: model)
             case .about: AboutView()
             }
         }
@@ -74,6 +80,21 @@ struct SettingsView: View {
                 Label("Запуск", systemImage: "power")
             } footer: {
                 Text("MenuFold відкривається кліком по його значку в Dock. Права кнопка на значку — налаштування та інформація про програму.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Глобальне сполучення клавіш") {
+                    HotKeyRecorder(hotKey: $prefs.hotKey)
+                }
+                Toggle("Показувати значок у рядку меню", isOn: $prefs.showsMenuBarIcon)
+                Toggle("Відкривати на останній вкладці", isOn: $prefs.rememberLastTab)
+                Toggle("Не ховати панель після запуску програми", isOn: $prefs.keepsPanelOpenAfterLaunch)
+            } header: {
+                Label("Панель", systemImage: "rectangle.on.rectangle")
+            } footer: {
+                Text("Сполучення відкриває й закриває панель з будь-якої програми; потрібен ⌘, ⌥ або ⌃ (або окрема клавіша F1–F12). Якщо панель не ховається, програми відкриваються у фоні, і можна запустити кілька поспіль.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -144,31 +165,6 @@ struct SettingsView: View {
             if Updater.shared.isEnabled {
                 updatesSection
             }
-
-            Section {
-                HStack {
-                    Text("Розкладка зберігається у файлі layout.json")
-                    Spacer()
-                    Button("Показати у Finder") { revealLayoutFolder() }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                }
-                Button("Скинути розкладку…", role: .destructive) { confirmReset = true }
-                    .buttonStyle(.glass)
-                    .tint(.red)
-                    .confirmationDialog(
-                        "Скинути розкладку?",
-                        isPresented: $confirmReset,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Скинути", role: .destructive) { resetLayout() }
-                        Button("Скасувати", role: .cancel) {}
-                    } message: {
-                        Text("Усі папки, власні й перевизначені категорії, власні значки та приховані програми буде видалено.")
-                    }
-            } header: {
-                Label("Розкладка", systemImage: "square.grid.3x3")
-            }
         }
         .formStyle(.grouped)
     }
@@ -232,8 +228,9 @@ struct SettingsView: View {
                         model.showsRunningTab = on
                     }
                 ))
+                Toggle("Показувати вкладку «Недавні»", isOn: $prefs.showsRecentTab)
             } footer: {
-                Text("Програми, які зараз відкриті. Вкладка стоїть одразу після «Все».")
+                Text("«Запущені» — програми, які зараз відкриті. «Недавні» — програми, які ви нещодавно запускали.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -245,13 +242,20 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(custom) { category in
-                        CustomCategoryRow(model: model, category: category)
+                        CustomCategoryRow(model: model, category: category) {
+                            bulkTarget = BulkCategoryTarget(categoryID: category.id)
+                        }
                     }
                 }
                 HStack {
                     Button("Додати категорію") { model.createCategory() }
                         .buttonStyle(.glass)
                         .controlSize(.small)
+                    Button("Змінити категорію кількох програм…") {
+                        bulkTarget = BulkCategoryTarget(categoryID: model.customCategories.first?.id ?? AppCategory.otherID)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     Spacer()
                     if model.hasCustomCategoryOrder {
                         Button("Скинути порядок вкладок") { model.resetCategoryOrder() }
@@ -262,16 +266,22 @@ struct SettingsView: View {
             } header: {
                 Label("Мої категорії", systemImage: "tag")
             } footer: {
-                Text("Власні категорії з’являються вкладками в MenuFold. Програму можна додати через її контекстне меню: «Змінити категорію». Після видалення категорії її програми повертаються до автоматичних категорій. Порядок вкладок змінюється перетягуванням у панелі.")
+                Text("Власні категорії з’являються вкладками в MenuFold. Програму можна додати через її контекстне меню: «Змінити категорію» — або кілька одразу кнопкою «+». Після видалення категорії її програми повертаються до автоматичних категорій. Порядок вкладок змінюється перетягуванням у панелі.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .sheet(item: $bulkTarget) { target in
+            BulkCategoryView(model: model, initialCategoryID: target.categoryID)
+        }
     }
 
     private var appsTab: some View {
         Form {
+            UnusedAppsSection(model: model)
+            PinnedAppsSection(model: model)
+
             Section {
                 let hidden = model.hiddenApps
                 if hidden.isEmpty {
@@ -398,19 +408,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Opens the folder that holds layout.json (created on the first save, so it may not exist yet).
-    private func revealLayoutFolder() {
-        let file = LayoutStore.defaultURL
-        let dir = file.deletingLastPathComponent()
-        if FileManager.default.fileExists(atPath: file.path) {
-            NSWorkspace.shared.activateFileViewerSelecting([file])
-        } else if FileManager.default.fileExists(atPath: dir.path) {
-            NSWorkspace.shared.open(dir)
-        } else {
-            NSWorkspace.shared.open(dir.deletingLastPathComponent())
-        }
-    }
-
     /// System Settings → Privacy & Security → App Management.
     private func openAppManagementSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AppBundles") {
@@ -465,12 +462,6 @@ struct SettingsView: View {
         loginStatus = SMAppService.mainApp.status
         launchAtLogin = loginStatus == .enabled || loginStatus == .requiresApproval
     }
-
-    /// Resets the layout, then re-checks the file: a successful save clears a previous warning.
-    private func resetLayout() {
-        model.resetLayout()
-        refreshLayoutHealth()
-    }
 }
 
 /// A selectable Dock icon in Settings: the icon itself with its name underneath.
@@ -518,6 +509,8 @@ private struct DockIconChoice: View {
 private struct CustomCategoryRow: View {
     let model: GridModel
     let category: AppCategory
+    /// Opens the bulk "add apps" sheet for this category.
+    let addApps: () -> Void
 
     @State private var name = ""
     @FocusState private var focused: Bool
@@ -538,6 +531,13 @@ private struct CustomCategoryRow: View {
             Text(countLabel(model.apps(inCategory: category.id).count))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Button(action: addApps) {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .help(Text("Додати програми…"))
+            .accessibilityLabel(Text("Додати програми…"))
             Button("Видалити", role: .destructive) { model.deleteCategory(id: category.id) }
                 .buttonStyle(.glass)
                 .controlSize(.small)

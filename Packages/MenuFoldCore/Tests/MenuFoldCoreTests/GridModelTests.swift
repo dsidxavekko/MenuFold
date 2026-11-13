@@ -328,7 +328,9 @@ import Testing
         let games = AppCategory.from(raw: "public.app-category.games")
         #expect(titles(m.items(tab: .category(games), query: "NOT")) == ["Notes"])
         #expect(titles(m.items(tab: .all, query: "cafe")) == ["Café"]) // diacritic-insensitive
-        #expect(titles(m.items(tab: .all, query: " A ")) == ["Café", "Mail", "Safari"])
+        // Ranked search (SearchMatcher): two letters match inside names, one only starts a word.
+        #expect(titles(m.items(tab: .all, query: " AF ")) == ["Café", "Safari"])
+        #expect(titles(m.items(tab: .all, query: " S ")) == ["Safari"])
     }
 
     @Test func tabs() {
@@ -337,6 +339,7 @@ import Testing
             switch tab {
             case .all: return "*"
             case .running: return "▶"
+            case .recent: return "⏱"
             case .category(let c): return c.displayName
             }
         }

@@ -60,6 +60,12 @@ public final class LayoutStore: @unchecked Sendable {
         fileURL.deletingLastPathComponent().appendingPathComponent("Icons", isDirectory: true)
     }
 
+    /// True when the layout lives in a folder the user chose (usually synced between Macs, e.g.
+    /// iCloud Drive). Set by the app before handing the store to `GridModel`: a shared folder must
+    /// never get destructive housekeeping (fresh empty layout after a quarantine, icon cleanup),
+    /// because another Mac may still be using that data.
+    public var isShared = false
+
     public init(fileURL: URL = LayoutStore.defaultURL) {
         self.fileURL = fileURL
     }
@@ -115,6 +121,29 @@ public final class LayoutStore: @unchecked Sendable {
         layout.version = Layout.currentVersion
         hasUnreadFileInPlace = false
         return (layout, .loaded)
+    }
+
+    /// Decodes and validates layout data exactly like `loadWithOutcome()` does for layout.json, but
+    /// without touching any file: for backups, imports and sync reloads. A newer schema is rejected
+    /// (`LayoutDataError.newerVersion`) rather than silently losing its new fields.
+    static func decodeValidated(_ data: Data) throws -> Layout {
+        guard data.count <= maxFileSize else { throw LayoutDataError.damaged }
+        let decoded: Layout
+        do {
+            decoded = try JSONDecoder().decode(Layout.self, from: data)
+        } catch {
+            throw LayoutDataError.damaged
+        }
+        return try validated(decoded)
+    }
+
+    /// The validation step of `decodeValidated` for an already decoded layout (an export file
+    /// embeds one): rejects newer versions, drops invalid entries, normalizes the version.
+    static func validated(_ decoded: Layout) throws -> Layout {
+        guard decoded.version <= Layout.currentVersion else { throw LayoutDataError.newerVersion }
+        var layout = decoded.droppingInvalidFolders()
+        layout.version = Layout.currentVersion
+        return layout
     }
 
     // MARK: Save
@@ -183,6 +212,24 @@ public final class LayoutStore: @unchecked Sendable {
         switch reason {
         case .corrupt, .unreadable: return .quarantined(dest)
         case .incompatible: return .incompatible(dest)
+        }
+    }
+}
+
+/// Why a backup or an exported layout file could not be used.
+public enum LayoutDataError: Error, LocalizedError, Equatable {
+    /// Not a file written by "Експортувати розкладку".
+    case notMenuFoldFile
+    /// Written by a newer MenuFold (higher schema or file-format version).
+    case newerVersion
+    /// Not valid JSON, or a key holds a value of the wrong shape.
+    case damaged
+
+    public var errorDescription: String? {
+        switch self {
+        case .notMenuFoldFile: return L("Це не файл розкладки MenuFold.")
+        case .newerVersion: return L("Файл створено новішою версією MenuFold. Оновіть програму й спробуйте ще раз.")
+        case .damaged: return L("Файл розкладки пошкоджено.")
         }
     }
 }

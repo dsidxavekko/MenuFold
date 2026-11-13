@@ -4,6 +4,45 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.5.0
+
+### Search
+- Results are ranked: exact and prefix matches first, then word starts, initials ("vsc" finds
+  Visual Studio Code), substrings and fuzzy matches; apps you use more win ties.
+- Typed in the wrong keyboard layout? "сфд" still finds Calculator and Calendar.
+- Folders are found by name, matching categories appear as chips, and System Settings panes
+  (Bluetooth, Displays, Wi‑Fi…) open right from the search results.
+
+### Organizing
+- **Pinned apps**: pin any app to a row above the grid on "All".
+- **Your own order** on "All": drop an app on the left or right edge of a tile to move it;
+  "Sort Alphabetically" brings the old order back.
+- **Recent** tab with the apps you opened last.
+- **Undo** with ⌘Z (and redo with ⇧⌘Z) for folder, category, pin, hide and order changes.
+- Drop an app onto a category tab to move it there, or change the category of many apps at once
+  in Settings → Categories.
+- Better automatic categories for hundreds of popular apps that don't declare one.
+- Folder tiles show how many apps they hold; folders can use emoji and many more symbols;
+  "Open All" launches every app in a folder.
+- New apps get a dot until you open them.
+
+### Opening MenuFold
+- A global keyboard shortcut (Settings → General), an optional menu bar icon, `menufold://` links
+  and Shortcuts actions.
+- ⌘1…⌘9 and ⌃Tab switch tabs.
+- The Dock icon's menu lists your pinned and most-used apps and your folders.
+- Optional: keep the panel open after launching an app, reopen on the last tab.
+- Choose the number of columns and rows (Settings → Appearance).
+- Full support for a Dock on the left or right edge.
+
+### Data
+- Export and import your layout (with custom icons), daily backups you can restore, and a data
+  folder you can put in iCloud Drive or Dropbox to share folders and categories between Macs.
+- Moving an app to the Trash can also remove its support files.
+- Settings → Apps lists apps you haven't opened in a long time, with their size.
+- The update badge shows when a new version is ready.
+- MenuFold now speaks German, Polish, French and Spanish.
+
 ## 0.4.2
 
 - Fixed: a layout file that could not be read (permissions, a lock) is no longer overwritten by the

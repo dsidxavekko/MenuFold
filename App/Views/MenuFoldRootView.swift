@@ -25,6 +25,11 @@ struct MenuFoldRootView: View {
         model.pendingTrashAppID.flatMap { id in model.apps.first { $0.id == id } }
     }
 
+    /// First-run gesture hints: once the catalog has apps to try them on, until dismissed.
+    private var showsFirstRunHint: Bool {
+        !AppPreferences.shared.hasSeenFirstRunHint && model.isLoaded && !model.apps.isEmpty
+    }
+
     private var showsTabs: Bool {
         model.query.isEmpty && model.availableTabs.count > 1
     }
@@ -39,6 +44,10 @@ struct MenuFoldRootView: View {
         let isOpen = folder != nil
         let trashApp = trashApp
         let isModal = trashApp != nil
+        let showsHint = showsFirstRunHint && !isOpen && !isModal
+        // Read in body (GridMetrics reads the observable AppPreferences), so a Settings change of
+        // columns/rows re-renders and resizes the content right away.
+        let panelSize = CGSize(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight)
         ZStack {
             VStack(spacing: 0) {
                 SearchField(model: model)
@@ -65,6 +74,20 @@ struct MenuFoldRootView: View {
             .animation(backdropMotion(opening: isOpen), value: isOpen)
             .animation(backdropMotion(opening: isModal), value: isModal)
             .allowsHitTesting(!isOpen && !isModal)
+
+            if showsHint {
+                // Floats over the bottom rows only; the rest of the grid stays usable.
+                FirstRunHintCard {
+                    withAnimation(reduceMotion ? Theme.crossfade : Theme.content) {
+                        AppPreferences.shared.hasSeenFirstRunHint = true
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .zIndex(0.5)
+            }
 
             // Dim over the whole panel (the window clips it to the rounded chrome).
             Color.black
@@ -97,12 +120,13 @@ struct MenuFoldRootView: View {
             }
         }
         .animation(backdropMotion(opening: isModal), value: model.pendingTrashAppID)
+        .animation(reduceMotion ? Theme.crossfade : Theme.content, value: showsHint)
         // The app was trashed or uninstalled meanwhile: drop the request (the key monitor swallows
         // typing while one is pending).
         .onChange(of: model.pendingTrashAppID != nil && trashApp == nil) { _, stale in
             if stale { model.pendingTrashAppID = nil }
         }
-        .frame(width: GridMetrics.panelWidth, height: GridMetrics.panelHeight)
+        .frame(width: panelSize.width, height: panelSize.height)
         .onKeyPress(.escape) {
             // Esc cancels a tab rename, then closes an open folder; otherwise let it through to the
             // shell (closes panel). An open trash card is dismissed before anything else.

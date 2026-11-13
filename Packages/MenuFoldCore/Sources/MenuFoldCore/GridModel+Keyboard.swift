@@ -27,10 +27,14 @@ extension GridModel {
 
     /// Up to `frequentLimit` visible, installed apps with the highest usage score, highest first.
     /// Empty when `showsFrequent` is off, the query is not empty, or the tab is not `.all`.
+    /// Apps shown in the "Закріплені" row are left out (the next ones fill their places), so one
+    /// app never appears twice above the grid.
     public var frequentApps: [AppEntry] {
         guard showsFrequent, frequentLimit > 0, tab == .all,
               query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-        let byID = Dictionary(installedVisibleApps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let pinnedShown = Set(pinnedApps.map(\.id))
+        let byID = Dictionary(installedVisibleApps.filter { !pinnedShown.contains($0.id) }.map { ($0.id, $0) },
+                              uniquingKeysWith: { a, _ in a })
         return usage.top(frequentLimit, among: Set(byID.keys), at: now()).compactMap { byID[$0] }
     }
 
@@ -38,6 +42,7 @@ extension GridModel {
     /// Only apps in the catalog count, so helpers and agents launched elsewhere don't pile up.
     public func recordUse(appID: String) {
         guard apps.contains(where: { $0.id == appID }) else { return }
+        noteLaunched(appID: appID)
         guard usage.record(appID, at: now()) else { return }
         saveUsage()
     }
@@ -55,13 +60,22 @@ extension GridModel {
 
 extension GridModel {
     /// Selection ids in navigation order, per section. Folder open → one section: its apps
-    /// ("app:…"). Otherwise → [the "Часті" row ids, `visibleItems` ids].
+    /// ("app:…"). Otherwise → [the "Закріплені" row ids, the "Часті" row ids, `visibleItems` ids,
+    /// the System Settings results ("pane:…", search only)].
     public var navigableSections: [[String]] {
         if let id = openFolderID, let folder = folder(id: id) {
             return [apps(in: folder).map { "app:" + $0.id }]
         }
-        return [frequentApps.map { Self.frequentSelectionID($0.id) }, visibleItems.map(\.id)]
+        return [pinnedApps.map { Self.pinnedSelectionID($0.id) },
+                frequentApps.map { Self.frequentSelectionID($0.id) },
+                visibleItems.map(\.id),
+                settingsPaneResults.map { Self.paneSelectionID($0.id) }]
     }
+
+    /// Selection id of a tile in the "Закріплені" row: "pinned:<bundle ID>".
+    public static func pinnedSelectionID(_ appID: String) -> String { "pinned:" + appID }
+    /// Selection id of a System Settings result: "pane:<pane id>".
+    public static func paneSelectionID(_ paneID: String) -> String { "pane:" + paneID }
 
     /// Moves `selectedItemID` with the arrow keys (see `GridNavigation.move`). `columns` is the
     /// column count of the grid being shown (7 for the panel, 6 inside a folder).
@@ -82,6 +96,8 @@ extension GridModel {
         let appID: String
         if id.hasPrefix("frequent:") {
             appID = String(id.dropFirst("frequent:".count))
+        } else if id.hasPrefix("pinned:") {
+            appID = String(id.dropFirst("pinned:".count))
         } else if id.hasPrefix("app:") {
             appID = String(id.dropFirst("app:".count))
         } else {
@@ -90,7 +106,8 @@ extension GridModel {
         return installedVisibleApps.first { $0.id == appID }
     }
 
-    /// Enter: launches the selected app or opens the selected folder. False when nothing is selected.
+    /// Enter: launches the selected app, opens the selected folder or System Settings pane.
+    /// False when nothing is selected.
     @discardableResult
     public func activateSelection() -> Bool {
         if let app = selectedApp {
@@ -100,6 +117,11 @@ extension GridModel {
         if let id = selectedItemID, id.hasPrefix("folder:"),
            let uuid = UUID(uuidString: String(id.dropFirst("folder:".count))), folder(id: uuid) != nil {
             openFolderID = uuid
+            return true
+        }
+        if let id = selectedItemID, id.hasPrefix("pane:"),
+           let pane = settingsPaneResults.first(where: { Self.paneSelectionID($0.id) == id }) {
+            openSettingsPane(pane)
             return true
         }
         return false

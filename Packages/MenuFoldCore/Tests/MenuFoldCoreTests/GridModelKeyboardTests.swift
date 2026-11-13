@@ -146,8 +146,8 @@ import Testing
     @Test func moveSelectionAcrossFrequentRowAndGrid() {
         let (m, _) = makeModel()
         seedUsage(m) // frequent row: c a b
-        #expect(m.navigableSections[0] == ["frequent:c", "frequent:a", "frequent:b"])
-        #expect(m.navigableSections[1] == "abcdefghi".map { "app:\($0)" })
+        #expect(m.navigableSections[1] == ["frequent:c", "frequent:a", "frequent:b"])
+        #expect(m.navigableSections[2] == "abcdefghi".map { "app:\($0)" })
         m.moveSelection(.right, columns: 7)
         #expect(m.selectedItemID == "frequent:c")
         m.moveSelection(.right, columns: 7)
