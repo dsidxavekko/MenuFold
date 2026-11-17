@@ -35,8 +35,22 @@ final class PanelGestures {
             && !model.showsShortcutsHelp
     }
 
+    /// Frame of the category tab strip in the panel's top-left coordinates (set by `CategoryTabs`).
+    /// Over it the gestures stand aside, so the strip scrolls normally.
+    static var tabStripFrame: CGRect = .zero
+
+    private func isOverTabStrip(_ event: NSEvent) -> Bool {
+        guard let height = panel.contentView?.bounds.height else { return false }
+        let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
+        return Self.tabStripFrame.contains(point)
+    }
+
     private func handle(_ event: NSEvent) -> Bool {
         guard event.window === panel, isAvailable else { return false }
+        if isOverTabStrip(event) {
+            swallowing = false
+            return false
+        }
         switch event.type {
         case .scrollWheel: return handleScroll(event)
         case .magnify: return handleMagnify(event)

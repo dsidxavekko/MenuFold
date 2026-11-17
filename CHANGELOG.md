@@ -4,6 +4,10 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.8.2
+
+- Swipe and pinch gestures no longer act over the category tabs, so the strip scrolls normally with two fingers.
+
 ## 0.8.1
 
 - Clipboard history starts empty on every launch (it was already memory-only) and no longer shows the ticking time next to each entry.

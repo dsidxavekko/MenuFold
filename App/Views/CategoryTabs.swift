@@ -40,6 +40,8 @@ struct CategoryTabs: View {
                 }
             }
             .scrollIndicators(.never)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { PanelGestures.tabStripFrame = $0 }
+            .onDisappear { PanelGestures.tabStripFrame = .zero }
             .onChange(of: model.renamingCategoryID) { _, id in
                 guard let id else { return }
                 withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id, anchor: .center) }
