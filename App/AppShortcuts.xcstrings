@@ -1,309 +1,579 @@
 {
-  "sourceLanguage": "uk",
-  "version": "1.0",
-  "strings": {
-    "Відкрити ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open ${applicationName}"
+  "sourceLanguage" : "uk",
+  "version" : "1.0",
+  "strings" : {
+    "Відкрити ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "${applicationName} öffnen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} öffnen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Otwórz ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otwórz ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abrir ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}を開く"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中打开"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} uygulamasını aç"
           }
         }
       }
     },
-    "Шукати в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search in ${applicationName}"
+    "Шукати в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In ${applicationName} suchen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In ${applicationName} suchen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Szukaj w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szukaj w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Buscar en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で検索"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中搜索"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} içinde ara"
           }
         }
       }
     },
-    "Відкрити папку в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open a folder in ${applicationName}"
+    "Відкрити папку в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open a folder in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordner in ${applicationName} öffnen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordner in ${applicationName} öffnen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Otwórz folder w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otwórz folder w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir un dossier dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir un dossier dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abrir una carpeta en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir una carpeta en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri una cartella in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir uma pasta no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}でフォルダを開く"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中打开文件夹"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} içinde klasör aç"
           }
         }
       }
     },
-    "Запустити ${app} через ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Launch ${app} with ${applicationName}"
+    "Запустити ${app} через ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Launch ${app} with ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "${app} mit ${applicationName} starten"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} mit ${applicationName} starten"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uruchom ${app} przez ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uruchom ${app} przez ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lancer ${app} avec ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lancer ${app} avec ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abrir ${app} con ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir ${app} con ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri ${app} con ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir ${app} com o ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で${app}を起動"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 ${applicationName} 启动 ${app}"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} uygulamasını ${applicationName} ile başlat"
           }
         }
       }
     },
-    "Закріпити ${app} в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pin ${app} in ${applicationName}"
+    "Закріпити ${app} в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin ${app} in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "${app} in ${applicationName} anheften"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} in ${applicationName} anheften"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Przypnij ${app} w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przypnij ${app} w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Épingler ${app} dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épingler ${app} dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fijar ${app} en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fijar ${app} en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fissa ${app} in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fixar ${app} no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で${app}を固定"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中固定 ${app}"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} uygulamasını ${applicationName} içinde sabitle"
           }
         }
       }
     },
-    "Відкріпити ${app} в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unpin ${app} in ${applicationName}"
+    "Відкріпити ${app} в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin ${app} in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "${app} in ${applicationName} lösen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} in ${applicationName} lösen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Odepnij ${app} w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odepnij ${app} w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désépingler ${app} dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désépingler ${app} dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dejar de fijar ${app} en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejar de fijar ${app} en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stacca ${app} in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desafixar ${app} no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で${app}の固定を解除"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中取消固定 ${app}"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} uygulamasının sabitlemesini ${applicationName} içinde kaldır"
           }
         }
       }
     },
-    "Додати ${app} до папки в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add ${app} to a folder in ${applicationName}"
+    "Додати ${app} до папки в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add ${app} to a folder in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "${app} in ${applicationName} zu einem Ordner hinzufügen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} in ${applicationName} zu einem Ordner hinzufügen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dodaj ${app} do folderu w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dodaj ${app} do folderu w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter ${app} à un dossier dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter ${app} à un dossier dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir ${app} a una carpeta en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir ${app} a una carpeta en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi ${app} a una cartella in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar ${app} a uma pasta no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で${app}をフォルダに追加"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中将 ${app} 添加到文件夹"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} uygulamasını ${applicationName} içinde klasöre ekle"
           }
         }
       }
     },
-    "Призначити категорію для ${app} в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set the category of ${app} in ${applicationName}"
+    "Призначити категорію для ${app} в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set the category of ${app} in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kategorie für ${app} in ${applicationName} festlegen"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kategorie für ${app} in ${applicationName} festlegen"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ustaw kategorię dla ${app} w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ustaw kategorię dla ${app} w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Définir la catégorie de ${app} dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir la catégorie de ${app} dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asignar categoría a ${app} en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asignar categoría a ${app} en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imposta la categoria di ${app} in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Definir a categoria de ${app} no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}で${app}のカテゴリを設定"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中为 ${app} 指定类别"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${app} uygulamasının kategorisini ${applicationName} içinde ayarla"
           }
         }
       }
     },
-    "Перемкнути профіль в ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switch profile in ${applicationName}"
+    "Перемкнути профіль в ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch profile in ${applicationName}"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profil in ${applicationName} wechseln"
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil in ${applicationName} wechseln"
           }
         },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Przełącz profil w ${applicationName}"
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przełącz profil w ${applicationName}"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changer de profil dans ${applicationName}"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer de profil dans ${applicationName}"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambiar de perfil en ${applicationName}"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar de perfil en ${applicationName}"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia profilo in ${applicationName}"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternar perfil no ${applicationName}"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName}でプロファイルを切り替える"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中切换描述文件"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} içinde profili değiştir"
           }
         }
       }

@@ -4,6 +4,11 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.6.5
+
+### Languages
+- MenuFold is now also available in Italian, Brazilian Portuguese, Japanese, Simplified Chinese and Turkish (Siri and Shortcuts phrases included).
+
 ## 0.6.0
 
 ### Search

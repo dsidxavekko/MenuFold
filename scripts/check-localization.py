@@ -12,8 +12,12 @@ The key "MenuFold" (the product name) is exempt from the translation check.
 import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LANGS = ["en", "de", "pl", "fr", "es"]
-PLURALS = {"pl": {"one", "few", "many", "other"}, "uk": {"one", "few", "many", "other"}}
+LANGS = ["en", "de", "pl", "fr", "es", "it", "pt-BR", "ja", "zh-Hans", "tr"]
+PLURALS = {
+    "pl": {"one", "few", "many", "other"}, "uk": {"one", "few", "many", "other"},
+    "it": {"one", "many", "other"}, "pt-BR": {"one", "many", "other"},
+    "ja": {"other"}, "zh-Hans": {"other"},
+}
 DEFAULT_PLURALS = {"one", "other"}
 EXEMPT_KEYS = {"MenuFold"}
 PH = re.compile(r"%(?:\d+\$)?(?:l{0,2}|h{0,2}|z|q)?[@dDuUfFsScCxXoOeEgGaAp]")

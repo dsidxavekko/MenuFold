@@ -61,7 +61,7 @@ Accessibility or Screen Recording permission.
 - **Dock icon.** Choose the MenuFold logo, the macOS launcher icon, the Applications folder icon or your own
   picture.
 - **Grid size.** Choose the number of columns and rows.
-- **Six languages:** English, Ukrainian, German, Polish, French and Spanish.
+- **Eleven languages:** English, Ukrainian, German, Polish, French, Spanish, Italian, Brazilian Portuguese, Japanese, Simplified Chinese and Turkish.
 
 <table>
   <tr>
