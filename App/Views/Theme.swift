@@ -18,16 +18,16 @@ enum Theme {
     // MARK: Panel window motion (Core Animation, see PanelController)
     /// Spring response / damping of the panel open scale; a bit livelier than `morph` so the
     /// overshoot is visible, like the system Apps launcher.
-    static let panelOpenResponse: CGFloat = 0.42
-    static let panelOpenDamping: CGFloat = 0.74
+    static let panelOpenResponse: CGFloat = 0.3
+    static let panelOpenDamping: CGFloat = 0.8
     /// Scale the panel grows from when opening, and shrinks to when closing.
-    static let panelOpenScale: CGFloat = 0.94
+    static let panelOpenScale: CGFloat = 0.96
     static let panelCloseScale: CGFloat = 0.97
     /// Fade-in / close durations (seconds).
-    static let panelFadeIn: TimeInterval = 0.2
-    static let panelClose: TimeInterval = 0.18
+    static let panelFadeIn: TimeInterval = 0.1
+    static let panelClose: TimeInterval = 0.12
     /// Content blur radius at the start of the open animation (sharpens to 0).
-    static let panelOpenBlur: CGFloat = 8
+    static let panelOpenBlur: CGFloat = 4
 
     // MARK: Shape
     static let panelCorner: CGFloat = 26

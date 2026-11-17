@@ -166,9 +166,10 @@ enum DockGeometry {
     /// `GridMetrics` and `panelSize` shrink together. Call before reading the panel size.
     @MainActor
     static func fitGrid(anchor: NSPoint = NSEvent.mouseLocation,
-                        policy: PanelScreenPolicy? = nil) {
+                        policy: PanelScreenPolicy? = nil,
+                        screen resolved: NSScreen? = nil) {
         let prefs = AppPreferences.shared
-        guard let screen = targetScreen(anchor: anchor, policy: policy) else {
+        guard let screen = resolved ?? targetScreen(anchor: anchor, policy: policy) else {
             prefs.setFittedGrid(columns: nil, rows: nil); return
         }
         let avail = CGSize(width: screen.visibleFrame.width - 2 * fitMargin,
@@ -181,8 +182,9 @@ enum DockGeometry {
     /// Frame for a panel of `size` on the target screen (`policy`, default from Settings).
     @MainActor
     static func panelFrame(size: NSSize, anchor: NSPoint = NSEvent.mouseLocation,
-                           policy: PanelScreenPolicy? = nil) -> NSRect {
-        guard let screen = targetScreen(anchor: anchor, policy: policy) else {
+                           policy: PanelScreenPolicy? = nil,
+                           screen resolved: NSScreen? = nil) -> NSRect {
+        guard let screen = resolved ?? targetScreen(anchor: anchor, policy: policy) else {
             return NSRect(origin: .zero, size: size)
         }
         return panelFrame(size: size, anchor: anchor, screenFrame: screen.frame,

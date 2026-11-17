@@ -543,9 +543,11 @@ final class PanelController: NSObject, NSWindowDelegate {
         let anchor = NSEvent.mouseLocation
         model.panelDidOpen()
 
-        DockGeometry.fitGrid(anchor: anchor)
+        // Resolve the screen once: the activeWindow policy walks CGWindowList, which is not free.
+        let screen = DockGeometry.targetScreen(anchor: anchor)
+        DockGeometry.fitGrid(anchor: anchor, screen: screen)
         let size = Self.panelSize
-        let frame = DockGeometry.panelFrame(size: size, anchor: anchor)
+        let frame = DockGeometry.panelFrame(size: size, anchor: anchor, screen: screen)
 
         // Reopening is the newer intent, so a hide that is still waiting for a drag to end is dropped.
         cancelDeferredHide()
@@ -707,7 +709,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             let sharpen = CABasicAnimation(keyPath: "filters.\(Self.blurFilterName).inputRadius")
             sharpen.fromValue = Theme.panelOpenBlur
             sharpen.toValue = 0
-            sharpen.duration = 0.3
+            sharpen.duration = 0.15
             sharpen.timingFunction = CAMediaTimingFunction(name: .easeOut)
             contentLayer.add(sharpen, forKey: Self.blurKey)
         }
