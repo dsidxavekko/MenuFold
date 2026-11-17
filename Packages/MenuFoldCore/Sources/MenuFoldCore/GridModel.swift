@@ -183,6 +183,14 @@ public final class GridModel {
     @ObservationIgnored var searchChoices = SearchChoices()
     @ObservationIgnored var searchChoiceStore: SearchChoiceStore?
 
+    /// A cache hit reads neither `apps` nor `layout`, so a SwiftUI body that only hits the cache would
+    /// not be tracking them and never refresh when they change (the category tabs stayed as first
+    /// drawn, without the system categories). Reading both registers the dependency.
+    private func trackCatalogAndLayout() {
+        _ = apps
+        _ = layout
+    }
+
     private func invalidateDerivedCaches(catalogChanged: Bool) {
         appsByIDCache = nil
         visibleAppsCache = nil
@@ -193,7 +201,7 @@ public final class GridModel {
 
     /// Installed apps by bundle ID (hidden ones too).
     var appsByID: [String: AppEntry] {
-        if let cached = appsByIDCache { return cached }
+        if let cached = appsByIDCache { trackCatalogAndLayout(); return cached }
         let map = Dictionary(apps.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         appsByIDCache = map
         return map
@@ -405,7 +413,7 @@ public final class GridModel {
     /// folder and either live there on disk (unless excluded) or were dropped into it in MenuFold.
     /// `appIDs` may include hidden apps; `apps(in:)` filters them.
     private var finderFolders: [Folder] {
-        if let cached = finderFoldersCache { return cached }
+        if let cached = finderFoldersCache { trackCatalogAndLayout(); return cached }
         let computed = computeFinderFolders()
         finderFoldersCache = computed
         return computed
@@ -447,7 +455,7 @@ public final class GridModel {
     }
 
     public var visibleApps: [AppEntry] {
-        if let cached = visibleAppsCache { return cached }
+        if let cached = visibleAppsCache { trackCatalogAndLayout(); return cached }
         let list = apps.filter { !layout.hidden.contains($0.id) && profileAllows($0) }
         visibleAppsCache = list
         return list

@@ -48,3 +48,22 @@ import Testing
         #expect(model.availableTabs.first == .clipboard)
     }
 }
+
+@MainActor
+@Suite struct CacheObservationTests {
+    /// A view body that only hits the `visibleApps` cache must still be told when the catalog changes
+    /// (the category tabs once stayed as first drawn).
+    @Test func cacheHitStillTracksCatalog() {
+        let catalog = StaticAppCatalog(apps: [])
+        let model = GridModel(catalog: catalog, store: nil)
+        _ = model.availableTabs // fills the caches while the catalog is empty
+        var fired = false
+        withObservationTracking {
+            _ = model.availableTabs // a second read: cache hit
+        } onChange: {
+            fired = true
+        }
+        catalog.replace([AppEntry(id: "a", name: "A", url: URL(fileURLWithPath: "/Applications/A.app"), infoCategory: "public.app-category.productivity")])
+        #expect(fired)
+    }
+}

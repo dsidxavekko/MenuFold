@@ -27,7 +27,7 @@ extension GridModel {
 
     /// Folded search data of every app, built once per catalog change.
     private var searchTargets: [String: SearchMatcher.Target] {
-        if let cached = searchTargetsCache { return cached }
+        if let cached = searchTargetsCache { _ = apps; return cached }
         let map = Dictionary(apps.map { ($0.id, $0.searchTarget) }, uniquingKeysWith: { first, _ in first })
         searchTargetsCache = map
         return map

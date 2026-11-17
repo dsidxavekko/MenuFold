@@ -4,6 +4,10 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.8.4
+
+- Fixed the category tabs sometimes showing only your own categories right after launch (the automatic ones such as Developer Tools or Utilities were missing until the app was restarted). The tab strip now always refreshes when the app list loads.
+
 ## 0.8.3
 
 - Fixed the panel sometimes opening with no apps (only a custom category tab visible) right after login, when Spotlight was not ready yet: the app list is now re-read automatically until it appears.
