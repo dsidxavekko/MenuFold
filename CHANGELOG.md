@@ -4,6 +4,10 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.7.2
+
+- Removed the tooltip with keyboard shortcuts that appeared over every app icon.
+
 ## 0.7.1
 
 - **Faster opening**: the panel appears sooner (shorter fade, spring and blur) and the target screen is resolved once per open.

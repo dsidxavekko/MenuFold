@@ -116,7 +116,6 @@ struct AppIconView: View {
         .themedAnimation(Theme.snappy, value: isTargeted)
         .themedAnimation(Theme.snappy, value: isSelected)
         .reorderCaret(dropZone)
-        .help(app.name + "\n" + String(localized: "↩ запустити · ⌥↩ новий екземпляр · ⇧↩ у Finder · ⌘I інформація · ⌘D закріпити"))
         .accessibilityLabel(app.name)
         .accessibilityValue([
             isNew ? String(localized: "Нова") : nil,
