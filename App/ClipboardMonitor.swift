@@ -31,10 +31,9 @@ final class ClipboardMonitor {
         if enabled {
             guard timer == nil else { return }
             lastChangeCount = NSPasteboard.general.changeCount
-            // Take what is on the clipboard right now, so the tab is not empty at first.
-            poll(force: true)
+            // What is on the clipboard now is not recorded: every launch starts with an empty history.
             let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.poll(force: false) }
+                MainActor.assumeIsolated { self?.poll() }
             }
             timer.tolerance = 0.2
             RunLoop.main.add(timer, forMode: .common)
@@ -56,9 +55,9 @@ final class ClipboardMonitor {
         model?.clipboard.add(entry.text)
     }
 
-    private func poll(force: Bool) {
+    private func poll() {
         let pasteboard = NSPasteboard.general
-        guard force || pasteboard.changeCount != lastChangeCount else { return }
+        guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
         let types = Set(pasteboard.types ?? [])
         guard types.isDisjoint(with: Self.ignoredTypes),

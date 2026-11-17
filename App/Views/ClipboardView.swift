@@ -52,10 +52,6 @@ private struct ClipboardRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(entry.date, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
             }
             .padding(.horizontal, 12)
             .frame(height: 36)

@@ -4,6 +4,10 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.8.1
+
+- Clipboard history starts empty on every launch (it was already memory-only) and no longer shows the ticking time next to each entry.
+
 ## 0.8.0
 
 - **Clipboard history**: a new "Clipboard" tab, the very first one, lists the text you copied. Click an entry to put it back on the clipboard (then paste with ⌘V); right-click to pin or delete it. The history is kept in memory only, passwords from password managers are not recorded, and it can be turned off in Settings → Categories. `menufold://tab?name=clipboard` opens it.
