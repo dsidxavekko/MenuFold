@@ -45,8 +45,8 @@ public enum GridItem: Identifiable, Hashable, Sendable {
 @MainActor
 @Observable
 public final class GridModel {
-    public private(set) var apps: [AppEntry] = []
-    public private(set) var layout: Layout = Layout()
+    public private(set) var apps: [AppEntry] = [] { didSet { invalidateDerivedCaches(catalogChanged: true) } }
+    public private(set) var layout: Layout = Layout() { didSet { invalidateDerivedCaches(catalogChanged: false) } }
     /// False until the catalog delivers its first result (even an empty one).
     public private(set) var isLoaded: Bool = false
     /// What `LayoutStore.loadWithOutcome()` found at launch, so Settings can tell the user (see
@@ -69,6 +69,10 @@ public final class GridModel {
     public var selectedItemID: String?
     /// App waiting for the in-panel "move to Trash" confirmation; nil when none is shown.
     public var pendingTrashAppID: String?
+    /// App whose ⌘I info card is shown in the panel; nil when none.
+    public var infoAppID: String?
+    /// The ⌘/ list of keyboard shortcuts is shown in the panel.
+    public var showsShortcutsHelp = false
 
     /// Launch statistics behind `frequentApps`.
     public internal(set) var usage = UsageStats()
@@ -79,6 +83,12 @@ public final class GridModel {
     public internal(set) var isTrashing = false
     /// How many apps the "Часті" row holds (one grid row).
     public var frequentLimit = 7
+    /// Bundle ID → size on disk in bytes, measured off the main actor when a smart rule needs sizes
+    /// (see SmartRules.swift). Empty until measured.
+    public internal(set) var appSizes: [String: Int64] = [:] { didSet { invalidateDerivedCaches(catalogChanged: false) } }
+    @ObservationIgnored var sizeCache: [String: Int64] = [:]
+    /// Measures a bundle (injectable for tests).
+    @ObservationIgnored var sizeProvider: @Sendable (URL) -> Int64? = { AppSizer.size(of: $0) }
     /// Bundle IDs of the apps running right now. The model can't watch processes itself, so the app
     /// keeps this current (NSWorkspace KVO).
     public var runningAppIDs: Set<String> = [] {
@@ -108,7 +118,7 @@ public final class GridModel {
     public var keepsPanelOpenAfterLaunch = false
 
     /// First-seen / last-launched dates per app (new-app dots, "Недавні", unused apps). See `AppHistory`.
-    public internal(set) var history = AppHistory()
+    public internal(set) var history = AppHistory() { didSet { if !layout.smartRules.isEmpty { invalidateDerivedCaches(catalogChanged: false) } } }
     /// Layouts before the last changes, newest last (`undo()`); see GridModel+Arrange.swift.
     public internal(set) var undoStack: [Layout] = []
     /// Layouts undone, newest last (`redo()`).
@@ -138,6 +148,35 @@ public final class GridModel {
     /// Finder folder path → display name (injectable for tests; results are cached).
     @ObservationIgnored private let finderNameResolver: (String) -> String
     @ObservationIgnored private var finderNameCache: [String: String] = [:]
+
+    // Caches derived from `apps` and `layout`, dropped by `invalidateDerivedCaches` whenever either
+    // changes (search runs on every keystroke and used to rebuild all of this each time).
+    @ObservationIgnored private var appsByIDCache: [String: AppEntry]?
+    @ObservationIgnored private var visibleAppsCache: [AppEntry]?
+    @ObservationIgnored private var finderFoldersCache: [Folder]?
+    /// Folded search data per app (see `SearchMatcher.Target`); rebuilt only when the catalog changes.
+    @ObservationIgnored var searchTargetsCache: [String: SearchMatcher.Target]?
+    /// Apps that matched the last search query, to narrow the next keystroke (GridModel+Search.swift).
+    @ObservationIgnored var lastSearchMatch: (query: SearchMatcher.Query, ids: Set<String>)?
+    /// Which app was launched after which query (adaptive ranking); see `SearchChoices`.
+    @ObservationIgnored var searchChoices = SearchChoices()
+    @ObservationIgnored var searchChoiceStore: SearchChoiceStore?
+
+    private func invalidateDerivedCaches(catalogChanged: Bool) {
+        appsByIDCache = nil
+        visibleAppsCache = nil
+        finderFoldersCache = nil
+        lastSearchMatch = nil
+        if catalogChanged { searchTargetsCache = nil }
+    }
+
+    /// Installed apps by bundle ID (hidden ones too).
+    var appsByID: [String: AppEntry] {
+        if let cached = appsByIDCache { return cached }
+        let map = Dictionary(apps.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        appsByIDCache = map
+        return map
+    }
     /// Folder that holds custom icon files. Without a store (previews, tests) a private temp folder.
     @ObservationIgnored public let iconsDirectory: URL
 
@@ -156,6 +195,10 @@ public final class GridModel {
         self.usageStore = usageStore
         self.historyStore = historyStore
         self.usage = usageStore?.load() ?? UsageStats()
+        self.searchChoiceStore = usageStore.map {
+            SearchChoiceStore(fileURL: $0.fileURL.deletingLastPathComponent().appendingPathComponent("search-choices.json"))
+        }
+        self.searchChoices = searchChoiceStore?.load() ?? SearchChoices()
         self.history = historyStore?.load() ?? AppHistory()
         self.historyUnreadable = historyStore?.lastLoadUnreadable ?? false
         self.homeDirectory = homeDirectory
@@ -189,6 +232,7 @@ public final class GridModel {
         // Only a layout that was really read says which icon files are in use; after a quarantine
         // the old file still refers to them, so they are kept.
         if case .loaded = layoutOutcome {
+            restorePersistedUndo()
             removeUnusedIconFiles()
             makeLaunchBackup()
         }
@@ -205,6 +249,7 @@ public final class GridModel {
         apps = newApps
         isLoaded = true
         noteCatalogApps()
+        refreshAppSizes()
         // Layout is kept intact (apps come back on reinstall); only close a folder that became empty.
         closeOpenFolderIfGone()
         validateTab()
@@ -236,12 +281,13 @@ public final class GridModel {
         for app in visibleApps {
             let c = category(of: app)
             if c.id == AppCategory.otherID { hasOther = true; continue }
-            if c.isCustom { continue }
+            if c.isCustom || c.isSmart { continue }
             if seen.insert(c.id).inserted { cats.append(c) }
         }
         cats.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
         if hasOther { cats.append(.other) }
-        return customCategories + cats
+        let smart = smartCategories
+        return (customCategories + smart + cats).filter { profileAllows(category: $0) }
     }
 
     /// True when the user has set their own tab order.
@@ -298,6 +344,8 @@ public final class GridModel {
             if !raw.hasPrefix(AppCategory.customPrefix) { return AppCategory.from(raw: raw) }
             if let custom = layout.customCategories.first(where: { $0.id == raw }) { return custom.category }
         }
+        // A manual override (above) always wins; then the first matching smart rule.
+        if let smart = smartCategory(for: app) { return smart }
         return AppCategory.automatic(for: app)
     }
 
@@ -334,6 +382,13 @@ public final class GridModel {
     /// folder and either live there on disk (unless excluded) or were dropped into it in MenuFold.
     /// `appIDs` may include hidden apps; `apps(in:)` filters them.
     private var finderFolders: [Folder] {
+        if let cached = finderFoldersCache { return cached }
+        let computed = computeFinderFolders()
+        finderFoldersCache = computed
+        return computed
+    }
+
+    private func computeFinderFolders() -> [Folder] {
         let manual = Set(layout.folders.flatMap(\.appIDs))
         var groups: [String: [String]] = [:]
         var order: [String] = []
@@ -357,7 +412,7 @@ public final class GridModel {
     }
 
     private func nativeFinderKey(_ appID: String) -> String? {
-        guard let app = apps.first(where: { $0.id == appID }) else { return nil }
+        guard let app = appsByID[appID] else { return nil }
         return FinderFolders.key(forAppPath: app.url.path, homeDirectory: homeDirectory)
     }
 
@@ -368,8 +423,11 @@ public final class GridModel {
         return name
     }
 
-    var visibleApps: [AppEntry] {
-        apps.filter { !layout.hidden.contains($0.id) }
+    public var visibleApps: [AppEntry] {
+        if let cached = visibleAppsCache { return cached }
+        let list = apps.filter { !layout.hidden.contains($0.id) && profileAllows($0) }
+        visibleAppsCache = list
+        return list
     }
 
     static func sorted(_ list: [AppEntry]) -> [AppEntry] {
@@ -696,7 +754,9 @@ public final class GridModel {
     /// run at once) may have just written an icon for a layout this process has not read yet.
     func removeUnusedIconFiles() {
         guard store?.isShared != true else { return }
-        let used = Set(layout.customIcons.values)
+        // Icons named by the undo steps restored from the last launch stay too.
+        var used = Set(layout.customIcons.values).union(undoStack.flatMap { $0.customIcons.values })
+        used.formUnion(iconsReferencedByBackups())
         let fresh = Date().addingTimeInterval(-60)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: iconsDirectory.path)) ?? []
         for file in files where Self.isOwnIconFileName(file) && !used.contains(file) {
@@ -705,6 +765,35 @@ public final class GridModel {
                let modified = attrs[.modificationDate] as? Date, modified > fresh { continue }
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    /// Icon file names named by Backups/layout-*.json, layout.bak/.bak2 and layout.corrupt-*: restoring
+    /// any of them must not find its icons gone. Reads only the `customIcons` field, and skips
+    /// files above the size limit.
+    func iconsReferencedByBackups() -> Set<String> {
+        guard let store = layoutStore else { return [] }
+        let fm = FileManager.default
+        let dir = store.fileURL.deletingLastPathComponent()
+        let stem = store.fileURL.deletingPathExtension().lastPathComponent
+        var urls: [URL] = []
+        for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+        where name == stem + ".bak" || name == stem + ".bak2" || (name.hasPrefix(stem + ".corrupt-") && name.hasSuffix(".json")) {
+            urls.append(dir.appendingPathComponent(name))
+        }
+        if let backups = backupsDirectory {
+            for name in (try? fm.contentsOfDirectory(atPath: backups.path)) ?? []
+            where name.hasPrefix("layout-") && name.hasSuffix(".json") {
+                urls.append(backups.appendingPathComponent(name))
+            }
+        }
+        struct IconsOnly: Decodable { var customIcons: [String: String]? }
+        var result = Set<String>()
+        for url in urls {
+            guard let data = try? LayoutStore.readLimited(url),
+                  let icons = try? JSONDecoder().decode(IconsOnly.self, from: data).customIcons else { continue }
+            result.formUnion(icons.values)
+        }
+        return result
     }
 
     /// `<UUID>.png`: the only names `setCustomIcon` and imports ever write.
@@ -734,6 +823,7 @@ public final class GridModel {
             Task { @MainActor in self?.onLaunchFailed?(app, message) }
         }
         markSeen(app.id)
+        rememberSearchChoice(appID: app.id)
         if !staysOpen { onLaunched?() }
     }
 
@@ -766,6 +856,8 @@ public final class GridModel {
         if !rememberLastTab { tab = .all } else { validateTab() }
         selectedItemID = nil
         pendingTrashAppID = nil
+        infoAppID = nil
+        showsShortcutsHelp = false
     }
 
     // MARK: Helpers
@@ -820,6 +912,7 @@ public final class GridModel {
         guard committed != layout else { return }
         if !isRestoringUndo { recordUndo(from: layout) }
         layout = committed
+        persistUndo()
         validateTab()
         // A folder made/dissolved or a category changed can take the selected tile out of view.
         clearSelectionIfGone()

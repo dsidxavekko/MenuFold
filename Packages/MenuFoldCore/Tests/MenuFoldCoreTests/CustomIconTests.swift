@@ -66,9 +66,13 @@ import Testing
         #expect(model.customIconURL(for: "mail") == second)
 
         // The next launch removes what nothing uses (files aged past the one-minute grace).
+        // Icons named by the restored undo steps stay (undo survives a relaunch); a real orphan goes.
+        let orphan = store.iconsDirectory.appendingPathComponent("\(UUID().uuidString).png")
+        try Data([0]).write(to: orphan)
         for name in iconFiles(store.iconsDirectory) { age(store.iconsDirectory.appendingPathComponent(name)) }
         _ = GridModel(catalog: StaticAppCatalog(apps: apps), store: store)
-        #expect(iconFiles(store.iconsDirectory) == [second.lastPathComponent])
+        #expect(!iconFiles(store.iconsDirectory).contains(orphan.lastPathComponent))
+        #expect(iconFiles(store.iconsDirectory).contains(second.lastPathComponent))
     }
 
     func age(_ url: URL) {

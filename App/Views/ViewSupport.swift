@@ -65,12 +65,12 @@ enum GridMetrics {
     static let iconSize: CGFloat = 64
     static let tileWidth: CGFloat = 108
     static let tileCorner: CGFloat = 15
-    static var columns: Int { AppPreferences.shared.columns }
+    static var columns: Int { AppPreferences.shared.effectiveColumns }
     static let folderColumns = 6
     /// Height of one grid row (tile + spacing), used to size the panel for `rows`.
     static let rowHeight: CGFloat = 116
     static var panelWidth: CGFloat { 844 + CGFloat(columns - 7) * tileWidth }
-    static var panelHeight: CGFloat { 577 + CGFloat(AppPreferences.shared.rows - 4) * rowHeight }
+    static var panelHeight: CGFloat { 577 + CGFloat(AppPreferences.shared.effectiveRows - 4) * rowHeight }
     static let folderWidth: CGFloat = 680
     static let folderHeight: CGFloat = 450
 }
@@ -282,17 +282,17 @@ struct StaggeredReveal: ViewModifier {
     let index: Int
     let columns: Int
     let isRevealed: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        let row = min(index / max(columns, 1), 3)
+        let row = min(index / max(columns, 1), Theme.revealMaxRow)
         let col = index % max(columns, 1)
-        let delay = Double(row) * 0.035 + Double(col) * 0.004
+        let delay = Double(row) * Theme.revealRowDelay + Double(col) * Theme.revealColumnDelay
         content
             .opacity(isRevealed || reduceMotion ? 1 : 0)
-            .scaleEffect(isRevealed || reduceMotion ? 1 : 0.9)
+            .scaleEffect(isRevealed || reduceMotion ? 1 : Theme.revealStartScale)
             .animation(
-                reduceMotion || !isRevealed ? nil : .smooth(duration: 0.12).delay(delay),
+                reduceMotion || !isRevealed ? nil : .smooth(duration: Theme.revealDuration).delay(delay),
                 value: isRevealed
             )
     }

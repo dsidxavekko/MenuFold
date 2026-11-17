@@ -14,8 +14,48 @@ public struct Leftover: Identifiable, Hashable, Sendable {
     public let url: URL
     /// Bytes on disk (0 when unknown).
     public let size: Int64
+    /// Part of the item could not be read, so `size` is a lower bound.
+    public let isLowerBound: Bool
+    public let kind: LeftoverKind
     public var id: URL { url }
-    public init(url: URL, size: Int64) { self.url = url; self.size = size }
+    public init(url: URL, size: Int64, isLowerBound: Bool = false, kind: LeftoverKind = .other) {
+        self.url = url; self.size = size; self.isLowerBound = isLowerBound; self.kind = kind
+    }
+    public var diskSize: DiskSize { DiskSize(bytes: max(size, 0), isLowerBound: isLowerBound) }
+}
+
+/// One row of the uninstaller's dry-run breakdown.
+public struct LeftoverGroup: Identifiable, Hashable, Sendable {
+    public let kind: LeftoverKind
+    public let items: [Leftover]
+    public var id: LeftoverKind { kind }
+    public var size: DiskSize { items.reduce(.zero) { $0 + $1.diskSize } }
+}
+
+extension Array where Element == Leftover {
+    public var totalSize: DiskSize { reduce(.zero) { $0 + $1.diskSize } }
+    /// Non-empty groups in the order caches, preferences, containers, other.
+    public func grouped() -> [LeftoverGroup] {
+        LeftoverKind.allCases.compactMap { kind in
+            let items = filter { $0.kind == kind }
+            return items.isEmpty ? nil : LeftoverGroup(kind: kind, items: items)
+        }
+    }
+}
+
+/// Dry run of removing an app: what would go to the Trash and how much space it frees.
+/// The single place the uninstaller UIs get their numbers from (`GridModel.uninstallPlan(for:)`).
+public struct UninstallPlan: Sendable {
+    public let appSize: DiskSize
+    public let leftovers: [Leftover]
+    public init(appSize: DiskSize, leftovers: [Leftover]) {
+        self.appSize = appSize
+        self.leftovers = leftovers
+    }
+    public var groups: [LeftoverGroup] { leftovers.grouped() }
+    public var leftoversSize: DiskSize { leftovers.totalSize }
+    public var totalSize: DiskSize { appSize + leftoversSize }
+    public var caches: [Leftover] { leftovers.filter { $0.kind == .caches } }
 }
 
 extension GridModel {
@@ -47,6 +87,7 @@ extension GridModel {
     func noteLaunched(appID: String) {
         var h = history
         h.lastLaunched[appID] = now()
+        h.launchCounts[appID, default: 0] += 1
         saveHistory(h)
     }
 
@@ -107,6 +148,12 @@ extension GridModel {
         guard h != history else { return }
         history = h
         guard let historyStore, retryHistoryIfUnreadable() else { return }
+        if historyStore.isShared {
+            // Shared data folder: merge with what other Macs wrote instead of replacing it. A file
+            // that cannot be read or decoded right now (half-synced) is left alone.
+            guard let disk = historyStore.loadForMerge() else { return }
+            history = history.merged(with: disk)
+        }
         do { try historyStore.save(history) } catch {
             NSLog("%@", "MenuFold: failed to save app history: \(error.localizedDescription)")
         }
@@ -115,17 +162,13 @@ extension GridModel {
     /// True when history.json may be written: it was readable (or missing) at load, or it can be
     /// read now. A successful late read merges the file into the in-memory history: the file's
     /// first-seen dates win (they are older), the later launch date wins, `seen` is united.
-    private func retryHistoryIfUnreadable() -> Bool {
+    func retryHistoryIfUnreadable() -> Bool {
         guard historyUnreadable else { return true }
         guard let historyStore else { historyUnreadable = false; return true }
         let disk = historyStore.load()
         guard !historyStore.lastLoadUnreadable else { return false }
         historyUnreadable = false
-        var merged = disk
-        for (id, date) in history.firstSeen where merged.firstSeen[id] == nil { merged.firstSeen[id] = date }
-        merged.lastLaunched.merge(history.lastLaunched) { max($0, $1) }
-        merged.seen.formUnion(history.seen)
-        history = merged
+        history = history.merged(with: disk)
         return true
     }
 
@@ -187,7 +230,7 @@ extension GridModel {
     /// deleted since, while the current ones are known to exist.
     public func restore(_ backup: LayoutBackup) throws {
         let data: Data
-        do { data = try Data(contentsOf: backup.url) } catch { throw LayoutDataError.damaged }
+        do { data = try LayoutStore.readLimited(backup.url) } catch { throw LayoutDataError.damaged }
         var restored = try LayoutStore.decodeValidated(data)
         restored.customIcons = layout.customIcons
         try replaceLayout(with: restored)
@@ -206,9 +249,7 @@ extension GridModel {
     /// The previous icon files are left on disk, so undo can map them again (see `restore` in
     /// GridModel+Arrange.swift); the next launch's cleanup removes the ones nothing uses.
     public func importLayout(from url: URL) throws {
-        let data: Data
-        do { data = try Data(contentsOf: url) } catch { throw LayoutDataError.notMenuFoldFile }
-        let transfer = try LayoutTransfer.decode(data)
+        let transfer = try LayoutTransfer.decode(contentsOf: url)
         var written: [URL] = []
         do {
             let imported = try transfer.installIcons(into: iconsDirectory, written: &written)
@@ -248,9 +289,23 @@ extension GridModel {
     /// cleared, because undoing across a sync would push the stale layout back out.
     public func reloadLayoutFromDisk() {
         guard let store = layoutStore,
-              let data = try? Data(contentsOf: store.fileURL),
+              let data = try? LayoutStore.readLimited(store.fileURL),
               let reloaded = try? LayoutStore.decodeValidated(data) else { return }
         applyLayoutWithoutSaving(reloaded)
+    }
+
+    /// history.json or usage.json changed on disk (another Mac through a synced data folder): merge
+    /// what is there into memory. Nothing is written back, so the change is not echoed. Without a
+    /// shared folder this does nothing.
+    public func reloadSharedStatsFromDisk() {
+        if let historyStore, historyStore.isShared, !historyUnreadable, let disk = historyStore.loadForMerge() {
+            let merged = history.merged(with: disk)
+            if merged != history { history = merged }
+        }
+        if let usageStore, usageStore.deviceID != nil {
+            let combined = usageStore.load()
+            if combined != usage { usage = combined }
+        }
     }
 
     // MARK: Uninstaller
@@ -270,14 +325,36 @@ extension GridModel {
     public func moveToTrash(_ app: AppEntry, leftovers urls: [URL]) async throws {
         try await moveToTrash(app)
         guard !urls.isEmpty else { return }
-        // Re-checked off the main actor: the lookup sizes every folder it finds.
+        try await trashLeftoverFiles(of: app, urls)
+    }
+
+    /// Only the given support files, the app stays installed (the uninstaller's "caches only").
+    /// Same re-check as `moveToTrash(_:leftovers:)`.
+    public func moveLeftoversToTrash(of app: AppEntry, _ urls: [URL]) async throws {
+        guard canTrash(app), !urls.isEmpty else { return }
+        try await trashLeftoverFiles(of: app, urls)
+    }
+
+    /// Dry run: the app's size plus its support files with sizes, computed off the main actor.
+    /// Cancelling the calling task stops the count and returns lower bounds.
+    public func uninstallPlan(for app: AppEntry) async -> UninstallPlan {
         let others = Set(apps.map(\.id)).subtracting([app.id])
-        let id = app.id, appURL = app.url
+        let id = app.id, url = app.url
+        let canTrash = canTrash(app)
+        async let appSize = DiskUsage.size(of: url)
+        let leftovers = canTrash ? await AppLeftovers().findSized(bundleID: id, otherBundleIDs: others) : []
+        return UninstallPlan(appSize: await appSize, leftovers: leftovers)
+    }
+
+    private func trashLeftoverFiles(of app: AppEntry, _ urls: [URL]) async throws {
+        // Re-checked off the main actor: the lookup lists several folders.
+        let others = Set(apps.map(\.id)).subtracting([app.id])
+        let id = app.id
         let fresh = await Task.detached(priority: .userInitiated) {
-            AppLeftovers().find(bundleID: id, appURL: appURL, otherBundleIDs: others)
+            AppLeftovers().locate(bundleID: id, otherBundleIDs: others)
         }.value
-        let allowed = Set(fresh.map { $0.url.standardizedFileURL.path })
-        let toTrash = urls.filter { allowed.contains($0.standardizedFileURL.path) }
+        let allowed = Set(fresh.map { $0.url.standardizedFileURL.path.lowercased() })
+        let toTrash = urls.filter { allowed.contains($0.standardizedFileURL.path.lowercased()) }
         guard !toTrash.isEmpty else { return }
         isTrashing = true
         defer { isTrashing = false }

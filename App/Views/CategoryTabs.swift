@@ -11,7 +11,7 @@ import SwiftUI
 struct CategoryTabs: View {
     @Bindable var model: GridModel
     @Namespace private var selectionNamespace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     /// Category ids in the order shown while a tab is being dragged; nil otherwise. The model is
     /// updated once, when the drag ends, so a drag saves the layout one time.
@@ -301,7 +301,7 @@ private struct TabCapsule: View {
     let action: () -> Void
 
     @State private var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     private static let selectionID = "category-tab-selection"
 

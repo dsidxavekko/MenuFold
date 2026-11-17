@@ -11,8 +11,9 @@ struct UnusedAppsSection: View {
     let model: GridModel
 
     @State private var days = 90
-    /// Bundle sizes by app URL, filled lazily as rows appear (computed off the main thread).
-    @State private var sizes: [URL: Int64] = [:]
+    /// Dry-run plans (app size + support files) by app id, filled lazily as rows appear. The same
+    /// `GridModel.uninstallPlan(for:)` the panel's trash card uses; counted off the main actor.
+    @State private var plans: [String: UninstallPlan] = [:]
     /// Apps currently being trashed, so their buttons are disabled.
     @State private var trashing: Set<String> = []
     /// Apps whose support files are being looked up before the confirmation alert.
@@ -55,9 +56,13 @@ struct UnusedAppsSection: View {
                     .lineLimit(1)
                 HStack(spacing: 4) {
                     Text(lastUsedText(app))
-                    if let size = sizes[app.url] {
-                        Text("·")
-                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                    if UsageLogger.shared.totalLaunches(of: app.id) > 0 {
+                        Text(verbatim: "·")
+                        Text("Запусків за рік: \(UsageLogger.shared.totalLaunches(of: app.id))")
+                    }
+                    if let plan = plans[app.id] {
+                        Text(verbatim: "·")
+                        Text(sizeText(plan))
                             .monospacedDigit()
                     }
                 }
@@ -84,11 +89,18 @@ struct UnusedAppsSection: View {
                 .disabled(trashing.contains(app.id) || scanning.contains(app.id))
         }
         .task(id: app.url) {
-            guard sizes[app.url] == nil else { return }
-            let url = app.url
-            let size = await Task.detached(priority: .utility) { DiskUsage.allocatedSize(of: url) }.value
-            sizes[url] = size
+            guard plans[app.id] == nil else { return }
+            let plan = await model.uninstallPlan(for: app)
+            // A cancelled count (the row scrolled away) is only a lower bound: don't keep it.
+            guard !Task.isCancelled else { return }
+            plans[app.id] = plan
         }
+    }
+
+    /// "120 MB" or "120 MB + 80 MB файлів підтримки" ("≥" when some part could not be read).
+    private func sizeText(_ plan: UninstallPlan) -> String {
+        guard !plan.leftovers.isEmpty else { return plan.appSize.formatted }
+        return String(localized: "\(plan.appSize.formatted) + \(plan.leftoversSize.formatted) файлів підтримки")
     }
 
     private func lastUsedText(_ app: AppEntry) -> String {
@@ -96,34 +108,32 @@ struct UnusedAppsSection: View {
         return date.formatted(.relative(presentation: .named))
     }
 
-    /// Looks up the app's support files off the main actor first (the same lookup as
-    /// `model.leftovers(for:)`, which sizes folders and can take a while), then confirms.
+    /// Counts the app and its support files off the main actor first (reusing the row's plan when
+    /// it is already there), then confirms.
     private func confirmTrash(_ app: AppEntry) {
         guard !scanning.contains(app.id) else { return }
         scanning.insert(app.id)
-        let others = Set(model.apps.map(\.id)).subtracting([app.id])
-        let id = app.id, url = app.url
-        let canTrash = model.canTrash(app)
+        let known = plans[app.id]
         Task {
-            let leftovers: [Leftover] = canTrash
-                ? await Task.detached(priority: .userInitiated) {
-                    AppLeftovers().find(bundleID: id, appURL: url, otherBundleIDs: others)
-                }.value
-                : []
+            let plan: UninstallPlan
+            if let known, !known.appSize.isLowerBound, !known.leftovers.contains(where: \.isLowerBound) { plan = known }
+            else { plan = await model.uninstallPlan(for: app) }
+            plans[app.id] = plan
             scanning.remove(app.id)
-            confirmTrash(app, leftovers: leftovers)
+            confirmTrash(app, plan: plan)
         }
     }
 
-    private func confirmTrash(_ app: AppEntry, leftovers: [Leftover]) {
+    private func confirmTrash(_ app: AppEntry, plan: UninstallPlan) {
+        let leftovers = plan.leftovers
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = String(localized: "Перемістити «\(app.name)» у Кошик?")
-        alert.informativeText = String(localized: "Програму можна буде повернути з Кошика, поки його не очищено.")
+        alert.informativeText = String(localized: "Програма: \(plan.appSize.formatted) · файли підтримки: \(plan.leftoversSize.formatted)")
+            + "\n" + String(localized: "Програму можна буде повернути з Кошика, поки його не очищено.")
         if !leftovers.isEmpty {
-            let total = leftovers.reduce(Int64(0)) { $0 + $1.size }
             alert.showsSuppressionButton = true
-            alert.suppressionButton?.title = String(localized: "Також її допоміжні файли (\(leftovers.count), \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)))")
+            alert.suppressionButton?.title = String(localized: "Також її допоміжні файли (\(leftovers.count), \(plan.leftoversSize.formatted))")
             alert.suppressionButton?.state = .on
         }
         alert.addButton(withTitle: String(localized: "У Кошик"))
@@ -239,7 +249,7 @@ enum SettingsAlerts {
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = error.localizedDescription
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.runModal()
     }
 

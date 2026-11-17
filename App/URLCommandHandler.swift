@@ -7,6 +7,7 @@ import MenuFoldCore
 /// - `menufold://search?q=TEXT`: open the panel with TEXT in the search field
 /// - `menufold://folder?name=NAME`: open the panel with that folder expanded
 /// - `menufold://tab?name=NAME`: open the panel on the tab with that title (or category id)
+/// - `menufold://launch?id=BUNDLE_ID`: launch (or bring forward) that app, without showing the panel
 /// - `menufold://settings`
 ///
 /// Anything else is logged and ignored.
@@ -43,6 +44,19 @@ enum URLCommandHandler {
         case "tab":
             guard let name = value("name"), delegate.showPanel(tabNamed: name) else {
                 NSLog("%@", "MenuFold: no tab for \(url.absoluteString)")
+                return
+            }
+        case "profile":
+            // `menufold://profile?name=Робота`; an empty name or "none" leaves profiles.
+            let name = (value("name") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty || name.lowercased() == "none" {
+                delegate.model.setActiveProfile(nil)
+            } else if !delegate.model.setActiveProfile(named: name) {
+                NSLog("%@", "MenuFold: no profile for \(url.absoluteString)")
+            }
+        case "launch":
+            guard let id = value("id") ?? value("bundleid"), delegate.launchApp(id: id) else {
+                NSLog("%@", "MenuFold: no app for \(url.absoluteString)")
                 return
             }
         case "settings", "preferences":
@@ -97,6 +111,27 @@ extension AppDelegate {
         model.query = ""
         model.tab = .all
         model.openFolderID = folder.id
+        return true
+    }
+
+    /// Shows the panel with the folder `id` expanded. False if there is none.
+    @discardableResult
+    func showPanel(folderID id: UUID) -> Bool {
+        guard let folder = model.folder(id: id) else { return false }
+        showPanel()
+        model.query = ""
+        model.tab = .all
+        model.openFolderID = folder.id
+        return true
+    }
+
+    /// Launches the visible app with this bundle id. False if unknown or hidden.
+    @discardableResult
+    func launchApp(id: String) -> Bool {
+        let wanted = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Only apps the panel shows: a hidden app is not launchable from a URL.
+        guard let app = model.visibleApps.first(where: { $0.id == wanted }) else { return false }
+        model.launch(app)
         return true
     }
 

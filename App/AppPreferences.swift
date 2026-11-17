@@ -124,6 +124,30 @@ final class AppPreferences {
         didSet { defaults.set(dataDirectory?.path, forKey: "dataDirectory"); changed() }
     }
 
+    /// Which display the panel opens on (default: under the pointer).
+    var panelScreenPolicy: PanelScreenPolicy {
+        didSet { defaults.set(panelScreenPolicy.rawValue, forKey: "panelScreenPolicy"); changed() }
+    }
+    /// Forces "reduce motion" inside MenuFold even when the system switch is off (see `ThemeOverrides`).
+    var forcesReduceMotion: Bool {
+        didSet { defaults.set(forcesReduceMotion, forKey: "forcesReduceMotion"); changed() }
+    }
+    /// Forces "increase contrast" inside MenuFold even when the system switch is off.
+    var forcesIncreaseContrast: Bool {
+        didSet { defaults.set(forcesIncreaseContrast, forKey: "forcesIncreaseContrast"); changed() }
+    }
+    /// Grid size the panel really uses on the screen it opens on: the chosen size, reduced only when
+    /// that screen is too small (set by `DockGeometry.fitGrid`; not persisted, no change notification).
+    private(set) var fittedColumns: Int?
+    private(set) var fittedRows: Int?
+    var effectiveColumns: Int { fittedColumns ?? columns }
+    var effectiveRows: Int { fittedRows ?? rows }
+
+    func setFittedGrid(columns: Int?, rows: Int?) {
+        if fittedColumns != columns { fittedColumns = columns }
+        if fittedRows != rows { fittedRows = rows }
+    }
+
     static let columnRange = 5...10
     static let rowRange = 3...7
 
@@ -146,6 +170,9 @@ final class AppPreferences {
         columns = min(max(c, Self.columnRange.lowerBound), Self.columnRange.upperBound)
         let r = defaults.object(forKey: "gridRows") as? Int ?? 4
         rows = min(max(r, Self.rowRange.lowerBound), Self.rowRange.upperBound)
+        panelScreenPolicy = defaults.string(forKey: "panelScreenPolicy").flatMap(PanelScreenPolicy.init(rawValue:)) ?? .cursor
+        forcesReduceMotion = defaults.bool(forKey: "forcesReduceMotion")
+        forcesIncreaseContrast = defaults.bool(forKey: "forcesIncreaseContrast")
         hasSeenFirstRunHint = defaults.bool(forKey: "hasSeenFirstRunHint")
         dataDirectory = defaults.string(forKey: "dataDirectory").map { URL(fileURLWithPath: $0, isDirectory: true) }
     }

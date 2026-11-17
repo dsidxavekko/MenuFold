@@ -21,10 +21,15 @@ env:
 jobs:
   core:
     name: MenuFoldCore (build + tests)
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check localization
+        # No dependencies, takes a second. Errors fail the job; stale keys and unlocalized
+        # NSAlert/NSMenuItem literals are reported as annotations.
+        run: python3 scripts/check-localization.py
 
       - name: Show toolchain
         run: |
@@ -49,9 +54,9 @@ jobs:
     # Fast App/ check when a full Xcode with a macOS >= 26 SDK is available. The shimmed fallback of
     # scripts/typecheck-app.sh is refused on CI on purpose: its stand-ins are not the real macros, so
     # it used to pass on a machine where the app itself did not compile. Without a usable SDK this job
-    # skips and `build-app` reports the real verdict instead.
+    # fails with an error annotation (never a silent skip).
     name: App typecheck
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 20
     needs: [core]
     steps:
@@ -69,7 +74,8 @@ jobs:
             echo "can=true" >> "$GITHUB_OUTPUT"
           else
             echo "can=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Typecheck skipped::macOS SDK $sdk is older than macOS ${MENUFOLD_MIN_SDK_MAJOR}; the app build job is the source of truth."
+            echo "::error title=macOS SDK too old::SDK $sdk is older than macOS ${MENUFOLD_MIN_SDK_MAJOR}; the runner image needs Xcode 27+. App/ was NOT typechecked."
+            exit 1
           fi
 
       - name: Cache SwiftPM build
@@ -88,7 +94,7 @@ jobs:
 
   build-app:
     name: Build MenuFold.app
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 40
     needs: [core]
     steps:
@@ -103,10 +109,25 @@ jobs:
           echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
           if [[ "${sdk_version%%.*}" -lt "${MENUFOLD_MIN_SDK_MAJOR}" ]]; then
             echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Build skipped::macOS SDK $sdk_version cannot target macOS ${MENUFOLD_MIN_SDK_MAJOR}; the app build needs a newer Xcode."
+            echo "::error title=macOS SDK too old::SDK $sdk_version cannot target macOS ${MENUFOLD_MIN_SDK_MAJOR}; the runner image needs Xcode 27+. The app was NOT built."
+            exit 1
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-xcodegen-${{ hashFiles('project.yml') }}
+          restore-keys: brew-${{ runner.os }}-xcodegen-
+
+      - name: Cache SwiftPM packages (Sparkle)
+        uses: actions/cache@v6
+        with:
+          path: build/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
 
       - name: Install xcodegen (if missing)
         if: steps.sdk.outputs.ok == 'true'
@@ -120,15 +141,20 @@ jobs:
             brew install xcodegen
           fi
 
-      - name: Build
+      - name: Build (Release, unsigned)
         if: steps.sdk.outputs.ok == 'true'
-        run: ./scripts/build.sh
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -project MenuFold.xcodeproj -scheme MenuFold -configuration Release \
+            -derivedDataPath build -clonedSourcePackagesDirPath build/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" build
 
       - name: Upload the app bundle
         if: steps.sdk.outputs.ok == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: MenuFold-app
-          path: build/Build/Products/Debug/MenuFold.app
+          path: build/Build/Products/Release/MenuFold.app
           if-no-files-found: error
           retention-days: 7

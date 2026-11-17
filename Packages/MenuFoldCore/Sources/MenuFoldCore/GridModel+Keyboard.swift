@@ -159,7 +159,7 @@ extension GridModel {
 extension GridModel {
     /// Installed apps that are not hidden.
     fileprivate var installedVisibleApps: [AppEntry] {
-        apps.filter { !layout.hidden.contains($0.id) }
+        visibleApps
     }
 
     fileprivate func saveUsage() {

@@ -25,9 +25,79 @@ extension AppCategory {
     }
 }
 
+extension AppCategory {
+    /// Words that find an app besides its name: synonyms of its automatic category ("games", "ігри")
+    /// and of its kind ("browser", "браузер"), in English and Ukrainian.
+    static func searchKeywords(for app: AppEntry) -> [String] {
+        let raw = automatic(for: app).id
+        return (categorySynonyms[raw] ?? []) + KnownApps.kindKeywords(bundleID: app.id)
+    }
+
+    /// Category id → search synonyms (the display name itself is matched through tabs/`@`).
+    static let categorySynonyms: [String: [String]] = [
+        "public.app-category.business": ["business", "office", "бізнес", "офіс"],
+        "public.app-category.developer-tools": ["developer", "development", "programming", "code", "розробка", "програмування", "код"],
+        "public.app-category.education": ["education", "learning", "освіта", "навчання"],
+        "public.app-category.entertainment": ["entertainment", "розваги"],
+        "public.app-category.finance": ["finance", "money", "bank", "фінанси", "гроші", "банк"],
+        "public.app-category.games": ["games", "game", "gaming", "ігри", "гра", "ігор"],
+        "public.app-category.graphics-design": ["graphics", "design", "drawing", "графіка", "дизайн", "малювання"],
+        "public.app-category.healthcare-fitness": ["health", "fitness", "здоров'я", "фітнес"],
+        "public.app-category.lifestyle": ["lifestyle", "стиль життя"],
+        "public.app-category.medical": ["medical", "медицина"],
+        "public.app-category.music": ["music", "audio", "музика", "аудіо"],
+        "public.app-category.news": ["news", "новини"],
+        "public.app-category.photography": ["photo", "photos", "photography", "camera", "фото", "камера"],
+        "public.app-category.productivity": ["productivity", "продуктивність"],
+        "public.app-category.reference": ["reference", "dictionary", "довідник", "словник"],
+        "public.app-category.social-networking": ["social", "chat", "messenger", "соцмережі", "чат", "месенджер"],
+        "public.app-category.sports": ["sports", "sport", "спорт"],
+        "public.app-category.travel": ["travel", "maps", "подорожі", "карти"],
+        "public.app-category.utilities": ["utilities", "tools", "утиліти", "інструменти"],
+        "public.app-category.video": ["video", "movies", "відео", "кіно"],
+        "public.app-category.weather": ["weather", "погода"],
+    ]
+}
+
 /// Built-in categories of well-known apps that lack (or misstate) `LSApplicationCategoryType`.
 /// Values are the part after `public.app-category.`. Keys are lowercased bundle ids.
 enum KnownApps {
+    /// Kind words for search ("browser" finds Safari, Chrome, …). Keys are lowercased bundle ids.
+    static func kindKeywords(bundleID: String) -> [String] {
+        let id = bundleID.lowercased()
+        var words: [String] = []
+        for kind in kinds where kind.ids.contains(id) { words += kind.words }
+        return words
+    }
+
+    private static let kinds: [(words: [String], ids: Set<String>)] = [
+        (["browser", "web", "internet", "браузер", "інтернет", "веб"], [
+            "com.apple.safari", "com.apple.safaritechnologypreview", "com.google.chrome", "com.google.chrome.canary",
+            "com.google.chrome.beta", "org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition", "org.mozilla.nightly",
+            "com.microsoft.edgemac", "com.brave.browser", "com.operasoftware.opera", "com.operasoftware.operagx",
+            "com.vivaldi.vivaldi", "company.thebrowser.browser", "app.zen-browser.zen", "org.chromium.chromium",
+            "com.kagi.kagimacos", "org.torproject.torbrowser", "com.duckduckgo.macos.browser",
+        ]),
+        (["mail", "email", "e-mail", "пошта", "лист"], [
+            "com.apple.mail", "com.microsoft.outlook", "com.readdle.smartemail-mac", "com.google.gmail",
+            "org.mozilla.thunderbird", "com.superhuman.electron", "it.bloop.airmail2",
+        ]),
+        (["messenger", "chat", "messages", "месенджер", "чат", "повідомлення"], [
+            "com.apple.mobilesms", "ru.keepcoder.telegram", "org.telegram.desktop", "com.tdesktop.telegram",
+            "net.whatsapp.whatsapp", "com.hnc.discord", "com.tinyspeck.slackmacgap", "org.whispersystems.signal-desktop",
+            "com.viber.osx", "com.microsoft.teams", "com.microsoft.teams2", "us.zoom.xos",
+        ]),
+        (["terminal", "shell", "console", "термінал", "консоль"], [
+            "com.apple.terminal", "com.googlecode.iterm2", "dev.warp.warp-stable", "net.kovidgoyal.kitty",
+            "com.mitchellh.ghostty", "org.alacritty", "co.zeit.hyper",
+        ]),
+        (["editor", "ide", "code", "редактор", "код"], [
+            "com.microsoft.vscode", "com.microsoft.vscodeinsiders", "com.apple.dt.xcode", "com.sublimetext.4",
+            "com.sublimetext.3", "com.jetbrains.intellij", "com.jetbrains.pycharm", "com.jetbrains.webstorm",
+            "dev.zed.zed", "com.todesktop.230313mzl4w4u92", "com.panic.nova", "com.apple.textedit",
+        ]),
+    ]
+
     static let byBundleID: [String: String] = [
         // Browsers
         "com.apple.safari": "productivity",

@@ -20,8 +20,16 @@ extension UTType {
     static let menuFoldAppID = UTType(exportedAs: "com.menufold.app-id")
 }
 
+extension UTType {
+    /// Private drag type: the dragged folder's `GridItem.id` ("folder:<uuid>", UTF-8), used only to
+    /// reorder folders on "Все". Declared in Info.plist. A folder drag carries nothing else, so it
+    /// can never leave the app.
+    static let menuFoldFolderID = UTType(exportedAs: "com.menufold.folder-id")
+}
+
 extension NSPasteboard.PasteboardType {
     static let menuFoldAppID = NSPasteboard.PasteboardType(UTType.menuFoldAppID.identifier)
+    static let menuFoldFolderID = NSPasteboard.PasteboardType(UTType.menuFoldFolderID.identifier)
 }
 
 /// The app drag in progress (at most one), shared between the drag source, the internal drop
@@ -33,6 +41,10 @@ final class AppDragSession {
 
     /// Bundle ID of the app being dragged, or nil when no tile drag is in progress.
     private(set) var appID: String?
+    /// `GridItem.id` of the folder being dragged to reorder "Все" (never together with `appID`).
+    private(set) var folderItemID: String?
+    /// Any tile drag (app or folder) is in progress.
+    var isDragging: Bool { appID != nil || folderItemID != nil }
     /// Whether the pointer is currently outside the panel window.
     private(set) var isOutsidePanel = false
     /// Whether the pointer is over the Dock's window; widens the outside mask so the Dock can pin.
@@ -47,7 +59,16 @@ final class AppDragSession {
 
     private init() {}
 
+    func beganFolder(itemID: String, in window: NSWindow?) {
+        folderItemID = itemID
+        appID = nil
+        self.window = window
+        isOutsidePanel = false
+        isOverDock = false
+    }
+
     func began(appID: String, in window: NSWindow?) {
+        folderItemID = nil
         self.appID = appID
         self.window = window
         isOutsidePanel = false
@@ -62,7 +83,7 @@ final class AppDragSession {
     /// pointer as the end point and `.none` as the operation, i.e. "cancelled", so the panel is
     /// treated as not having received a drop. Safe to call when no drag is in progress.
     func forceEnd() {
-        guard appID != nil || isOutsidePanel || isOverDock || window != nil else { return }
+        guard isDragging || isOutsidePanel || isOverDock || window != nil else { return }
         ended(at: NSEvent.mouseLocation, operation: [])
     }
 
@@ -80,7 +101,7 @@ final class AppDragSession {
     /// `appID == nil`, `isOverDock == false`, `isOutsidePanel == false` and `window == nil`, so the
     /// panel's click-through/dim state can never stay latched (bug 3).
     func ended(at screenPoint: NSPoint, operation: NSDragOperation) {
-        let wasActive = appID != nil || isOutsidePanel || isOverDock || window != nil
+        let wasActive = isDragging || isOutsidePanel || isOverDock || window != nil
         let droppedOutside = operation != [] && !isInsidePanel(screenPoint)
         // Tell the panel the pointer is back inside before ending, so it restores its alpha even
         // when the last `moved(to:)` was outside (above) and the drag then ended over the panel.
@@ -89,6 +110,7 @@ final class AppDragSession {
             onOutsidePanelChanged?(false)
         }
         appID = nil
+        folderItemID = nil
         window = nil
         isOutsidePanel = false
         isOverDock = false
@@ -296,6 +318,126 @@ struct AppDragSource: NSViewRepresentable {
     func updateNSView(_ view: AppDragSourceView, context: Context) {
         view.appID = appID
         view.appURL = url
+    }
+}
+
+/// Transparent NSView over a folder tile that turns a mouse drag into a reorder drag. The pasteboard
+/// holds only the private folder type, and outside the app the operation mask is empty, so nothing
+/// can be dropped anywhere but on MenuFold's own tiles. Mouse events that don't start a drag go to
+/// the hosting view (click opens the folder, context menu, hover).
+final class FolderDragSourceView: NSView, NSDraggingSource {
+    var itemID = ""
+    /// Renders the drag image when a drag starts (a snapshot of the folder's artwork).
+    var snapshot: (@MainActor () -> NSImage?)?
+
+    private var mouseDownEvent: NSEvent?
+    private var pendingID = ""
+    private var isDragging = false
+    private static let threshold: CGFloat = 4
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        isDragging = false
+        mouseDownEvent = event.modifierFlags.contains(.control) ? nil : event
+        pendingID = itemID
+        super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if isDragging { return }
+        guard let down = mouseDownEvent, !pendingID.isEmpty else {
+            super.mouseDragged(with: event)
+            return
+        }
+        let a = down.locationInWindow, b = event.locationInWindow
+        guard hypot(b.x - a.x, b.y - a.y) > Self.threshold else {
+            super.mouseDragged(with: event)
+            return
+        }
+        isDragging = true
+        cancelPress(after: down)
+        startDrag(with: down, itemID: pendingID)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let wasPressed = mouseDownEvent != nil
+        mouseDownEvent = nil
+        if !isDragging, wasPressed { super.mouseUp(with: event) }
+        isDragging = false
+    }
+
+    override func rightMouseDown(with event: NSEvent) { nextResponder?.rightMouseDown(with: event) }
+    override func rightMouseUp(with event: NSEvent) { nextResponder?.rightMouseUp(with: event) }
+
+    /// Same trick as `AppDragSourceView`: end the SwiftUI button's press far outside it.
+    private func cancelPress(after down: NSEvent) {
+        guard let up = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: NSPoint(x: -10_000, y: -10_000),
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: down.windowNumber,
+            context: nil,
+            eventNumber: down.eventNumber,
+            clickCount: down.clickCount,
+            pressure: 0
+        ) else { return }
+        super.mouseUp(with: up)
+    }
+
+    private func startDrag(with event: NSEvent, itemID: String) {
+        let item = NSPasteboardItem()
+        item.setString(itemID, forType: .menuFoldFolderID)
+        let size = GridMetrics.iconSize
+        let point = convert(event.locationInWindow, from: nil)
+        let dragItem = NSDraggingItem(pasteboardWriter: item)
+        dragItem.setDraggingFrame(
+            NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size),
+            contents: MainActor.assumeIsolated { snapshot?() } ?? NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil)
+        )
+        defer {
+            let session = MainActor.assumeIsolated { AppDragSession.shared }
+            if session.folderItemID == itemID { session.ended(at: NSEvent.mouseLocation, operation: []) }
+            isDragging = false
+            mouseDownEvent = nil
+        }
+        MainActor.assumeIsolated { AppDragSession.shared.beganFolder(itemID: itemID, in: window) }
+        let session = beginDraggingSession(with: [dragItem], event: event, source: self)
+        session.animatesToStartingPositionsOnCancelOrFail = true
+        session.draggingFormation = .none
+    }
+
+    func draggingSession(_ session: NSDraggingSession,
+                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? [.move, .generic] : []
+    }
+
+    func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                         operation: NSDragOperation) {
+        isDragging = false
+        mouseDownEvent = nil
+        MainActor.assumeIsolated { AppDragSession.shared.ended(at: screenPoint, operation: operation) }
+    }
+}
+
+/// SwiftUI wrapper; place it as an overlay on the folder tile's label (inside the Button).
+struct FolderDragSource: NSViewRepresentable {
+    let itemID: String
+    var snapshot: (@MainActor () -> NSImage?)?
+
+    func makeNSView(context: Context) -> FolderDragSourceView {
+        let view = FolderDragSourceView()
+        view.itemID = itemID
+        view.snapshot = snapshot
+        return view
+    }
+
+    func updateNSView(_ view: FolderDragSourceView, context: Context) {
+        view.itemID = itemID
+        view.snapshot = snapshot
     }
 }
 

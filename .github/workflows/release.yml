@@ -31,7 +31,7 @@ concurrency:
 jobs:
   release:
     name: Build and publish
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       # Full history: the tag may need to be created at a commit, and `git describe`-style
@@ -87,6 +87,41 @@ jobs:
             exit 1
           fi
           echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run the MenuFoldCore tests
+        if: steps.sdk.outputs.ok == 'true'
+        working-directory: Packages/MenuFoldCore
+        run: swift test --parallel
+
+      - name: Check localization
+        run: python3 scripts/check-localization.py
+
+      - name: Build number must exceed the published one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          new="$(git rev-list --count HEAD)"
+          if ! curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml" -o /tmp/published-appcast.xml; then
+            echo "::notice::No published appcast yet; skipping the build number comparison."
+            exit 0
+          fi
+          old="$(python3 - <<'PY'
+          import re
+          t = open('/tmp/published-appcast.xml', encoding='utf-8').read()
+          m = re.search(r'<sparkle:version>\s*(\d+)\s*</sparkle:version>', t) or re.search(r'sparkle:version="(\d+)"', t)
+          print(m.group(1) if m else 0)
+          PY
+          )"
+          echo "build number: new=$new published=$old"
+          if [[ "$new" -le "$old" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$new" -eq "$old" ]]; then
+              echo "::warning title=Same build number::Re-running the release of build $new (assets are replaced)."
+            else
+              echo "::error title=Build number not higher::Build $new <= published build $old; Sparkle would not offer this update."
+              exit 1
+            fi
+          fi
 
       - name: Install xcodegen
         if: steps.sdk.outputs.ok == 'true'
@@ -182,6 +217,42 @@ jobs:
             --title "MenuFold ${VERSION}" \
             --notes-file notes.md \
             --verify-tag
+
+      - name: Verify the published appcast
+        if: steps.sdk.outputs.ok == 'true'
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          base="https://github.com/${REPO}/releases/download/${TAG}"
+          curl -fsSL --retry 5 --retry-delay 5 "$base/appcast.xml" -o "$work/appcast.xml"
+          zip_name="MenuFold-${VERSION}-macos26-arm64.zip"
+          curl -fsSL --retry 5 --retry-delay 5 "$base/$zip_name" -o "$work/$zip_name"
+          python3 - "$work/appcast.xml" "$work/$zip_name" "dist/SHA256SUMS" "$zip_name" <<'PY'
+          import hashlib, os, re, sys
+          appcast, zpath, sums, zname = sys.argv[1:]
+          t = open(appcast, encoding='utf-8').read()
+          length = int(re.search(r'length="(\d+)"', t).group(1))
+          sig = re.search(r'sparkle:edSignature="([^"]+)"', t)
+          assert sig, 'appcast has no sparkle:edSignature'
+          assert length == os.path.getsize(zpath), f'appcast length {length} != downloaded {os.path.getsize(zpath)}'
+          digest = hashlib.sha256(open(zpath, 'rb').read()).hexdigest()
+          expected = [l.split()[0] for l in open(sums) if l.strip().endswith(zname)]
+          assert expected and expected[0] == digest, f'sha256 mismatch: {digest} vs {expected}'
+          open(os.path.join(os.path.dirname(appcast), 'sig'), 'w').write(sig.group(1))
+          print('appcast length, sha256 and signature presence OK')
+          PY
+          sign_update="$(find build-release -name sign_update -type f 2>/dev/null | head -1 || true)"
+          if [[ -n "$sign_update" ]]; then
+            "$sign_update" --verify "$work/$zip_name" "$(cat "$work/sig")" \
+              && echo "sign_update --verify OK" \
+              || { echo "::error title=Bad update signature::sign_update --verify failed for the published zip."; exit 1; }
+          else
+            echo "::notice::sign_update not found in the runner; checked length and sha256 only."
+          fi
 
       - name: Summary
         env:

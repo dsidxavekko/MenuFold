@@ -62,6 +62,30 @@ public struct CustomCategory: Identifiable, Codable, Hashable, Sendable {
     public var category: AppCategory { AppCategory(id: id, displayName: name) }
 }
 
+/// A global shortcut for one app or folder (`Layout.appHotkeys`): a virtual key code and Carbon
+/// modifier flags (`cmdKey`, `optionKey`, `controlKey`, `shiftKey`).
+public struct AppHotkey: Codable, Hashable, Sendable {
+    public var keyCode: UInt32
+    public var modifiers: UInt32
+    public init(keyCode: UInt32, modifiers: UInt32) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+    }
+
+    /// Carbon modifier bits: cmdKey 256, optionKey 2048, controlKey 4096.
+    static let requiredModifierMask: UInt32 = 256 | 2048 | 4096
+    /// A usable global shortcut: at least one of ⌘ ⌥ ⌃ (a bare or shift-only key would steal typing)
+    /// and a real virtual key code (0…127).
+    public var isValid: Bool {
+        keyCode <= 127 && modifiers & Self.requiredModifierMask != 0
+    }
+
+    /// Key of `Layout.appHotkeys` for an app.
+    public static func key(appID: String) -> String { "app:" + appID }
+    /// Key of `Layout.appHotkeys` for a folder (manual or Finder).
+    public static func key(folderID: UUID) -> String { "folder:" + folderID.uuidString }
+}
+
 /// Everything persisted to layout.json.
 public struct Layout: Codable, Equatable, Sendable {
     public static let currentVersion = 1
@@ -94,12 +118,23 @@ public struct Layout: Codable, Equatable, Sendable {
     /// Manual order of the "Все" tab as `GridItem.id`s ("app:…" / "folder:…"); nil → alphabetical.
     /// Items missing from it (new apps, new folders) follow the listed ones alphabetically.
     public var manualOrder: [String]?
+    /// Rule-made categories ("smart categories"), in priority order. See `SmartRule`.
+    public var smartRules: [SmartRule]
+    /// Named filters over the launcher. See `Profile`.
+    public var profiles: [Profile]
+    /// The profile in use (nil = none). Switching it is not an undo step.
+    public var activeProfileID: String?
+    /// Global shortcut per app or folder, keyed by `AppHotkey.key(appID:)` / `key(folderID:)`.
+    /// Kept for uninstalled apps, like folders.
+    public var appHotkeys: [String: AppHotkey]
 
     public init(version: Int = Layout.currentVersion, folders: [Folder] = [], categoryOverrides: [String: String] = [:], hidden: Set<String> = [],
                 finderStyles: [String: FinderFolderStyle] = [:], ignoredFinderFolders: Set<String> = [], finderExclusions: Set<String> = [],
                 finderAdditions: [String: String] = [:], customCategories: [CustomCategory] = [],
                 categoryOrder: [String] = [], customIcons: [String: String] = [:],
-                pinned: [String] = [], manualOrder: [String]? = nil) {
+                pinned: [String] = [], manualOrder: [String]? = nil,
+                smartRules: [SmartRule] = [], profiles: [Profile] = [], activeProfileID: String? = nil,
+                appHotkeys: [String: AppHotkey] = [:]) {
         self.version = version
         self.folders = folders
         self.categoryOverrides = categoryOverrides
@@ -113,6 +148,10 @@ public struct Layout: Codable, Equatable, Sendable {
         self.customIcons = customIcons
         self.pinned = pinned
         self.manualOrder = manualOrder
+        self.smartRules = smartRules
+        self.profiles = profiles
+        self.activeProfileID = activeProfileID
+        self.appHotkeys = appHotkeys
     }
 }
 
@@ -170,8 +209,31 @@ extension Folder {
     }
 }
 
+// MARK: Migration
+
 extension Layout {
-    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder, customIcons, pinned, manualOrder }
+    /// Schema upgrade steps: `migrations[n]` turns a version-`n` layout into version `n + 1`.
+    /// Add one entry (and bump `currentVersion`) when a change cannot be expressed as a new optional
+    /// key with a default. Old files keep loading: every step runs in order. Version 1 is the
+    /// original schema; files without a version (or with a bogus one below 1) are treated as 1.
+    static let migrations: [Int: @Sendable (inout Layout) -> Void] = [:]
+
+    /// The layout upgraded to `Layout.currentVersion` by running the steps from its own version.
+    func migrated(using steps: [Int: @Sendable (inout Layout) -> Void] = Layout.migrations,
+                  to target: Int = Layout.currentVersion) -> Layout {
+        var layout = self
+        var v = max(version, 1)
+        while v < target {
+            steps[v]?(&layout)
+            v += 1
+        }
+        layout.version = target
+        return layout
+    }
+}
+
+extension Layout {
+    private enum CodingKeys: String, CodingKey { case version, folders, categoryOverrides, hidden, finderStyles, ignoredFinderFolders, finderExclusions, finderAdditions, customCategories, categoryOrder, customIcons, pinned, manualOrder, smartRules, profiles, activeProfileID, appHotkeys }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -188,6 +250,10 @@ extension Layout {
         customIcons = try decodePresent([String: String].self, c, CodingKeys.customIcons, default: [:])
         pinned = try decodePresent([String].self, c, CodingKeys.pinned, default: [])
         manualOrder = try decodePresent([String]?.self, c, CodingKeys.manualOrder, default: nil)
+        smartRules = try decodePresent([SmartRule].self, c, CodingKeys.smartRules, default: [])
+        profiles = try decodePresent([Profile].self, c, CodingKeys.profiles, default: [])
+        activeProfileID = try decodePresent(String?.self, c, CodingKeys.activeProfileID, default: nil)
+        appHotkeys = try decodePresent([String: AppHotkey].self, c, CodingKeys.appHotkeys, default: [:])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -206,6 +272,10 @@ extension Layout {
         try c.encode(customIcons, forKey: .customIcons)
         try c.encode(pinned, forKey: .pinned)
         try c.encodeIfPresent(manualOrder, forKey: .manualOrder)
+        if !smartRules.isEmpty { try c.encode(smartRules, forKey: .smartRules) }
+        if !profiles.isEmpty { try c.encode(profiles, forKey: .profiles) }
+        try c.encodeIfPresent(activeProfileID, forKey: .activeProfileID)
+        if !appHotkeys.isEmpty { try c.encode(appHotkeys, forKey: .appHotkeys) }
     }
 }
 
@@ -249,10 +319,15 @@ extension Layout {
         copy.categoryOverrides = categoryOverrides.filter { _, id in
             !id.hasPrefix(AppCategory.customPrefix) || seenCategories.contains(id)
         }
-        // Tab order: no blanks, no repeats, no deleted custom categories.
+        copy.smartRules = validSmartRules()
+        let smartIDs = Set(copy.smartRules.map(\.id))
+        copy.profiles = validProfiles()
+        if let active = activeProfileID, !copy.profiles.contains(where: { $0.id == active }) { copy.activeProfileID = nil }
+        // Tab order: no blanks, no repeats, no deleted custom or smart categories.
         var seenOrder = Set<String>()
         copy.categoryOrder = categoryOrder.filter { id in
             !id.isEmpty
+                && (!id.hasPrefix(AppCategory.smartPrefix) || smartIDs.contains(id))
                 && (!id.hasPrefix(AppCategory.customPrefix) || seenCategories.contains(id))
                 && seenOrder.insert(id).inserted
         }
@@ -261,6 +336,14 @@ extension Layout {
         // the row or the grid two tiles with one SwiftUI id). Unknown ids are kept, like folders do.
         copy.pinned = Self.dedupedNonEmpty(pinned)
         copy.manualOrder = manualOrder.map(Self.dedupedNonEmpty)
+        // Shortcuts: a known key shape and no repeated combination (the first by key order wins).
+        var seenCombos = Set<AppHotkey>()
+        copy.appHotkeys = [:]
+        for (key, hotkey) in appHotkeys.sorted(by: { $0.key < $1.key })
+        where (key.hasPrefix("app:") && key.count > 4 || key.hasPrefix("folder:") && key.count > 7)
+            && hotkey.isValid && seenCombos.insert(hotkey).inserted {
+            copy.appHotkeys[key] = hotkey
+        }
         return copy
     }
 

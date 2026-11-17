@@ -39,7 +39,7 @@ enum CustomIconPicker {
         alert.alertStyle = .warning
         alert.messageText = String(localized: "Не вдалося змінити значок")
         alert.informativeText = error.localizedDescription
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.runModal()
     }
 }

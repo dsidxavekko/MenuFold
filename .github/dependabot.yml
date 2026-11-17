@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "CI"
+  # Sparkle is pinned with exactVersion in project.yml (XcodeGen), which Dependabot cannot read or
+  # update: bump it by hand. MenuFoldCore has no external dependencies; this entry only reports
+  # updates to anything added to its Package.swift later.
+  - package-ecosystem: swift
+    directory: /Packages/MenuFoldCore
+    schedule:
+      interval: weekly

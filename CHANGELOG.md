@@ -4,6 +4,54 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.6.0
+
+### Search
+- Faster on large catalogs: names, Finder folders and lookups are cached until the app list or layout changes, and typing more letters narrows the previous results.
+- Finds apps by bundle ID and by kind words ("browser", "games", "mail", "terminal"), in English and Ukrainian.
+- Learns what you pick: the app you launch for a query ranks higher next time, and often-used apps get a small boost.
+- Query prefixes: `>` apps only, `/` folders only, `@name` apps of a category, `?` System Settings only.
+- Queries such as `node.js`, `c++` or `1.5` are no longer re-typed through the other keyboard layout.
+
+### Organizing
+- **Smart categories**: tabs made by rules (vendor, App Store / Homebrew / Setapp, size, days since last launch), managed in Settings → Categories. A manual category always wins.
+- **Profiles** ("Work", "Home", "Games"…): hide apps, add pinned apps and limit categories; switch from the Dock or menu bar menu, `menufold://profile?name=` or Shortcuts.
+- Drag to reorder the **Pinned** row; drag **folders** to reorder "All".
+- Any **emoji** can be a folder's icon.
+- The last 10 undo steps survive a relaunch (not with a synced data folder).
+- **Global shortcuts per app or folder** (tile menu → "Hotkey…", Settings → Apps).
+
+### Keyboard and quick actions
+- **App info card** (⌘I or the tile menu): version, size, install date, source, path, bundle ID, first seen, last launch and launch count.
+- ⌘D pin/unpin, ⌥+arrows move a tile, ⌥Return opens a new instance, ⇧Return shows in Finder, ⌘/ lists all shortcuts (also in Settings → General).
+- Drop files on an app tile to open them with that app; hold an app over a folder to open it (spring-loaded).
+
+### Shortcuts, Spotlight and URLs
+- Apps, folders, categories and profiles are Shortcuts entities; new actions: Launch App, Pin/Unpin, Add to Folder, Assign Category, Switch Profile.
+- Folders and your own categories are indexed in Spotlight (Settings → General, on by default).
+- `menufold://launch?id=<bundle id>` and `menufold://profile?name=`.
+
+### Statistics
+- Settings → Statistics: top apps, activity by weekday, last 30 days and apps not opened for 90 days. Only per-day totals are stored on your Mac, with an on/off switch and "Erase".
+- With a synced data folder, history and usage are now merged between Macs instead of overwritten.
+
+### Uninstaller
+- Shows the app's size plus its support files; "≥" means some part could not be read. Hard links are not counted twice and counting no longer blocks the interface.
+- The Trash card has a dry run (caches, preferences, containers, other) and a "Clear caches only" button that frees space without uninstalling the app.
+
+### Displays
+- Choose where the panel opens: under the pointer, on the main display or where the active window is. It stays above full-screen apps, and the grid shrinks on small screens.
+- Settings → Appearance: a grid preview, plus "Reduce motion" and "Increase contrast" switches that apply inside MenuFold.
+
+### Accessibility
+- Reduce Motion is honoured everywhere; Increase Contrast, Bold Text, Reduce Transparency and Differentiate Without Colour are supported.
+- VoiceOver: actions on tiles and folders (including "Move to folder" instead of dragging), announcements for the panel, folders and result counts.
+
+### Reliability
+- Huge layout, backup or import files are refused by size before being read; imported icons are re-encoded to PNG with size limits.
+- The layout keeps two previous states (layout.bak, layout.bak2) and the 5 newest quarantined files; a failed quarantine is retried on the next save.
+- Case-insensitive volumes: /applications/X.app is filtered like /Applications/X.app.
+
 ## 0.5.0
 
 ### Search

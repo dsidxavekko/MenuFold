@@ -7,7 +7,7 @@ import SwiftUI
 /// sit right above the results instead of making the user clear the field and hunt in the strip.
 struct TabChipsView: View {
     @Bindable var model: GridModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     var body: some View {
         let tabs = model.matchingTabs
@@ -127,7 +127,7 @@ private struct SettingsPaneTile: View {
     let action: () -> Void
 
     @State private var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -162,7 +162,7 @@ private struct PaneArtwork: View {
     let isSelected: Bool
 
     @Environment(\.isTilePressed) private var isPressed
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     private var scale: CGFloat {
         if reduceMotion { return 1 }

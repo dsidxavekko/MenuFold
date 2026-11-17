@@ -15,9 +15,13 @@ public struct AppEntry: Identifiable, Hashable, Sendable {
     public let lastUsedDate: Date?
     /// Mac App Store id (`kMDItemAppStoreAdamID`), for "Відкрити в App Store"; nil for other apps.
     public let appStoreID: String?
+    /// Where the app came from (App Store receipt, Homebrew Cask, Setapp); nil = unknown / direct download.
+    /// Read off the main thread by `BundleReader`; used by smart categories (`SmartRule`).
+    public let installSource: AppInstallSource?
 
-    public init(id: String, name: String, alternateName: String? = nil, url: URL, infoCategory: String?,
-                lastUsedDate: Date? = nil, appStoreID: String? = nil) {
+    public init(id: String, name: String, alternateName: String? = nil, url: URL, infoCategory: String? = nil,
+                lastUsedDate: Date? = nil, appStoreID: String? = nil, installSource: AppInstallSource? = nil) {
+        self.installSource = installSource
         self.id = id
         self.name = name
         self.alternateName = alternateName == name ? nil : alternateName
@@ -33,8 +37,15 @@ public struct AppEntry: Identifiable, Hashable, Sendable {
         searchScore(SearchMatcher.Query(query)) != nil
     }
 
-    /// Best `SearchMatcher` score over `name` and `alternateName`; nil = no match.
+    /// Best `SearchMatcher` score over `name`, `alternateName`, category synonyms and bundle ID.
+    /// Builds the folded `searchTarget` each time; the model keeps prepared ones for real searches.
     func searchScore(_ query: SearchMatcher.Query) -> Double? {
-        SearchMatcher.bestScore([name] + (alternateName.map { [$0] } ?? []), query)
+        SearchMatcher.score(searchTarget, query)
+    }
+
+    /// What search matches this app by, folded once (see `SearchMatcher.Target`).
+    var searchTarget: SearchMatcher.Target {
+        SearchMatcher.Target(names: [name] + (alternateName.map { [$0] } ?? []),
+                             keywords: AppCategory.searchKeywords(for: self), bundleID: id)
     }
 }

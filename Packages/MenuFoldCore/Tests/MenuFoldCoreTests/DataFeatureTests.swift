@@ -218,7 +218,10 @@ private let day: TimeInterval = 24 * 3600
         #expect(newName != "ICON.png")
         #expect(target.layout.customIcons["y"] == newName) // shared file stays shared
         #expect(target.layout.customIcons["gone"] == nil)
-        #expect(try Data(contentsOf: storeB.iconsDirectory.appendingPathComponent(newName)) == bytes)
+        // Imported icons are re-encoded as PNG, not copied byte for byte.
+        let stored = try Data(contentsOf: storeB.iconsDirectory.appendingPathComponent(newName))
+        #expect(stored.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
+        #expect(NSBitmapImageRep(data: stored) != nil)
         #expect(storeB.load() == target.layout)
     }
 

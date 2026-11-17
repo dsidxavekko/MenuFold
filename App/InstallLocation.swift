@@ -72,7 +72,7 @@ enum InstallLocation {
                 alert.alertStyle = .warning
                 alert.messageText = String(localized: "Не вдалося відкрити копію в «Програмах»")
                 alert.informativeText = String(localized: "MenuFold продовжить працювати звідси. Спробуйте відкрити копію з папки «Програми» вручну. (\(error.localizedDescription))")
-                alert.addButton(withTitle: "OK")
+                alert.addButton(withTitle: String(localized: "OK"))
                 NSApp.activate()
                 alert.runModal()
                 onOpenFailed()
@@ -120,7 +120,7 @@ enum InstallLocation {
         let alert = NSAlert()
         alert.messageText = String(localized: "Перемістіть MenuFold у «Програми»")
         alert.informativeText = String(localized: "macOS запустила MenuFold із тимчасової копії, бо його не перенесли з папки, куди він завантажився. Закрийте MenuFold, перетягніть його у Finder у папку «Програми» і відкрийте звідти. Тоді він залишатиметься в Dock і зможе оновлюватися.")
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         NSApp.activate()
         alert.runModal()
     }

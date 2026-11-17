@@ -10,7 +10,7 @@ struct GridView: View {
     @Bindable var model: GridModel
     var namespace: Namespace.ID?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
     /// Drives the staggered fade/scale-in of the first rows each time the panel opens.
     @State private var isRevealed = false
 
@@ -61,7 +61,9 @@ struct GridView: View {
                         title: model.query.isEmpty ? String(localized: "Тут поки порожньо") : String(localized: "Нічого не знайдено"),
                         subtitle: model.query.isEmpty ? nil : String(localized: "Спробуйте іншу назву."),
                         systemImage: model.query.isEmpty ? "tray" : "magnifyingglass",
-                        effectTrigger: model.query
+                        effectTrigger: model.query,
+                        actionTitle: model.query.isEmpty ? nil : String(localized: "Очистити пошук"),
+                        action: { model.query = "" }
                     )
                 }
             case .grid:
@@ -69,9 +71,19 @@ struct GridView: View {
             }
         }
         .transition(.opacity)
-        .animation(Theme.content, value: phase)
+        .themedAnimation(Theme.content, value: phase)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: reveal)
+        // VoiceOver: the number of results after the user stops typing.
+        .task(id: model.query) {
+            guard !model.query.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            let count = model.visibleItems.count + model.settingsPaneResults.count
+            AccessibilityNotification.Announcement(
+                count == 0 ? String(localized: "Нічого не знайдено") : String(localized: "Знайдено: \(count)")
+            ).post()
+        }
         // Panel re-shown: replay the quick cascade. Only for the panel (settings is an NSWindow).
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
             guard note.object is NSPanel else { return }
@@ -79,6 +91,7 @@ struct GridView: View {
             hide.disablesAnimations = true
             withTransaction(hide) { isRevealed = false }
             reveal()
+            AccessibilityNotification.Announcement(String(localized: "MenuFold відкрито. Пошук активний")).post()
         }
     }
 
@@ -237,8 +250,12 @@ struct EmptyStateView: View {
     var showsSpinner = false
     /// Changing this replays the symbol's bounce (e.g. the search query).
     var effectTrigger: String = ""
+    /// Optional button under the text (e.g. "Очистити пошук").
+    var actionTitle: String?
+    var action: (() -> Void)?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldContrast) private var contrast
     @State private var appeared = 0
 
     var body: some View {
@@ -248,7 +265,7 @@ struct EmptyStateView: View {
             } else if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(contrast == .increased ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
                     .symbolRenderingMode(.hierarchical)
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, options: .nonRepeating, value: reduceMotion ? 0 : appeared)
@@ -257,12 +274,17 @@ struct EmptyStateView: View {
             }
             Text(title)
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             if let subtitle {
                 Text(subtitle)
                     .font(.callout)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(contrast == .increased ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
                     .multilineTextAlignment(.center)
+            }
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.glass)
+                    .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -14,12 +14,15 @@ struct FolderOverlayView: View {
     @Bindable var model: GridModel
     var namespace: Namespace.ID?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     @State private var name = ""
     @State private var isBackdropTargeted = false
     @State private var iconsShown = false
     @State private var isTitleHovered = false
+    @State private var emojiRowShown = false
+    @State private var emojiText = ""
+    @FocusState private var emojiFocused: Bool
     @FocusState private var titleFocused: Bool
 
     private let columns = Array(
@@ -32,10 +35,20 @@ struct FolderOverlayView: View {
             backdrop
             container
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { close() }
         .onAppear {
             name = folder.name
             iconsShown = true
             startRenameIfRequested()
+            AccessibilityNotification.Announcement(
+                String(localized: "Відкрито папку \(folder.name), програм: \(model.apps(in: folder).count)")
+            ).post()
+        }
+        .onDisappear {
+            // Back on the grid: tell VoiceOver where the focus returns.
+            AccessibilityNotification.LayoutChanged(nil).post()
         }
         .onChange(of: model.renamingFolderID) { startRenameIfRequested() }
         .onChange(of: titleFocused) { _, focused in
@@ -62,10 +75,10 @@ struct FolderOverlayView: View {
             .onTapGesture { close() }
             .appDropDestination { isBackdropTargeted = $0 } perform: { id in
                 guard model.folderContaining(appID: id)?.id == folder.id else { return false }
-                withAnimation(Theme.content) { model.removeFromFolder(id) }
+                withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.removeFromFolder(id) }
                 return true
             }
-            .animation(Theme.snappy, value: isBackdropTargeted)
+            .themedAnimation(Theme.snappy, value: isBackdropTargeted)
     }
 
     // MARK: Container
@@ -75,7 +88,7 @@ struct FolderOverlayView: View {
         return shape
             .fill(.clear)
             .glassEffect(.regular.tint(folder.color.color.opacity(0.15)), in: shape)
-            .shadow(color: .black.opacity(0.18), radius: 22, y: 8)
+            .cardShadow()
             .overlay {
                 // Scale factor of the morphing surface relative to its resting size.
                 GeometryReader { geo in
@@ -111,6 +124,11 @@ struct FolderOverlayView: View {
                 .overlay(alignment: .trailing) {
                     if !apps.isEmpty { openAllButton }
                 }
+                .overlay(alignment: .leading) {
+                    emojiButton
+                }
+
+            if emojiRowShown { emojiRow }
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -177,6 +195,7 @@ struct FolderOverlayView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Папка \(folder.name), з Finder")
             .accessibilityHint(folder.finderPath ?? "")
+            .accessibilityAddTraits(.isHeader)
         } else {
             editableTitle
         }
@@ -210,10 +229,71 @@ struct FolderOverlayView: View {
             .glassEffect(showsCapsule ? .regular : .identity, in: .capsule)
             .contentShape(.capsule)
             .onHover { isTitleHovered = $0 }
-            .animation(Theme.snappy, value: showsCapsule)
+            .themedAnimation(Theme.snappy, value: showsCapsule)
             .help("Назва папки. Enter — зберегти, Esc — скасувати.")
             .accessibilityLabel("Назва папки")
             .accessibilityHint("Enter зберігає нову назву, Esc повертає попередню")
+    }
+
+    // MARK: Emoji
+
+    /// Shows the folder's emoji (or a smiley); opens the inline row with quick emoji and a field.
+    private var emojiButton: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : Theme.snappy) { emojiRowShown.toggle() }
+        } label: {
+            if let symbol = folder.symbol, let emoji = FolderSymbols.emoji(in: symbol) {
+                Text(verbatim: emoji).font(.title2)
+            } else {
+                Image(systemName: "face.smiling").font(.title3)
+            }
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.regular)
+        .help("Емодзі для папки")
+        .accessibilityLabel("Емодзі для папки")
+    }
+
+    private var emojiRow: some View {
+        HStack(spacing: 6) {
+            ForEach(["📁", "⭐️", "🔥", "🎮", "🎵", "💼", "💻", "🚀"], id: \.self) { emoji in
+                Button { applyEmoji(emoji) } label: { Text(verbatim: emoji).font(.title3) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(emoji)
+            }
+            TextField("Емодзі", text: $emojiText)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.center)
+                .focused($emojiFocused)
+                .frame(width: 70)
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .glassEffect(.regular, in: .capsule)
+                .onChange(of: emojiText) { _, text in
+                    // Keep only the last typed emoji; typing anything else is ignored.
+                    if text.isEmpty { return }
+                    if let last = text.last.map(String.init), FolderEmoji.normalized(last) != nil {
+                        applyEmoji(last)
+                    } else {
+                        emojiText = ""
+                    }
+                }
+                .help("Введіть будь-яке емодзі (⌃⌘Пробіл)")
+            if let symbol = folder.symbol, FolderSymbols.emoji(in: symbol) != nil {
+                Button {
+                    model.setStyle(folder: folder.id, color: folder.color, symbol: nil)
+                } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+                    .help("Без іконки")
+                    .accessibilityLabel("Без іконки")
+            }
+        }
+        .transition(.opacity)
+    }
+
+    private func applyEmoji(_ emoji: String) {
+        if model.setFolderEmoji(folder: folder.id, to: emoji) { emojiText = "" }
     }
 
     /// "Відкрити всі": launches every app of the folder (the panel closes after the last one).

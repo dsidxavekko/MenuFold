@@ -14,9 +14,13 @@ public struct AppCandidate: Hashable, Sendable {
     public var lastUsedDate: Date?
     /// Spotlight's `kMDItemAppStoreAdamID`, carried into `AppEntry.appStoreID`.
     public var appStoreID: String?
+    /// Carried into `AppEntry.installSource`.
+    public var installSource: AppInstallSource?
 
     public init(path: String, bundleID: String?, name: String, alternateName: String? = nil,
-                infoCategory: String?, modificationDate: Date?, lastUsedDate: Date? = nil, appStoreID: String? = nil) {
+                infoCategory: String?, modificationDate: Date?, lastUsedDate: Date? = nil, appStoreID: String? = nil,
+                installSource: AppInstallSource? = nil) {
+        self.installSource = installSource
         self.path = path
         self.bundleID = bundleID
         self.name = name
@@ -73,7 +77,7 @@ public enum AppFilter {
         return best.values
             .map { c in
                 AppEntry(id: c.bundleID!, name: c.name, alternateName: c.alternateName, url: URL(fileURLWithPath: c.path, isDirectory: true), infoCategory: c.infoCategory,
-                         lastUsedDate: c.lastUsedDate, appStoreID: c.appStoreID)
+                         lastUsedDate: c.lastUsedDate, appStoreID: c.appStoreID, installSource: c.installSource)
             }
             .sorted { lhs, rhs in
                 let r = lhs.name.localizedStandardCompare(rhs.name)
@@ -101,7 +105,8 @@ public enum AppFilter {
     }
 
     /// Bundle-like directory extensions: an app inside any of these is a helper, not a user app.
-    static let bundleExtensions = [".app", ".framework", ".bundle", ".plugin", ".appex", ".xpc", ".prefpane", ".kext", ".systemextension"]
+    /// Shared with `FinderFolders`, so both agree on what a bundle is.
+    static var bundleExtensions: [String] { FinderFolders.bundleExtensions }
 
     static func isAllowed(path: String, homeDirectory: String = NSHomeDirectory(), tempRoots: [String] = []) -> Bool {
         let p = normalize(path)
@@ -109,33 +114,33 @@ public enum AppFilter {
         guard !p.isEmpty else { return false }
         let components = p.split(separator: "/")
         // Any bundle component before the last one → helper nested inside another bundle.
-        if components.dropLast().contains(where: { c in
-            let lower = c.lowercased()
-            return bundleExtensions.contains { lower.hasSuffix($0) }
-        }) { return false }
-        if p.hasPrefix(coreServicesPrefix) {
-            if coreServicesWhitelist.contains(p) { return true }
-            if p.hasPrefix(coreServicesAppsPrefix) { return true }
+        if components.dropLast().contains(where: { FinderFolders.isBundle($0) }) { return false }
+        // Prefixes compare case-insensitively: APFS is case-insensitive by default, so Spotlight may
+        // report "/applications/X.app" or "/system/library/coreservices/…".
+        let has = FinderFolders.hasPathPrefix
+        if has(p, coreServicesPrefix) {
+            if coreServicesWhitelist.contains(where: { $0.caseInsensitiveCompare(p) == .orderedSame }) { return true }
+            if has(p, coreServicesAppsPrefix) { return true }
             return false
         }
         // Library folders hold agents / input methods / support helpers, never user-facing apps.
         let home = normalizeHome(homeDirectory)
         let libraryRoots = ["/System/Library/", "/Library/"] + (home.isEmpty ? [] : [home + "/Library/"])
-        if libraryRoots.contains(where: p.hasPrefix) { return false }
+        if libraryRoots.contains(where: { has(p, $0) }) { return false }
         // Other volumes, temp dirs and the Trash: backup copies and throw-away bundles.
-        if excludedRoots.contains(where: { p == $0 || p.hasPrefix($0 + "/") }) { return false }
-        if tempRoots.contains(where: { !$0.isEmpty && (p == $0 || p.hasPrefix($0 + "/")) }) { return false }
+        if excludedRoots.contains(where: { p.caseInsensitiveCompare($0) == .orderedSame || has(p, $0 + "/") }) { return false }
+        if tempRoots.contains(where: { !$0.isEmpty && (p.caseInsensitiveCompare($0) == .orderedSame || has(p, $0 + "/")) }) { return false }
         let trashRoots = ["/.Trashes"] + (home.isEmpty ? [] : [home + "/.Trash"])
-        if trashRoots.contains(where: { p == $0 || p.hasPrefix($0 + "/") }) { return false }
+        if trashRoots.contains(where: { p.caseInsensitiveCompare($0) == .orderedSame || has(p, $0 + "/") }) { return false }
         return true
     }
 
     static func rank(_ path: String, homeDirectory: String) -> Int {
         let p = normalize(path)
-        if p.hasPrefix("/Applications/") { return 0 }
-        if p.hasPrefix("/System/Applications/") { return 1 }
+        if FinderFolders.hasPathPrefix(p, "/Applications/") { return 0 }
+        if FinderFolders.hasPathPrefix(p, "/System/Applications/") { return 1 }
         let home = normalizeHome(homeDirectory)
-        if !home.isEmpty, p.hasPrefix(home + "/Applications/") { return 2 }
+        if !home.isEmpty, FinderFolders.hasPathPrefix(p, home + "/Applications/") { return 2 }
         return 3
     }
 

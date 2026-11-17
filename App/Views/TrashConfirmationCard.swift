@@ -17,14 +17,16 @@ struct TrashConfirmationCard: View {
     let app: AppEntry
     @Bindable var model: GridModel
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
     @State private var isBusy = false
     @State private var isQuitting = false
     @State private var errorMessage: String?
-    /// Support files found for the app; nil while still looking.
-    @State private var leftovers: [Leftover]?
+    /// Dry run (app size + support files); nil while still counting.
+    @State private var plan: UninstallPlan?
     @State private var includesLeftovers = true
     @State private var showsLeftoverPaths = false
+
+    private var leftovers: [Leftover]? { plan?.leftovers }
 
     private var isRunning: Bool { RunningAppsMonitor.shared.isRunning(app.id) }
 
@@ -46,8 +48,13 @@ struct TrashConfirmationCard: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if errorMessage == nil, !isRunning, let leftovers, !leftovers.isEmpty {
-                leftoversSection(leftovers)
+            if errorMessage == nil, !isRunning, !app.url.path.hasPrefix("/System/") {
+                sizeSummary
+                    .transition(.opacity)
+            }
+
+            if errorMessage == nil, !isRunning, let plan, !plan.leftovers.isEmpty {
+                leftoversSection(plan)
                     .transition(.opacity)
             }
 
@@ -63,10 +70,10 @@ struct TrashConfirmationCard: View {
         .padding(22)
         .frame(width: Theme.cardWidth)
         .glassEffect(.regular, in: .rect(cornerRadius: Theme.cardCorner, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 22, y: 8)
+        .cardShadow()
         .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isRunning)
         .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: errorMessage)
-        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: leftovers)
+        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: plan?.leftovers)
         .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: showsLeftoverPaths)
         .task(id: app.id) { await findLeftovers() }
         .onChange(of: isRunning) { _, running in
@@ -90,13 +97,45 @@ struct TrashConfirmationCard: View {
         }
     }
 
-    private func leftoversSection(_ leftovers: [Leftover]) -> some View {
-        let total = leftovers.reduce(Int64(0)) { $0 + max($1.size, 0) }
-        let size = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+    /// "Програма: 120 MB · файли підтримки: 80 MB · Звільниться 200 MB" (with "≥" when some part
+    /// could not be read), or a spinner while the counting runs.
+    @ViewBuilder
+    private var sizeSummary: some View {
+        if let plan {
+            let total = includesLeftovers ? plan.totalSize : plan.appSize
+            VStack(spacing: 2) {
+                Text("Програма: \(plan.appSize.formatted) · файли підтримки: \(plan.leftoversSize.formatted)")
+                    .foregroundStyle(.secondary)
+                Text("Звільниться \(total.formatted)")
+                    .fontWeight(.medium)
+            }
+            .font(.callout)
+            .monospacedDigit()
+            .multilineTextAlignment(.center)
+        } else {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Рахую розмір…").foregroundStyle(.secondary)
+            }
+            .font(.callout)
+        }
+    }
+
+    private func title(for kind: LeftoverKind) -> String {
+        switch kind {
+        case .caches: String(localized: "Кеші")
+        case .preferences: String(localized: "Налаштування")
+        case .containers: String(localized: "Контейнери")
+        case .other: String(localized: "Інше")
+        }
+    }
+
+    private func leftoversSection(_ plan: UninstallPlan) -> some View {
+        let leftovers = plan.leftovers
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
                 Toggle(isOn: $includesLeftovers) {
-                    Text("Також видалити файли підтримки (\(leftovers.count), \(size))")
+                    Text("Також видалити файли підтримки (\(leftovers.count), \(plan.leftoversSize.formatted))")
                         .font(.callout)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -119,41 +158,68 @@ struct TrashConfirmationCard: View {
             if showsLeftoverPaths {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 3) {
-                        ForEach(leftovers) { leftover in
-                            Text((leftover.url.path as NSString).abbreviatingWithTildeInPath)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .help(leftover.url.path)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        ForEach(plan.groups) { group in
+                            HStack {
+                                Text(title(for: group.kind)).font(.caption.weight(.semibold))
+                                Spacer(minLength: 4)
+                                Text(group.size.formatted).font(.caption).monospacedDigit()
+                            }
+                            .foregroundStyle(.primary)
+                            .padding(.top, 3)
+                            ForEach(group.items) { leftover in
+                                Text((leftover.url.path as NSString).abbreviatingWithTildeInPath)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .help(leftover.url.path)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
                 }
-                .frame(maxHeight: 110)
+                .frame(maxHeight: 130)
                 .transition(.opacity)
+            }
+            if !plan.caches.isEmpty {
+                // Frees space without uninstalling: the app stays, only its rebuildable caches go.
+                Button(action: trashCachesOnly) {
+                    Text("Очистити лише кеші (\(plan.caches.totalSize.formatted))")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .controlSize(.regular)
+                .help(Text("Програма залишиться встановленою"))
             }
         }
         .disabled(isBusy)
     }
 
-    /// Looks for support files once the card is shown, off the main actor (see below). It waits
+    /// Counts the app and its support files once the card is shown, off the main actor. It waits
     /// a moment first, so the card appears (and animates in) before the disk scan starts.
     private func findLeftovers() async {
         // Apps under /System can't be trashed at all; nothing to offer.
-        guard !app.url.path.hasPrefix("/System/") else { leftovers = []; return }
+        guard !app.url.path.hasPrefix("/System/") else { plan = UninstallPlan(appSize: .zero, leftovers: []); return }
         try? await Task.sleep(for: .milliseconds(150))
         guard !Task.isCancelled else { return }
-        // The same lookup as `model.leftovers(for:)`, but off the main actor: sizing a large
-        // container or cache folder can take a while and must not freeze the panel.
-        let others = Set(model.apps.map(\.id)).subtracting([app.id])
-        let id = app.id, url = app.url
-        let found = await Task.detached(priority: .userInitiated) {
-            AppLeftovers().find(bundleID: id, appURL: url, otherBundleIDs: others)
-        }.value
+        let found = await model.uninstallPlan(for: app)
         guard !Task.isCancelled else { return }
-        leftovers = found
-        includesLeftovers = !found.isEmpty
+        plan = found
+        includesLeftovers = !found.leftovers.isEmpty
+    }
+
+    private func trashCachesOnly() {
+        guard !isBusy, let caches = plan?.caches, !caches.isEmpty else { return }
+        isBusy = true
+        Task { @MainActor in
+            do {
+                try await model.moveLeftoversToTrash(of: app, caches.map(\.url))
+                if model.pendingTrashAppID == app.id { model.pendingTrashAppID = nil }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isBusy = false
+        }
     }
 
     @ViewBuilder

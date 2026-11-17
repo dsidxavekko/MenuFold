@@ -67,10 +67,20 @@ struct FolderTileView: View {
     @State private var isHovered = false
     /// The part of the tile a drag is over: center = add to the folder, edges = reorder.
     @State private var dropZone: TileDropZone?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     private var isTargeted: Bool { dropZone == .center }
     private var itemID: String { MenuFoldCore.GridItem.folder(folder, apps: apps).id }
+
+    /// The folder's artwork as the drag image.
+    @MainActor
+    private func dragSnapshot() -> NSImage? {
+        let size = GridMetrics.iconSize
+        let renderer = ImageRenderer(content: FolderArtwork(folder: folder, apps: apps, isExpanded: false)
+            .frame(width: size, height: size))
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        return renderer.nsImage
+    }
 
     private var isOpen: Bool { model.openFolderID == folder.id }
     /// Keyboard selection (`GridItem` id "folder:…").
@@ -80,13 +90,20 @@ struct FolderTileView: View {
     /// Drops into Finder folders are virtual (files are not moved).
     private var canAcceptDrops: Bool { acceptsDrops }
 
+    private func open() {
+        withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) {
+            model.openFolderID = folder.id
+        }
+        AccessibilityNotification.Announcement(
+            String(localized: "Відкрито папку \(folder.name), програм: \(apps.count)")
+        ).post()
+    }
+
     var body: some View {
         // Read the preference in `body` so toggling it in Settings re-renders the tile.
         let showsCount = AppPreferences.shared.showsFolderCounts && !apps.isEmpty
         Button {
-            withAnimation(Theme.morph) {
-                model.openFolderID = folder.id
-            }
+            open()
         } label: {
             VStack(spacing: 6) {
                 Group {
@@ -106,7 +123,7 @@ struct FolderTileView: View {
                     }
                 }
                 Text(folder.name)
-                    .font(Theme.labelFont)
+                    .tileLabelFont()
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .truncationMode(.tail)
@@ -117,15 +134,42 @@ struct FolderTileView: View {
             .padding(6)
             .frame(width: GridMetrics.tileWidth)
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // AppKit drag source for reordering folders on "Все" (private pasteboard type, never
+            // leaves the app). Inside the label so forwarded clicks still open the folder.
+            .overlay {
+                if acceptsReorder {
+                    FolderDragSource(itemID: itemID, snapshot: { dragSnapshot() })
+                        .id(itemID)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
-        .animation(Theme.snappy, value: isHovered)
-        .animation(Theme.snappy, value: isTargeted)
-        .animation(Theme.snappy, value: isSelected)
+        .themedAnimation(Theme.snappy, value: isHovered)
+        .themedAnimation(Theme.snappy, value: isTargeted)
+        .themedAnimation(Theme.snappy, value: isSelected)
         .reorderCaret(dropZone)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(String(localized: "Програм: \(apps.count)"))
+        .accessibilityHint(String(localized: "Відкриває папку"))
+        .accessibilityAction(named: Text("Відкрити")) { open() }
+        .accessibilityAction(named: Text("Відкрити всі")) { model.launchAll(in: folder) }
+        .accessibilityActions {
+            if let path = folder.finderPath {
+                Button("Показати у Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                }
+            } else {
+                Button("Перейменувати") {
+                    model.renamingFolderID = folder.id
+                    withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) { model.openFolderID = folder.id }
+                }
+            }
+            Button(folder.isFinder ? String(localized: "Не показувати як папку") : String(localized: "Розформувати")) {
+                withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.dissolve(folder: folder.id) }
+            }
+        }
         .help(folder.isFinder ? String(localized: "\(folder.name) — папка з Finder") : folder.name)
         .accessibilityLabel(folder.isFinder ? String(localized: "Папка \(folder.name), з Finder") : String(localized: "Папка \(folder.name)"))
         .tileDropDestination(
@@ -136,13 +180,24 @@ struct FolderTileView: View {
             zone: { dropZone = $0 },
             performCenter: { id in
                 guard canAcceptDrops, !folder.appIDs.contains(id) else { return false }
-                withAnimation(Theme.content) { model.add(id, to: folder.id) }
+                withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.add(id, to: folder.id) }
                 return true
             },
             performReorder: { id, after in
                 TileReorderSupport.move(appID: id, relativeTo: itemID, after: after,
                                         model: model, reduceMotion: reduceMotion)
-            }
+            },
+            ownItemID: itemID,
+            performItemReorder: acceptsReorder ? { dropped, after in
+                TileReorderSupport.moveItem(dropped, relativeTo: itemID, after: after,
+                                            model: model, reduceMotion: reduceMotion)
+            } : nil,
+            // Spring-loaded folder: an app held over the tile opens it.
+            springLoad: canAcceptDrops ? {
+                withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) {
+                    model.openFolderID = folder.id
+                }
+            } : nil
         )
         .contextMenu {
             FolderContextMenu(folder: folder, model: model,
@@ -165,7 +220,8 @@ private struct FolderTileArtwork: View {
     var count: Int?
 
     @Environment(\.isTilePressed) private var isPressed
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldContrast) private var contrast
 
     private var scale: CGFloat {
         if reduceMotion { return 1 }
@@ -194,11 +250,14 @@ private struct FolderTileArtwork: View {
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
             }
         }
-        .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: count)
+        .themedAnimation(Theme.snappy, value: count)
         .overlay {
             if isTargeted {
                 RoundedRectangle(cornerRadius: GridMetrics.iconSize * 0.23, style: .continuous)
-                    .strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5)
+                    .strokeBorder(
+                        Color.accentColor.opacity(contrast == .increased
+                            ? Theme.dropTargetStrokeOpacityHighContrast : Theme.dropTargetStrokeOpacity),
+                        lineWidth: contrast == .increased ? Theme.dropTargetStrokeWidthHighContrast : 1.5)
                     .transition(.opacity)
             } else if isSelected {
                 SelectionRing(cornerRadius: GridMetrics.iconSize * 0.23)
@@ -206,19 +265,23 @@ private struct FolderTileArtwork: View {
         }
         .shadow(color: .black.opacity(lifted ? 0.2 : 0), radius: lifted ? 6 : 0, y: lifted ? 3 : 0)
         .scaleEffect(scale)
-        .animation(Theme.snappy, value: isPressed)
+        .themedAnimation(Theme.snappy, value: isPressed)
     }
 }
 
 /// Small corner badge marking a folder mirrored from Finder.
 struct FinderBadge: View {
+    @Environment(\.menuFoldContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
+        let high = contrast == .increased
         Image(systemName: "macwindow")
             .font(.system(size: 8.5, weight: .semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(high ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .frame(width: 19, height: 19)
-            .background(.regularMaterial, in: Circle())
-            .overlay(Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+            .background(reduceTransparency ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(.regularMaterial), in: Circle())
+            .overlay(Circle().strokeBorder(Color.primary.opacity(high ? Theme.badgeStrokeOpacityHighContrast : Theme.badgeStrokeOpacity), lineWidth: high ? 1 : 0.5))
             .shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5)
             .accessibilityLabel("Папка з Finder")
     }
@@ -227,15 +290,18 @@ struct FinderBadge: View {
 /// Small glass capsule with the number of visible apps in a folder (Settings → "showsFolderCounts").
 struct FolderCountBadge: View {
     let count: Int
+    @Environment(\.menuFoldContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
+        let high = contrast == .increased
         Text(verbatim: count > 99 ? "99+" : "\(count)")
             .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(high ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .padding(.horizontal, 5.5)
             .frame(minWidth: 19, minHeight: 19)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+            .background(reduceTransparency ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(.regularMaterial), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(high ? Theme.badgeStrokeOpacityHighContrast : Theme.badgeStrokeOpacity), lineWidth: high ? 1 : 0.5))
             .shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5)
             .contentTransition(.numericText())
             // The tile carries the count as its accessibility value.
@@ -253,10 +319,11 @@ struct FolderContextMenu: View {
     let model: GridModel
     /// The tile's `GridItem` id when it is a top-level item of "Все" (offers moving it); nil otherwise.
     var itemID: String?
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     var body: some View {
         Button("Відкрити") {
-            withAnimation(Theme.morph) { model.openFolderID = folder.id }
+            withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) { model.openFolderID = folder.id }
         }
         Button("Відкрити всі") { model.launchAll(in: folder) }
             .disabled(model.apps(in: folder).isEmpty)
@@ -267,7 +334,7 @@ struct FolderContextMenu: View {
         } else {
             Button("Перейменувати") {
                 model.renamingFolderID = folder.id
-                withAnimation(Theme.morph) { model.openFolderID = folder.id }
+                withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) { model.openFolderID = folder.id }
             }
         }
         if let itemID {
@@ -275,10 +342,11 @@ struct FolderContextMenu: View {
             ItemMoveMenuItems(itemID: itemID, model: model)
         }
         Divider()
+        Button("Гаряча клавіша…") { HotkeyEditRequest.request(key: AppHotkey.key(folderID: folder.id)) }
         FolderStyleMenus(folder: folder, model: model)
         Divider()
         Button(folder.isFinder ? String(localized: "Не показувати як папку") : String(localized: "Розформувати")) {
-            withAnimation(Theme.content) {
+            withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) {
                 if model.openFolderID == folder.id { model.openFolderID = nil }
                 model.dissolve(folder: folder.id)
             }

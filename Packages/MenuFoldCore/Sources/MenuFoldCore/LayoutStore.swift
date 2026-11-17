@@ -92,6 +92,12 @@ public final class LayoutStore: @unchecked Sendable {
                 hasUnreadFileInPlace = true
                 return (Layout(), .unreadable(cause: "cannot be opened"))
             }
+            // Size first: a huge (or sparse) file must not be pulled into memory just to be refused.
+            if let size = Self.fileSize(at: fileURL), size > Self.maxFileSize {
+                NSLog("%@", "MenuFold: layout file is \(size) bytes; refusing to load it")
+                hasUnreadFileInPlace = false
+                return (Layout(), .unreadable(cause: "file is unreasonably large"))
+            }
             data = try Data(contentsOf: fileURL)
         } catch {
             NSLog("%@", "MenuFold: could not read layout, leaving it untouched: \(error.localizedDescription)")
@@ -117,8 +123,7 @@ public final class LayoutStore: @unchecked Sendable {
             return (Layout(), quarantine(.incompatible))
         }
 
-        var layout = decoded.droppingInvalidFolders()
-        layout.version = Layout.currentVersion
+        let layout = decoded.migrated().droppingInvalidFolders()
         hasUnreadFileInPlace = false
         return (layout, .loaded)
     }
@@ -126,6 +131,21 @@ public final class LayoutStore: @unchecked Sendable {
     /// Decodes and validates layout data exactly like `loadWithOutcome()` does for layout.json, but
     /// without touching any file: for backups, imports and sync reloads. A newer schema is rejected
     /// (`LayoutDataError.newerVersion`) rather than silently losing its new fields.
+    /// Size of the file in bytes without reading it, nil when unknown.
+    static func fileSize(at url: URL) -> Int? {
+        // Not `URL.resourceValues`: it caches per URL instance and would report a stale size.
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size].flatMap { ($0 as? NSNumber)?.intValue }
+    }
+
+    /// Reads a file only if it is at most `limit` bytes (checked BEFORE reading); a larger file
+    /// throws `LayoutDataError.damaged`.
+    static func readLimited(_ url: URL, limit: Int = maxFileSize) throws -> Data {
+        if let size = fileSize(at: url), size > limit { throw LayoutDataError.damaged }
+        let data = try Data(contentsOf: url)
+        guard data.count <= limit else { throw LayoutDataError.damaged }
+        return data
+    }
+
     static func decodeValidated(_ data: Data) throws -> Layout {
         guard data.count <= maxFileSize else { throw LayoutDataError.damaged }
         let decoded: Layout
@@ -141,9 +161,7 @@ public final class LayoutStore: @unchecked Sendable {
     /// embeds one): rejects newer versions, drops invalid entries, normalizes the version.
     static func validated(_ decoded: Layout) throws -> Layout {
         guard decoded.version <= Layout.currentVersion else { throw LayoutDataError.newerVersion }
-        var layout = decoded.droppingInvalidFolders()
-        layout.version = Layout.currentVersion
-        return layout
+        return decoded.migrated().droppingInvalidFolders()
     }
 
     // MARK: Save
@@ -153,7 +171,15 @@ public final class LayoutStore: @unchecked Sendable {
         // aside would destroy it. Writability is left to the write itself — asking whether the file
         // "is deletable" says nothing about whether the app may write it, and would make the app
         // silently stop saving in folders where writing works fine.
-        guard !lastQuarantineFailed else { throw LayoutStoreError.quarantinePending(fileURL) }
+        // Retried on every save: the cause (a lock, permissions) may be gone by now.
+        if lastQuarantineFailed {
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                _ = quarantine(.corrupt("retry"))
+            } else {
+                lastQuarantineFailed = false
+            }
+            guard !lastQuarantineFailed else { throw LayoutStoreError.quarantinePending(fileURL) }
+        }
         // A file we could not read must never be overwritten: the atomic write below is a
         // rename-over, which succeeds whenever the directory is writable and would destroy the
         // only copy of the data. Refuse while it stays unreadable; if it became readable again
@@ -172,7 +198,62 @@ public final class LayoutStore: @unchecked Sendable {
         var copy = layout
         copy.version = Layout.currentVersion
         let data = try encoder.encode(copy)
+        rotateBackups()
         try data.write(to: fileURL, options: .atomic)
+    }
+
+    // MARK: Backups (layout.bak)
+
+    /// How often the previous file is copied to `layout.bak`; the first save of a session always does.
+    var backupInterval: TimeInterval = 600
+    private var lastBackupRotation: Date?
+
+    private var backupURL: URL { fileURL.deletingPathExtension().appendingPathExtension("bak") }
+    private var olderBackupURL: URL { fileURL.deletingPathExtension().appendingPathExtension("bak2") }
+
+    /// Keeps the two most recent previous states (`layout.bak`, `layout.bak2`) of a valid file.
+    /// Skipped for a shared folder (another Mac may be using it) and for a file that does not decode
+    /// (it must never replace a good backup). Best effort: a failure never blocks the save.
+    private func rotateBackups() {
+        guard !isShared else { return }
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: fileURL.path) else { return }
+        if let last = lastBackupRotation, Date().timeIntervalSince(last) < backupInterval { return }
+        guard let data = try? Self.readLimited(fileURL), (try? Self.decodeValidated(data)) != nil else { return }
+        do {
+            if fm.fileExists(atPath: backupURL.path) {
+                try? fm.removeItem(at: olderBackupURL)
+                try fm.moveItem(at: backupURL, to: olderBackupURL)
+            }
+            try data.write(to: backupURL, options: .atomic)
+            lastBackupRotation = Date()
+        } catch {
+            NSLog("%@", "MenuFold: could not rotate the layout backup: \(error)")
+        }
+    }
+
+    /// Newest `layout.corrupt-…` files kept; older ones are deleted after a new quarantine.
+    static let maxCorruptBackups = 5
+
+    private func pruneCorruptBackups(keeping keep: URL) {
+        guard !isShared else { return }
+        let dir = fileURL.deletingLastPathComponent()
+        let prefix = fileURL.deletingPathExtension().lastPathComponent + ".corrupt-"
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        // Files from a newer app version (version > currentVersion) are the user's only copy of
+        // data this build cannot read: never delete them, and do not count them.
+        struct VersionOnly: Decodable { var version: Int? }
+        let corrupt = names.filter { name in
+            guard name.hasPrefix(prefix), name.hasSuffix(".json") else { return false }
+            if let data = try? Self.readLimited(dir.appendingPathComponent(name)),
+               let version = try? JSONDecoder().decode(VersionOnly.self, from: data).version,
+               version > Layout.currentVersion { return false }
+            return true
+        }.sorted()
+        guard corrupt.count > Self.maxCorruptBackups else { return }
+        for name in corrupt.dropLast(Self.maxCorruptBackups) where name != keep.lastPathComponent {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
     }
 
     // MARK: Quarantine
@@ -186,11 +267,16 @@ public final class LayoutStore: @unchecked Sendable {
     /// Renames the current file to `layout.corrupt-<yyyyMMdd-HHmmss>.json` in the same directory.
     /// Returns the destination when the move succeeded, or the unchanged path (flagged in
     /// `lastQuarantineFailed`) when it did not.
-    private func quarantine(_ reason: QuarantineReason) -> LoadOutcome {
+    private static let stampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
+
+    private func quarantine(_ reason: QuarantineReason) -> LoadOutcome {
+        let formatter = Self.stampFormatter
         let dir = fileURL.deletingLastPathComponent()
         let stem = fileURL.deletingPathExtension().lastPathComponent + ".corrupt-" + formatter.string(from: Date())
         var dest = dir.appendingPathComponent(stem + ".json")
@@ -209,6 +295,8 @@ public final class LayoutStore: @unchecked Sendable {
         }
         // The file is gone from its original path, so nothing unread can be overwritten there.
         hasUnreadFileInPlace = false
+        lastQuarantineFailed = false
+        pruneCorruptBackups(keeping: dest)
         switch reason {
         case .corrupt, .unreadable: return .quarantined(dest)
         case .incompatible: return .incompatible(dest)

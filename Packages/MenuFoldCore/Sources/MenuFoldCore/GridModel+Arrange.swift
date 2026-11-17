@@ -20,7 +20,7 @@ extension GridModel {
     /// and `showsPinned` (Dock menu, menu bar menu, Settings).
     public var visiblePinnedApps: [AppEntry] {
         let byID = Dictionary(visibleApps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return layout.pinned.compactMap { byID[$0] }
+        return effectivePinnedIDs.compactMap { byID[$0] }
     }
 
     public func isPinned(_ appID: String) -> Bool { layout.pinned.contains(appID) }
@@ -56,6 +56,38 @@ extension GridModel {
         shown.insert(moved, at: to)
         var l = layout
         for (slot, id) in zip(slots, shown) { l.pinned[slot] = id }
+        commit(l)
+    }
+
+    /// Drag-and-drop in the "Закріплені" row: puts `appID` right before `targetID`. An app that is not
+    /// pinned yet is pinned at that place. Like `movePinned(_:by:)`, only the apps the row shows count;
+    /// invisible entries keep their slots.
+    public func movePinned(_ appID: String, before targetID: String) {
+        movePinned(appID, relativeTo: targetID, after: false)
+    }
+
+    /// Same, right after `targetID`.
+    public func movePinned(_ appID: String, after targetID: String) {
+        movePinned(appID, relativeTo: targetID, after: true)
+    }
+
+    private func movePinned(_ appID: String, relativeTo targetID: String, after: Bool) {
+        guard !appID.isEmpty, appID != targetID else { return }
+        let visible = Set(visibleApps.map(\.id))
+        guard visible.contains(targetID), layout.pinned.contains(targetID) else { return }
+        var l = layout
+        if !l.pinned.contains(appID) {
+            guard visible.contains(appID) else { return }
+            l.pinned.append(appID)
+        }
+        let slots = l.pinned.indices.filter { visible.contains(l.pinned[$0]) }
+        var shown = slots.map { l.pinned[$0] }
+        shown.removeAll { $0 == appID }
+        guard let index = shown.firstIndex(of: targetID) else { return }
+        shown.insert(appID, at: after ? index + 1 : index)
+        guard shown.count == slots.count else { return }
+        for (slot, id) in zip(slots, shown) { l.pinned[slot] = id }
+        guard l.pinned != layout.pinned else { return }
         commit(l)
     }
 
@@ -171,6 +203,7 @@ extension GridModel {
         current.version = Layout.currentVersion
         while var target = self[keyPath: source].popLast() {
             target.customIcons = restoredIcons(target.customIcons, current: layout.customIcons)
+            target = target.keepingActiveProfile(of: layout)  // switching profile is not an undo step
             target.version = Layout.currentVersion
             guard target != current else { continue }
             self[keyPath: other].append(layout)

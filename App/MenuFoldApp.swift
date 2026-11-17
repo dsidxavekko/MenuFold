@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var preferencesObserver: NSObjectProtocol?
     private var statusItem: StatusItemController?
     private var layoutWatcher: LayoutFileWatcher?
+    /// history.json / usage.json of a shared data folder (empty otherwise) and their watcher.
+    private let sharedStatsURLs: [URL]
+    private var statsWatcher: SharedStatsWatcher?
     /// When this process started; see `isJustLaunched`.
     let launchDate = Date()
     /// Set once `applicationDidFinishLaunching` ran.
@@ -55,18 +58,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static let showsRunningTabKey = "showsRunningTab"
 
     override init() {
-        // layout.json and Icons/ may live in a user-chosen (synced) folder; usage and history are
-        // per-Mac data and always stay in the default support folder.
+        // layout.json and Icons/ may live in a user-chosen (synced) folder.
         let supportDir = LayoutStore.defaultURL.deletingLastPathComponent()
         let store = LayoutStore(fileURL: AppPreferences.shared.layoutFileURL)
+        // history.json and usage.json stay in the default folder, unless a (synced) data folder is
+        // chosen: then they live there and are merged with other Macs' changes, never replaced.
+        let sharedStats = SharedStatsFiles.make(supportDir: supportDir, dataDir: store.fileURL.deletingLastPathComponent(),
+                                                isShared: AppPreferences.shared.dataDirectory != nil)
+        self.sharedStatsURLs = sharedStats.watchedURLs
         // A user-chosen folder may be synced with other Macs, which changes how the store treats
         // files it did not write itself (see `LayoutStore.isShared`).
         store.isShared = AppPreferences.shared.dataDirectory != nil
         let model = GridModel(
             catalog: SpotlightAppCatalog(),
             store: store,
-            usageStore: UsageStore(),
-            historyStore: AppHistoryStore(fileURL: supportDir.appendingPathComponent("history.json"))
+            usageStore: sharedStats.usage,
+            historyStore: sharedStats.history
         )
         Self.applyPreferences(to: model)
         model.showsFrequent = UserDefaults.standard.object(forKey: Self.showsFrequentKey) as? Bool ?? true
@@ -108,6 +115,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startIntegrations() {
         let hotKeys = HotKeyManager.shared
         hotKeys.onPress = { [weak self] in self?.panel.toggle(bypassingDockGuard: true) }
+        hotKeys.onTargetPress = { [weak self] key in self?.handleHotkey(key: key) }
+        hotKeys.model = model
+        SpotlightIndexer.shared.start(model: model)
         hotKeys.start()
         statusItem = StatusItemController(
             onToggle: { [weak self] in self?.panel.toggle(bypassingDockGuard: true) },
@@ -119,6 +129,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         watcher.start()
         layoutWatcher = watcher
+        if !sharedStatsURLs.isEmpty {
+            let statsWatcher = SharedStatsWatcher(fileURLs: sharedStatsURLs) { [weak self] in
+                self?.model.reloadSharedStatsFromDisk()
+            }
+            statsWatcher.start()
+            self.statsWatcher = statsWatcher
+        }
     }
 
     /// Any app launch (Dock, Spotlight, Finder, MenuFold itself) counts towards the "Часті" row.
@@ -129,7 +146,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             guard let id = app?.bundleIdentifier else { return }
-            MainActor.assumeIsolated { self?.model.recordUse(appID: id) }
+            MainActor.assumeIsolated {
+                self?.model.recordUse(appID: id)
+                if self?.model.apps.contains(where: { $0.id == id }) == true { UsageLogger.shared.record(appID: id) }
+            }
         }
     }
 
@@ -144,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .warning
         alert.messageText = String(localized: "Не вдалося відкрити «\(app.name)»")
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         NSApp.activate()
         alert.runModal()
     }
@@ -194,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func relaunch() {
         HotKeyManager.shared.stop()
         layoutWatcher?.stop()
+        statsWatcher?.stop()
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         config.activates = true

@@ -111,6 +111,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         let root = MenuFoldRootView(model: model)
             .environment(model)
+            .themeOverrides()
         hostingView = NSHostingView(rootView: AnyView(root))
         hostingView.sizingOptions = [.intrinsicContentSize]
 
@@ -176,7 +177,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.isMovable = false
         panel.animationBehavior = .none
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle, .stationary]
         panel.delegate = self
         // Esc cancels a tab rename, then closes an open folder (the search field can swallow SwiftUI's
         // onKeyPress), then the panel.
@@ -185,13 +186,16 @@ final class PanelController: NSObject, NSWindowDelegate {
             if self.model.pendingTrashAppID != nil {
                 // While the system is trashing, the card stays so its result is seen.
                 if !self.model.isTrashing { self.model.pendingTrashAppID = nil }
+            } else if self.model.infoAppID != nil || self.model.showsShortcutsHelp {
+                self.model.infoAppID = nil
+                self.model.showsShortcutsHelp = false
             } else if self.model.renamingCategoryID != nil {
                 NotificationCenter.default.post(name: .menuFoldCategoryEscape, object: nil)
             } else if self.model.openFolderID != nil {
                 NotificationCenter.default.post(name: .menuFoldFolderEscape, object: nil)
                 // Same motion as the SwiftUI Esc path (MenuFoldRootView): whichever responder sees the key
                 // first, the folder closes with the same curve.
-                let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                let reduceMotion = ThemeOverrides.reduceMotion
                 withAnimation(reduceMotion ? Theme.crossfade : Theme.folderClose) { self.model.openFolderID = nil }
             } else {
                 self.hide()
@@ -229,10 +233,13 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     /// Re-sizes a visible panel to `panelSize`, centred on the screen it is on.
     private func resizeIfNeeded() {
-        let size = Self.panelSize
-        guard isShown, panel.frame.size != size else { return }
+        guard isShown else { return }
+        // Stay on the screen the panel is on, whatever the screen policy says.
         let anchor = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
-        panel.setFrame(DockGeometry.panelFrame(size: size, anchor: anchor), display: true)
+        DockGeometry.fitGrid(anchor: anchor, policy: .cursor)
+        let size = Self.panelSize
+        guard panel.frame.size != size else { return }
+        panel.setFrame(DockGeometry.panelFrame(size: size, anchor: anchor, policy: .cursor), display: true)
     }
 
     // MARK: Keyboard
@@ -281,7 +288,7 @@ final class PanelController: NSObject, NSWindowDelegate {
            chars.unicodeScalars.allSatisfy(\.isASCII) {
             return chars
         }
-        let qwerty: [UInt16: String] = [KeyCode.r: "r", KeyCode.z: "z", 12: "q", 13: "w", 4: "h", 43: ","]
+        let qwerty: [UInt16: String] = [KeyCode.r: "r", KeyCode.z: "z", 12: "q", 13: "w", 4: "h", 43: ",", 34: "i", 2: "d", 44: "/"]
         return qwerty[event.keyCode]
     }
 
@@ -306,6 +313,22 @@ final class PanelController: NSObject, NSWindowDelegate {
             if modifiers == .command, let key = latinKey(event), appShortcuts.contains(key) { return false }
             return true
         }
+        // ⌘I / ⌘/ cards: Return and Esc close them (Esc reaches `onCancel`), ⌘I and ⌘/ toggle, the
+        // app-level ⌘Q/⌘W/⌘H/⌘, keep working, and everything else is swallowed.
+        if model.infoAppID != nil || model.showsShortcutsHelp {
+            if event.keyCode == KeyCode.escape { return false }
+            if isReturn, modifiers.isEmpty {
+                model.infoAppID = nil
+                model.showsShortcutsHelp = false
+                return true
+            }
+            if modifiers == .command || modifiers == [.command, .shift], let key = latinKey(event) {
+                if key == "/" { model.showsShortcutsHelp.toggle(); model.infoAppID = nil; return true }
+                if key == "i", model.infoAppID != nil { model.infoAppID = nil; return true }
+                if modifiers == .command, ["q", "w", "h", ","].contains(key) { return false }
+            }
+            return true
+        }
         // Inline renames own the keyboard: a category tab, or the open folder's title (the search
         // field is disabled while a folder is open, so a field editor there is the title's).
         if model.renamingFolderID != nil || model.renamingCategoryID != nil { return false }
@@ -317,6 +340,10 @@ final class PanelController: NSObject, NSWindowDelegate {
            modifiers == .control || modifiers == [.control, .shift] {
             withAnimation(Self.contentAnimation) { model.cycleTab(by: modifiers.contains(.shift) ? -1 : 1) }
             return true
+        }
+        // Quick actions on the selected tile.
+        if let handled = handleQuickAction(event, modifiers: modifiers, isReturn: isReturn, columns: columns) {
+            return handled
         }
         if modifiers.isEmpty {
             switch event.keyCode {
@@ -335,7 +362,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 // No selection: the search field's onSubmit launches the first app.
                 guard model.selectedItemID != nil else { return false }
                 // Opening a folder morphs like a click on its tile.
-                let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                let reduceMotion = ThemeOverrides.reduceMotion
                 withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) {
                     _ = model.activateSelection()
                 }
@@ -376,9 +403,53 @@ final class PanelController: NSObject, NSWindowDelegate {
         return false
     }
 
+    /// ⌘/ (keys list), ⌘I (info), ⌘D (pin/unpin), ⌥+arrows (move the tile), ⌥Return (new instance),
+    /// ⇧Return (show in Finder). Nil when the event is none of these, or has nothing to act on, so it
+    /// goes on to the usual handling (the search field keeps ⌥←/→ word jumps and Return).
+    private func handleQuickAction(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, isReturn: Bool,
+                                   columns: Int) -> Bool? {
+        let reduceMotion = ThemeOverrides.reduceMotion
+        if modifiers == .command || modifiers == [.command, .shift], latinKey(event) == "/" {
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { model.showsShortcutsHelp = true }
+            return true
+        }
+        if modifiers == .command, model.selectedApp != nil {
+            switch latinKey(event) {
+            case "i":
+                withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { _ = model.showInfoForSelection() }
+                return true
+            case "d":
+                withAnimation(Self.contentAnimation) { _ = model.togglePinOnSelection() }
+                return true
+            default: break
+            }
+        }
+        if modifiers == .option, model.selectedItemID != nil {
+            let direction: MoveDirection?
+            switch event.keyCode {
+            case KeyCode.left: direction = .left
+            case KeyCode.right: direction = .right
+            case KeyCode.up: direction = .up
+            case KeyCode.down: direction = .down
+            default: direction = nil
+            }
+            if let direction {
+                var moved = false
+                withAnimation(Self.contentAnimation) { moved = model.moveSelectedTile(direction, columns: columns) }
+                // Nothing moved: let the event reach the search field (⌥←/→ word jumps).
+                return moved ? true : nil
+            }
+        }
+        if isReturn, model.selectedApp != nil {
+            if modifiers == .option { return model.launchNewInstanceOfSelection() }
+            if modifiers == .shift { return model.revealSelectionInFinder() }
+        }
+        return nil
+    }
+
     /// Tab switches and undo re-flow the grid; Reduce Motion gets a crossfade.
     private static var contentAnimation: Animation {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? Theme.crossfade : Theme.content
+        ThemeOverrides.reduceMotion ? Theme.crossfade : Theme.content
     }
 
     /// Digit of the physical number-row key (key codes are layout-independent), so ⌘1…⌘9 also work
@@ -427,6 +498,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         let anchor = NSEvent.mouseLocation
         model.panelDidOpen()
 
+        DockGeometry.fitGrid(anchor: anchor)
         let size = Self.panelSize
         let frame = DockGeometry.panelFrame(size: size, anchor: anchor)
 
@@ -553,7 +625,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         let generation = motionGeneration
         resetMotion()
 
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion = ThemeOverrides.reduceMotion
         let panel = panel
         let target = presentedAlpha
         NSAnimationContext.runAnimationGroup { ctx in
@@ -606,7 +678,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func animateOut(completion: @escaping @MainActor (Int) -> Void) {
         motionGeneration += 1
         let generation = motionGeneration
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion = ThemeOverrides.reduceMotion
         hostingView.layer?.removeAnimation(forKey: Self.blurKey)
         hostingView.layer?.filters = nil
 

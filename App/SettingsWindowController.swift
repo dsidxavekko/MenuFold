@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Tabs of the Settings window, in toolbar order.
 enum SettingsTab: Int, CaseIterable {
-    case general, appearance, categories, apps, data, about
+    case general, appearance, categories, apps, data, stats, about
 
     var title: String {
         switch self {
@@ -13,6 +13,7 @@ enum SettingsTab: Int, CaseIterable {
         case .categories: String(localized: "Категорії")
         case .apps: String(localized: "Програми")
         case .data: String(localized: "Дані")
+        case .stats: String(localized: "Статистика")
         case .about: String(localized: "Про програму")
         }
     }
@@ -24,6 +25,7 @@ enum SettingsTab: Int, CaseIterable {
         case .categories: "tag"
         case .apps: "square.grid.2x2"
         case .data: "externaldrive"
+        case .stats: "chart.bar.xaxis"
         case .about: "info.circle"
         }
     }
@@ -36,6 +38,7 @@ enum SettingsTab: Int, CaseIterable {
         case .categories: NSSize(width: 520, height: 480)
         case .apps: NSSize(width: 560, height: 600)
         case .data: NSSize(width: 520, height: 600)
+        case .stats: NSSize(width: 520, height: 640)
         case .about: NSSize(width: 520, height: CryptoWallet.visible.isEmpty ? 360 : 470 + CGFloat(CryptoWallet.visible.count) * 36)
         }
     }

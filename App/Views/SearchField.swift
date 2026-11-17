@@ -9,12 +9,12 @@ import SwiftUI
 struct SearchField: View {
     @Bindable var model: GridModel
     @FocusState private var isFocused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     private var isDisabled: Bool { model.openFolderID != nil }
     /// A dragged tile carries its file URL, which an editable field would paste as text; a disabled
     /// field refuses the drop, so the field is disabled (without dimming) while a tile is dragged.
-    private var isDraggingApp: Bool { AppDragSession.shared.appID != nil }
+    private var isDraggingApp: Bool { AppDragSession.shared.isDragging }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -28,6 +28,7 @@ struct SearchField: View {
                 .focused($isFocused)
                 .disabled(isDisabled || isDraggingApp)
                 .onSubmit(launchFirst)
+                .accessibilityHint("Enter запускає перший результат. Префікси: > програми, / папки, @ категорія, ? налаштування")
             if !model.query.isEmpty {
                 Button {
                     model.query = ""

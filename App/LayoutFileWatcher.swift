@@ -1,4 +1,5 @@
 import Foundation
+import MenuFoldCore
 
 /// Watches layout.json for changes made by someone else — another Mac through a synced data folder
 /// (iCloud Drive, Dropbox), or a user editing the file — and calls `onChange` debounced.
@@ -111,5 +112,61 @@ final class LayoutFileWatcher: @unchecked Sendable {
         return Signature(modified: attrs?[.modificationDate] as? Date,
                          size: (attrs?[.size] as? NSNumber)?.intValue,
                          inode: (attrs?[.systemFileNumber] as? NSNumber)?.intValue)
+    }
+}
+
+/// Watches several files (history.json and usage.json of a shared data folder) and calls `onChange`
+/// when any of them changes. One `LayoutFileWatcher` per file.
+final class SharedStatsWatcher: @unchecked Sendable {
+    private let watchers: [LayoutFileWatcher]
+
+    init(fileURLs: [URL], debounce: TimeInterval = 1, onChange: @escaping @MainActor () -> Void) {
+        watchers = fileURLs.map { LayoutFileWatcher(fileURL: $0, debounce: debounce, onChange: onChange) }
+    }
+
+    func start() { watchers.forEach { $0.start() } }
+    func stop() { watchers.forEach { $0.stop() } }
+}
+
+/// Where history.json and usage.json live and how they are opened.
+///
+/// Without a shared data folder: the default support folder, exactly as before. With one: the
+/// files sit next to layout.json, history merges with what other Macs wrote (`AppHistoryStore.isShared`)
+/// and usage keeps one part per Mac (`UsageStore.deviceID`). The first time, the Mac's existing local
+/// files are copied there when the shared ones do not exist yet, so nothing starts from zero.
+enum SharedStatsFiles {
+    struct Result {
+        let usage: UsageStore
+        let history: AppHistoryStore
+        /// The two files to watch (empty when not shared).
+        let watchedURLs: [URL]
+    }
+
+    private static let deviceKey = "statsDeviceID"
+
+    static func make(supportDir: URL, dataDir: URL, isShared: Bool) -> Result {
+        let localHistory = supportDir.appendingPathComponent("history.json")
+        let localUsage = supportDir.appendingPathComponent("usage.json")
+        guard isShared else {
+            return Result(usage: UsageStore(fileURL: localUsage), history: AppHistoryStore(fileURL: localHistory), watchedURLs: [])
+        }
+        let history = dataDir.appendingPathComponent("history.json")
+        let usage = dataDir.appendingPathComponent("usage.json")
+        let fm = FileManager.default
+        try? fm.createDirectory(at: dataDir, withIntermediateDirectories: true)
+        for (from, to) in [(localHistory, history), (localUsage, usage)]
+        where fm.fileExists(atPath: from.path) && !fm.fileExists(atPath: to.path) {
+            try? fm.copyItem(at: from, to: to)
+        }
+        let defaults = UserDefaults.standard
+        let device = defaults.string(forKey: deviceKey) ?? {
+            let id = UUID().uuidString
+            defaults.set(id, forKey: deviceKey)
+            return id
+        }()
+        let historyStore = AppHistoryStore(fileURL: history)
+        historyStore.isShared = true
+        return Result(usage: UsageStore(fileURL: usage, deviceID: device), history: historyStore,
+                      watchedURLs: [history, usage])
     }
 }

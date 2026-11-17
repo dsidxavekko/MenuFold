@@ -57,12 +57,13 @@ final class DragActivity {
         isWatchingSession = true
         withObservationTracking {
             _ = AppDragSession.shared.appID
+            _ = AppDragSession.shared.folderItemID
         } onChange: { [weak self] in
             // `onChange` fires before the change lands; re-check on the next main-actor turn.
             Task { @MainActor in
                 guard let self else { return }
                 self.isWatchingSession = false
-                if AppDragSession.shared.appID == nil { self.setActive(false) }
+                if !AppDragSession.shared.isDragging { self.setActive(false) }
                 else if self.isActive { self.watchSession() }
             }
         }
@@ -94,13 +95,21 @@ final class EdgeAutoScroller {
     @ObservationIgnored private var offset: CGFloat = 0
     @ObservationIgnored private var minOffset: CGFloat = 0
     @ObservationIgnored private var maxOffset: CGFloat = 0
-    /// Signed points per tick (negative = up).
+    /// Target speed in points per second (negative = up), from the pointer's depth in the zone.
+    @ObservationIgnored private var targetVelocity: CGFloat = 0
+    /// Speed actually applied; eases toward `targetVelocity` so scrolling starts and stops smoothly.
     @ObservationIgnored private var velocity: CGFloat = 0
+    @ObservationIgnored private var lastTick: CFTimeInterval = 0
     @ObservationIgnored private var timer: Timer?
 
     static let zoneHeight: CGFloat = 44
-    private static let minSpeed: CGFloat = 4
-    private static let maxSpeed: CGFloat = 20
+    /// Points per second (the old 4…20 pt per 60 Hz tick).
+    private static let minSpeed: CGFloat = 240
+    private static let maxSpeed: CGFloat = 1200
+    /// With Reduce Motion: slower, no acceleration ramp.
+    private static let maxSpeedReduced: CGFloat = 480
+    /// Share of the gap to the target speed closed per second (exponential easing).
+    private static let easeRate: CGFloat = 14
 
     func update(_ metrics: ScrollMetrics) {
         offset = metrics.offset
@@ -114,10 +123,16 @@ final class EdgeAutoScroller {
 
     /// `distance` = pointer distance from the scroll view's edge, 0…zoneHeight.
     func drive(up: Bool, distance: CGFloat) {
-        let t = 1 - min(max(distance / Self.zoneHeight, 0), 1)
-        let speed = Self.minSpeed + (Self.maxSpeed - Self.minSpeed) * t
-        velocity = up ? -speed : speed
+        let linear = 1 - min(max(distance / Self.zoneHeight, 0), 1)
+        let reduced = ThemeOverrides.reduceMotion
+        // Ease-in curve: gentle near the zone's inner edge, fast only close to the screen edge.
+        let t = reduced ? linear : linear * linear
+        let top = reduced ? Self.maxSpeedReduced : Self.maxSpeed
+        let speed = Self.minSpeed + (top - Self.minSpeed) * t
+        targetVelocity = up ? -speed : speed
+        if reduced { velocity = targetVelocity }
         guard timer == nil else { return }
+        lastTick = CACurrentMediaTime()
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -130,12 +145,24 @@ final class EdgeAutoScroller {
         timer?.invalidate()
         timer = nil
         velocity = 0
+        targetVelocity = 0
     }
 
     private func tick() {
         // Drag released anywhere (including outside the window) → stop.
-        guard NSEvent.pressedMouseButtons & 1 != 0, velocity != 0 else { return stop() }
-        let target = min(max(offset + velocity, minOffset), maxOffset)
+        guard NSEvent.pressedMouseButtons & 1 != 0, targetVelocity != 0 else { return stop() }
+        // Time-based, so a late timer tick does not make the scroll stutter.
+        let now = CACurrentMediaTime()
+        let dt = CGFloat(min(max(now - lastTick, 0), 0.1))
+        lastTick = now
+        if !ThemeOverrides.reduceMotion {
+            // Reverse direction at once, otherwise ease toward the target.
+            if velocity * targetVelocity < 0 { velocity = 0 }
+            velocity += (targetVelocity - velocity) * min(1, Self.easeRate * dt)
+        } else {
+            velocity = targetVelocity
+        }
+        let target = min(max(offset + velocity * dt, minOffset), maxOffset)
         guard target != offset else { return stop() }
         offset = target
         position.scrollTo(y: target)
@@ -162,9 +189,9 @@ private struct EdgeScrollDropDelegate: DropDelegate {
     /// `allowsHitTesting(false)` does not stop SwiftUI drop routing, so gate drops explicitly.
     let isActive: Bool
 
-    /// Only MenuFold app drags: a foreign drop is left for the views underneath (bug 6).
+    /// Only MenuFold app and folder drags: a foreign drop is left for the views underneath (bug 6).
     func validateDrop(info: DropInfo) -> Bool {
-        isActive && info.hasItemsConforming(to: [.menuFoldAppID])
+        isActive && info.hasItemsConforming(to: EdgeAutoScrollModifier.types)
     }
 
     func dropEntered(info: DropInfo) { drive(info) }
@@ -172,7 +199,7 @@ private struct EdgeScrollDropDelegate: DropDelegate {
     /// Never propose `.move` while inactive: a proposal that is not followed by a successful
     /// `performDrop` makes the tile fly back, i.e. the drop is silently swallowed (bug 6).
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard isActive, info.hasItemsConforming(to: [.menuFoldAppID]) else { return nil }
+        guard isActive, info.hasItemsConforming(to: EdgeAutoScrollModifier.types) else { return nil }
         drive(info)
         return DropProposal(operation: .move)
     }
@@ -222,11 +249,11 @@ private struct EdgeAutoScrollModifier: ViewModifier {
     /// (never by a plain mouse drag), and the shared session holds the dragged app id; both are
     /// observed, so a missed drag-end report still disarms the zones.
     private var dragInProgress: Bool {
-        drag.isActive && AppDragSession.shared.appID != nil
+        drag.isActive && AppDragSession.shared.isDragging
     }
 
     /// The private type put on the pasteboard by `AppDragSourceView`.
-    private static let types: [UTType] = [.menuFoldAppID]
+    fileprivate static let types: [UTType] = [.menuFoldAppID, .menuFoldFolderID]
 
     func body(content: Content) -> some View {
         content

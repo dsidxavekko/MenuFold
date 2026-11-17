@@ -38,6 +38,7 @@ struct SettingsView: View {
             case .categories: categoriesTab
             case .apps: appsTab
             case .data: DataSettingsView(model: model)
+            case .stats: StatsSettingsView(model: model)
             case .about: AboutView()
             }
         }
@@ -162,6 +163,10 @@ struct SettingsView: View {
                 Label("Часті", systemImage: "clock.arrow.circlepath")
             }
 
+            ShortcutsSettingsSection()
+
+            SpotlightSettingsSection()
+
             if Updater.shared.isEnabled {
                 updatesSection
             }
@@ -270,6 +275,9 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            SmartRulesSection(model: model)
+            ProfilesSection(model: model)
         }
         .formStyle(.grouped)
         .sheet(item: $bulkTarget) { target in
@@ -281,6 +289,7 @@ struct SettingsView: View {
         Form {
             UnusedAppsSection(model: model)
             PinnedAppsSection(model: model)
+            AppHotkeysSection(model: model)
 
             Section {
                 let hidden = model.hiddenApps

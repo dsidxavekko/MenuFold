@@ -6,7 +6,7 @@ import SwiftUI
 struct MenuFoldRootView: View {
     @Bindable var model: GridModel
     @Namespace private var folderNamespace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
     /// Height of the soft fade at the grid's top/bottom edges (kept inside the content margin, so
     /// the first and last rows are fully opaque when scrolled to an end).
@@ -23,6 +23,11 @@ struct MenuFoldRootView: View {
     /// App waiting for the "move to Trash" confirmation (nil once it is gone from the catalog).
     private var trashApp: AppEntry? {
         model.pendingTrashAppID.flatMap { id in model.apps.first { $0.id == id } }
+    }
+
+    /// App whose ⌘I info card is open (nil once it is gone from the catalog).
+    private var infoApp: AppEntry? {
+        model.infoAppID.flatMap { id in model.apps.first { $0.id == id } }
     }
 
     /// First-run gesture hints: once the catalog has apps to try them on, until dismissed.
@@ -43,7 +48,9 @@ struct MenuFoldRootView: View {
         let folder = openFolder
         let isOpen = folder != nil
         let trashApp = trashApp
-        let isModal = trashApp != nil
+        let infoApp = infoApp
+        let showsShortcuts = model.showsShortcutsHelp
+        let isModal = trashApp != nil || infoApp != nil || showsShortcuts
         let showsHint = showsFirstRunHint && !isOpen && !isModal
         // Read in body (GridMetrics reads the observable AppPreferences), so a Settings change of
         // columns/rows re-renders and resizes the content right away.
@@ -118,8 +125,35 @@ struct MenuFoldRootView: View {
                     .zIndex(3)
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
             }
+
+            if infoApp != nil || showsShortcuts {
+                // ⌘I / ⌘/ cards: modal, a click outside closes them.
+                Color.black
+                    .opacity(Theme.cardBackdropDim)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        model.infoAppID = nil
+                        model.showsShortcutsHelp = false
+                    }
+                    .zIndex(2)
+                    .transition(.opacity)
+                Group {
+                    if let infoApp {
+                        AppInfoCard(app: infoApp, model: model).id(infoApp.id)
+                    } else {
+                        ShortcutsHelpCard(model: model)
+                    }
+                }
+                .zIndex(3)
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+            }
         }
         .animation(backdropMotion(opening: isModal), value: model.pendingTrashAppID)
+        .animation(backdropMotion(opening: isModal), value: model.infoAppID)
+        .animation(backdropMotion(opening: isModal), value: model.showsShortcutsHelp)
+        .onChange(of: model.infoAppID != nil && infoApp == nil) { _, stale in
+            if stale { model.infoAppID = nil }
+        }
         .animation(reduceMotion ? Theme.crossfade : Theme.content, value: showsHint)
         // The app was trashed or uninstalled meanwhile: drop the request (the key monitor swallows
         // typing while one is pending).
@@ -133,6 +167,11 @@ struct MenuFoldRootView: View {
             if model.pendingTrashAppID != nil {
                 // While the system is trashing, the card stays so its result is seen.
                 if !model.isTrashing { model.pendingTrashAppID = nil }
+                return .handled
+            }
+            if model.infoAppID != nil || model.showsShortcutsHelp {
+                model.infoAppID = nil
+                model.showsShortcutsHelp = false
                 return .handled
             }
             if model.renamingCategoryID != nil {

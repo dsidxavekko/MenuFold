@@ -13,17 +13,34 @@ public struct AppHistory: Codable, Equatable, Sendable {
     /// `lastLaunched`, which feeds "Недавні": activating an already running app is not a launch.
     /// Pruned once an app is older than `newAppInterval`, since it cannot be new any more.
     public var seen: Set<String>
+    /// Bundle ID → how many launches were seen since this counter existed (shown in the info card).
+    public var launchCounts: [String: Int]
 
     /// How long an app counts as new after it first appeared.
     public static let newAppInterval: TimeInterval = 7 * 24 * 3600
 
-    public init(firstSeen: [String: Date] = [:], lastLaunched: [String: Date] = [:], seen: Set<String> = []) {
+    public init(firstSeen: [String: Date] = [:], lastLaunched: [String: Date] = [:], seen: Set<String> = [],
+                launchCounts: [String: Int] = [:]) {
+        self.launchCounts = launchCounts
         self.firstSeen = firstSeen
         self.lastLaunched = lastLaunched
         self.seen = seen
     }
 
-    private enum CodingKeys: String, CodingKey { case firstSeen, lastLaunched, seen }
+    /// Union of two histories (for a data folder shared between Macs): the earlier first-seen date
+    /// wins, the later launch date wins, `seen` marks are united, launch counters take the larger
+    /// value (summing would count a launch twice once both Macs have merged each other's file).
+    /// Commutative and idempotent.
+    public func merged(with other: AppHistory) -> AppHistory {
+        var result = self
+        result.firstSeen.merge(other.firstSeen) { min($0, $1) }
+        result.lastLaunched.merge(other.lastLaunched) { max($0, $1) }
+        result.seen.formUnion(other.seen)
+        result.launchCounts.merge(other.launchCounts) { max($0, $1) }
+        return result
+    }
+
+    private enum CodingKeys: String, CodingKey { case firstSeen, lastLaunched, seen, launchCounts }
 
     /// Missing keys keep their defaults, so files from older/newer versions load.
     public init(from decoder: Decoder) throws {
@@ -31,6 +48,7 @@ public struct AppHistory: Codable, Equatable, Sendable {
         firstSeen = try c.decodeIfPresent([String: Date].self, forKey: .firstSeen) ?? [:]
         lastLaunched = try c.decodeIfPresent([String: Date].self, forKey: .lastLaunched) ?? [:]
         seen = try c.decodeIfPresent(Set<String>.self, forKey: .seen) ?? []
+        launchCounts = try c.decodeIfPresent([String: Int].self, forKey: .launchCounts) ?? [:]
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -38,6 +56,7 @@ public struct AppHistory: Codable, Equatable, Sendable {
         try c.encode(firstSeen, forKey: .firstSeen)
         try c.encode(lastLaunched, forKey: .lastLaunched)
         try c.encode(seen.sorted(), forKey: .seen)
+        if !launchCounts.isEmpty { try c.encode(launchCounts, forKey: .launchCounts) }
     }
 }
 
@@ -54,6 +73,9 @@ public final class AppHistoryStore: @unchecked Sendable {
     }
     /// True when the last `load()` found a file it could not read (not a missing or corrupt one).
     public private(set) var lastLoadUnreadable = false
+    /// True when the file lives in a data folder shared with other Macs: saves then merge with what
+    /// is on disk instead of replacing it (see `GridModel+Data.swift`).
+    public var isShared = false
 
     public init(fileURL: URL = AppHistoryStore.defaultURL) { self.fileURL = fileURL }
 
@@ -75,6 +97,15 @@ public final class AppHistoryStore: @unchecked Sendable {
             moveAside()
             return AppHistory()
         }
+    }
+
+    /// The file's history for merging into memory (shared data folder). Unlike `load()` it never
+    /// moves a file aside: a file that cannot be read or decoded (a sync client may be mid-write)
+    /// gives nil and stays as it is. A missing file gives an empty history.
+    public func loadForMerge() -> AppHistory? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return AppHistory() }
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode(AppHistory.self, from: data)
     }
 
     /// Renames the file to `history.corrupt-<date>.json` in the same folder (a number is added if

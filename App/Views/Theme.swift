@@ -70,4 +70,90 @@ enum Theme {
     static let cardWidth: CGFloat = 340
     /// Dim over the panel behind the card (stronger than a folder's: the card is modal).
     static let cardBackdropDim: Double = 0.18
+
+    // MARK: Staggered reveal (panel open)
+    static let revealRowDelay: Double = 0.035
+    static let revealColumnDelay: Double = 0.004
+    static let revealMaxRow = 3
+    static let revealDuration: Double = 0.12
+    static let revealStartScale: CGFloat = 0.9
+
+    // MARK: Launch pulse (tile icon)
+    static let pulsePeak: CGFloat = 1.14
+    static let pulseUpDuration: Double = 0.09
+    static let pulseDownDuration: Double = 0.16
+
+    // MARK: Shadows and strokes
+    /// Shadow of floating cards (open folder, trash confirmation).
+    static let cardShadowOpacity: Double = 0.18
+    static let cardShadowRadius: CGFloat = 22
+    static let cardShadowY: CGFloat = 8
+    /// Hover lift shadow under a tile icon.
+    static let liftShadowOpacity: Double = 0.22
+    static let dropTargetStrokeOpacity: Double = 0.7
+    static let dropTargetTintOpacity: Double = 0.35
+    static let badgeStrokeOpacity: Double = 0.15
+    /// Under Increase Contrast the thin strokes get stronger.
+    static let badgeStrokeOpacityHighContrast: Double = 0.5
+
+    // MARK: Accessibility
+    /// Running dot: larger and fully opaque under Increase Contrast / Differentiate Without Colour.
+    static let runningDotSizeLarge: CGFloat = 6
+    static let runningDotColorHighContrast = Color.primary
+    static let selectionRingOpacityHighContrast: Double = 1
+    static let selectionRingWidthHighContrast: CGFloat = 3
+
+    // MARK: Drag and drop
+    /// Spring-loaded folders: how long an app must be held over a folder tile before it opens.
+    static let springLoadDelay: TimeInterval = 0.8
+    /// Drop-target ring under Increase Contrast.
+    static let dropTargetStrokeOpacityHighContrast: Double = 1
+    static let dropTargetStrokeWidthHighContrast: CGFloat = 3
+}
+
+extension Theme {
+    /// Reduce Motion aware animation: `animation` normally, the plain crossfade with Reduce Motion.
+    static func motion(_ animation: Animation, reduceMotion: Bool) -> Animation {
+        reduceMotion ? crossfade : animation
+    }
+
+    /// Shadow of a floating card.
+    struct CardShadow: ViewModifier {
+        func body(content: Content) -> some View {
+            content.shadow(color: .black.opacity(Theme.cardShadowOpacity),
+                           radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
+        }
+    }
+}
+
+/// `.animation` that falls back to `Theme.crossfade` under Reduce Motion (or to nothing when
+/// `crossfade` is false, for animations that are only movement).
+private struct ThemedAnimation<V: Equatable>: ViewModifier {
+    let animation: Animation
+    let value: V
+    let crossfade: Bool
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? (crossfade ? Theme.crossfade : nil) : animation, value: value)
+    }
+}
+
+/// Tile label font: medium weight under Bold Text so it stays distinct from the regular system one.
+private struct TileLabelFont: ViewModifier {
+    @Environment(\.legibilityWeight) private var legibilityWeight
+
+    func body(content: Content) -> some View {
+        content.font(legibilityWeight == .bold ? Theme.labelFont.weight(.semibold) : Theme.labelFont)
+    }
+}
+
+extension View {
+    func themedAnimation<V: Equatable>(_ animation: Animation, value: V, crossfade: Bool = true) -> some View {
+        modifier(ThemedAnimation(animation: animation, value: value, crossfade: crossfade))
+    }
+
+    func cardShadow() -> some View { modifier(Theme.CardShadow()) }
+
+    func tileLabelFont() -> some View { modifier(TileLabelFont()) }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import MenuFoldCore
 
 /// Panel placement (centered on the clicked screen) and Dock-area detection.
 enum DockGeometry {
@@ -124,10 +125,64 @@ enum DockGeometry {
                           orientation: orientation, dockBand: dockBand)
     }
 
-    /// Frame for a panel of `size` on the screen under the current mouse location.
+    /// Screen the panel opens on under `policy`: pointer, primary display, or the display of the
+    /// frontmost other app's window (CGWindowList bounds need no Accessibility permission).
     @MainActor
-    static func panelFrame(size: NSSize, anchor: NSPoint = NSEvent.mouseLocation) -> NSRect {
-        guard let screen = screen(containing: anchor) else {
+    static func targetScreen(anchor: NSPoint = NSEvent.mouseLocation,
+                             policy: PanelScreenPolicy? = nil) -> NSScreen? {
+        let policy = policy ?? AppPreferences.shared.panelScreenPolicy
+        let screens = NSScreen.screens
+        let window = policy == .activeWindow ? frontmostWindowFrame() : nil
+        guard let i = DisplayPlacement.screenIndex(policy: policy, screenFrames: screens.map(\.frame),
+                                                   primaryIndex: 0, cursor: anchor, activeWindowFrame: window)
+        else { return NSScreen.main }
+        return screens[i]
+    }
+
+    /// Frame (Cocoa coordinates) of the topmost normal window of any app but MenuFold: the front app's
+    /// main window, since the list is ordered front to back.
+    @MainActor
+    static func frontmostWindowFrame() -> NSRect? {
+        guard let primary = NSScreen.screens.first,
+              let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        let me = ProcessInfo.processInfo.processIdentifier
+        for window in info {
+            guard let pid = window[kCGWindowOwnerPID as String] as? pid_t, pid != me,
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let dict = window[kCGWindowBounds as String] as? NSDictionary,
+                  let b = CGRect(dictionaryRepresentation: dict as CFDictionary),
+                  b.width >= 100, b.height >= 100 else { continue }
+            return NSRect(x: b.minX, y: primary.frame.maxY - b.maxY, width: b.width, height: b.height)
+        }
+        return nil
+    }
+
+    /// Margin kept free around the panel when fitting the grid to a screen.
+    static let fitMargin: CGFloat = 24
+
+    /// Reduces the grid (never the stored preference) when the target screen is too small for it, so
+    /// `GridMetrics` and `panelSize` shrink together. Call before reading the panel size.
+    @MainActor
+    static func fitGrid(anchor: NSPoint = NSEvent.mouseLocation,
+                        policy: PanelScreenPolicy? = nil) {
+        let prefs = AppPreferences.shared
+        guard let screen = targetScreen(anchor: anchor, policy: policy) else {
+            prefs.setFittedGrid(columns: nil, rows: nil); return
+        }
+        let avail = CGSize(width: screen.visibleFrame.width - 2 * fitMargin,
+                           height: screen.visibleFrame.height - 2 * fitMargin)
+        let fit = DisplayPlacement.fittedGrid(columns: prefs.columns, rows: prefs.rows, available: avail)
+        prefs.setFittedGrid(columns: fit.columns == prefs.columns ? nil : fit.columns,
+                            rows: fit.rows == prefs.rows ? nil : fit.rows)
+    }
+
+    /// Frame for a panel of `size` on the target screen (`policy`, default from Settings).
+    @MainActor
+    static func panelFrame(size: NSSize, anchor: NSPoint = NSEvent.mouseLocation,
+                           policy: PanelScreenPolicy? = nil) -> NSRect {
+        guard let screen = targetScreen(anchor: anchor, policy: policy) else {
             return NSRect(origin: .zero, size: size)
         }
         return panelFrame(size: size, anchor: anchor, screenFrame: screen.frame,

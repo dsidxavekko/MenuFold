@@ -17,12 +17,12 @@ public enum FinderFolders {
         let path = normalize(raw)
         let home = standardized(homeDirectory).map(normalize) ?? ""
 
-        if path.hasPrefix(systemUtilities + "/") {
+        if hasPathPrefix(path, systemUtilities + "/") {
             return systemUtilities
         }
         let roots = (home.isEmpty || home == "/") ? ["/Applications"] : [home + "/Applications", "/Applications"]
         for root in roots {
-            guard path.hasPrefix(root + "/") else { continue }
+            guard hasPathPrefix(path, root + "/") else { continue }
             let rest = path.dropFirst(root.count + 1).split(separator: "/", omittingEmptySubsequences: true)
             // Need at least <subfolder>/<App>.app; a bundle as the first component isn't a folder.
             guard rest.count >= 2, let first = rest.first, !isBundle(first) else { return nil }
@@ -70,8 +70,19 @@ public enum FinderFolders {
         return "/" + stack.joined(separator: "/")
     }
 
-    private static func isBundle(_ component: Substring) -> Bool {
+    /// Directory extensions that make a path component a bundle (the single source for
+    /// `AppFilter` too): an app inside one is a helper; a bundle is never a Finder folder.
+    static let bundleExtensions = [".app", ".framework", ".bundle", ".plugin", ".appex", ".xpc",
+                                   ".prefpane", ".kext", ".systemextension", ".qlgenerator",
+                                   ".mdimporter", ".saver", ".component", ".xcplugin"]
+
+    static func isBundle<S: StringProtocol>(_ component: S) -> Bool {
         let lower = component.lowercased()
-        return [".app", ".framework", ".bundle", ".xpc", ".appex", ".plugin"].contains { lower.hasSuffix($0) }
+        return bundleExtensions.contains { lower.hasSuffix($0) }
+    }
+
+    /// Case-insensitive path prefix test (APFS volumes are case-insensitive by default).
+    static func hasPathPrefix(_ path: String, _ prefix: String) -> Bool {
+        path.range(of: prefix, options: [.anchored, .caseInsensitive]) != nil
     }
 }

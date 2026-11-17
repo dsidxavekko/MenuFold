@@ -32,6 +32,28 @@ extension AppDelegate {
             menu.addItem(.separator())
         }
 
+        if !model.profiles.isEmpty {
+            let profilesItem = NSMenuItem(title: String(localized: "Профіль"), action: nil, keyEquivalent: "")
+            profilesItem.image = NSImage(systemSymbolName: "person.crop.rectangle.stack", accessibilityDescription: nil)
+            let profilesMenu = NSMenu()
+            profilesMenu.autoenablesItems = false
+            let none = NSMenuItem(title: String(localized: "Без профілю"), action: #selector(menuSetProfile(_:)), keyEquivalent: "")
+            none.target = self
+            none.state = model.activeProfileID == nil ? .on : .off
+            profilesMenu.addItem(none)
+            profilesMenu.addItem(.separator())
+            for profile in model.profiles {
+                let item = NSMenuItem(title: profile.name, action: #selector(menuSetProfile(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = profile.id
+                item.state = profile.id == model.activeProfileID ? .on : .off
+                profilesMenu.addItem(item)
+            }
+            profilesItem.submenu = profilesMenu
+            menu.addItem(profilesItem)
+            menu.addItem(.separator())
+        }
+
         let folders = model.visibleFolders
         if !folders.isEmpty {
             let foldersItem = NSMenuItem(title: String(localized: "Папки"), action: nil, keyEquivalent: "")
@@ -165,6 +187,11 @@ extension AppDelegate {
     @objc func menuLaunchFolder(_ sender: NSMenuItem) {
         guard let folder = sender.representedObject as? Folder else { return }
         model.launchAll(in: folder)
+    }
+
+    /// Profile submenu item: `representedObject` is the profile id, nil for "Без профілю".
+    @objc func menuSetProfile(_ sender: NSMenuItem) {
+        model.setActiveProfile(sender.representedObject as? String)
     }
 
     @objc func menuOpenSettings(_ sender: Any?) {

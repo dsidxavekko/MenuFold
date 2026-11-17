@@ -90,10 +90,12 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         let gen = generation
         Task.detached(priority: .userInitiated) {
             let languages = BundleReader.systemLanguages()
+            let caskApps = BundleReader.homebrewCaskAppNames()
             let entries = AppFilter.filter(items.compactMap { item -> AppCandidate? in
                 guard var c = BundleReader.candidate(atPath: item.path, languages: languages) else { return nil }
                 c.lastUsedDate = item.lastUsedDate
                 c.appStoreID = item.appStoreID
+                if c.installSource == nil, caskApps.contains((item.path as NSString).lastPathComponent) { c.installSource = .homebrew }
                 return c
             })
             await MainActor.run { [weak self] in
@@ -155,7 +157,36 @@ enum BundleReader {
         let localized = localizedName(url: url, info: info, languages: languages)
         return AppCandidate(path: resolved.isEmpty ? path : resolved, bundleID: bundleID, name: localized ?? plain,
                             alternateName: localized == nil || localized == plain ? nil : plain,
-                            infoCategory: category, modificationDate: mod)
+                            infoCategory: category, modificationDate: mod,
+                            installSource: installSource(path: resolved.isEmpty ? path : resolved, bundleID: bundleID))
+    }
+
+    /// Setapp (its folder or bundle-id prefix) or Mac App Store (`Contents/_MASReceipt/receipt`).
+    /// Homebrew Cask is decided by the catalog from `homebrewCaskAppNames()`. Reads the disk, so
+    /// callers keep it off the main thread (the catalog does).
+    static func installSource(path: String, bundleID: String) -> AppInstallSource? {
+        if path.contains("/Setapp/") || bundleID.lowercased().hasPrefix("com.setapp.") { return .setapp }
+        let receipt = (path as NSString).appendingPathComponent("Contents/_MASReceipt/receipt")
+        return FileManager.default.fileExists(atPath: receipt) ? .appStore : nil
+    }
+
+    /// File names ("Foo.app") of apps installed by Homebrew Cask: the bundles inside
+    /// `<Caskroom>/<token>/<version>/`. Empty without Homebrew.
+    static func homebrewCaskAppNames(roots: [String] = ["/opt/homebrew/Caskroom", "/usr/local/Caskroom"]) -> Set<String> {
+        let fm = FileManager.default
+        var names = Set<String>()
+        for root in roots {
+            for token in (try? fm.contentsOfDirectory(atPath: root)) ?? [] {
+                let tokenDir = (root as NSString).appendingPathComponent(token)
+                for version in (try? fm.contentsOfDirectory(atPath: tokenDir)) ?? [] {
+                    let versionDir = (tokenDir as NSString).appendingPathComponent(version)
+                    for item in (try? fm.contentsOfDirectory(atPath: versionDir)) ?? [] where item.hasSuffix(".app") {
+                        names.insert(item)
+                    }
+                }
+            }
+        }
+        return names
     }
 
     /// The system-wide language list (System Settings → Language & Region). Read from the global

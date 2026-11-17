@@ -20,11 +20,17 @@ struct AppIconView: View {
     @State private var isHovered = false
     /// The part of the tile a drag is over: center = folder drop, edges = reorder.
     @State private var dropZone: TileDropZone?
+    /// Files from outside are over the tile and this app can open them.
+    @State private var isFileTarget = false
     @State private var launchPulse = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldContrast) private var contrast
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
-    private var isTargeted: Bool { dropZone == .center }
+    private var isTargeted: Bool { dropZone == .center || isFileTarget }
     private var itemID: String { MenuFoldCore.GridItem.app(app).id }
+    /// The tile is in the "Закріплені" row: its edges reorder that row instead of "Все".
+    private var inPinnedRow: Bool { selectionID?.hasPrefix("pinned:") == true && model.openFolderID == nil }
     private var isSelected: Bool {
         model.selectedItemID == (selectionID ?? MenuFoldCore.GridItem.app(app).id)
     }
@@ -48,10 +54,13 @@ struct AppIconView: View {
                 // Dock-like dot in the gap under the icon; it takes no layout space.
                 .overlay(alignment: .bottom) {
                     if isRunning {
+                        let strong = contrast == .increased || differentiateWithoutColor
+                        let dot = strong ? Theme.runningDotSizeLarge : Theme.runningDotSize
                         Circle()
-                            .fill(Theme.runningDotColor)
-                            .frame(width: Theme.runningDotSize, height: Theme.runningDotSize)
-                            .offset(y: Theme.runningDotSize + 1)
+                            .fill(strong ? Theme.runningDotColorHighContrast : Theme.runningDotColor)
+                            .frame(width: dot, height: dot)
+                            .overlay { if strong { Circle().strokeBorder(.background, lineWidth: 1) } }
+                            .offset(y: dot + 1)
                             .transition(reduceMotion ? .opacity : .scale(scale: 0.2).combined(with: .opacity))
                             .accessibilityHidden(true)
                     }
@@ -65,10 +74,10 @@ struct AppIconView: View {
                             .transition(reduceMotion ? .opacity : .scale(scale: 0.2).combined(with: .opacity))
                     }
                 }
-                .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isRunning)
-                .animation(reduceMotion ? Theme.crossfade : Theme.snappy, value: isNew)
+                .themedAnimation(Theme.snappy, value: isRunning)
+                .themedAnimation(Theme.snappy, value: isNew)
                 Text(app.name)
-                    .font(Theme.labelFont)
+                    .tileLabelFont()
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .truncationMode(.tail)
@@ -93,38 +102,92 @@ struct AppIconView: View {
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
-        .animation(Theme.snappy, value: isHovered)
-        .animation(Theme.snappy, value: isTargeted)
-        .animation(Theme.snappy, value: isSelected)
+        .themedAnimation(Theme.snappy, value: isHovered)
+        .themedAnimation(Theme.snappy, value: isTargeted)
+        .themedAnimation(Theme.snappy, value: isSelected)
         .reorderCaret(dropZone)
-        .help(app.name)
+        .help(app.name + "\n" + String(localized: "↩ запустити · ⌥↩ новий екземпляр · ⇧↩ у Finder · ⌘I інформація · ⌘D закріпити"))
         .accessibilityLabel(app.name)
         .accessibilityValue([
             isNew ? String(localized: "Нова") : nil,
             isRunning ? String(localized: "Запущено") : nil,
         ].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(String(localized: "Відкриває програму"))
+        .accessibilityActions { voiceOverActions(isRunning: isRunning) }
         .tileDropDestination(
             allowsCenter: acceptsFolderDrops,
-            allowsReorder: acceptsReorder,
+            allowsReorder: acceptsReorder || inPinnedRow,
             isKnownApp: { id in model.apps.contains { $0.id == id } },
-            canReorder: { id in id != app.id && TileReorderSupport.isTopLevel(appID: id, in: model) },
+            canReorder: { id in
+                guard id != app.id else { return false }
+                // Pinned row: any app may land here (it gets pinned); "Все": top-level items only.
+                return inPinnedRow ? true : TileReorderSupport.isTopLevel(appID: id, in: model)
+            },
             zone: { dropZone = $0 },
             performCenter: { dropped in
                 guard acceptsFolderDrops, dropped != app.id else { return false }
                 guard let folderID = model.createFolder(dropping: dropped, onto: app.id) else { return false }
-                withAnimation(Theme.morph) { model.openFolderID = folderID }
+                withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) { model.openFolderID = folderID }
                 return true
             },
             performReorder: { dropped, after in
-                TileReorderSupport.move(appID: dropped, relativeTo: itemID, after: after,
-                                        model: model, reduceMotion: reduceMotion)
-            }
+                if inPinnedRow {
+                    withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) {
+                        if after { model.movePinned(dropped, after: app.id) }
+                        else { model.movePinned(dropped, before: app.id) }
+                    }
+                    return true
+                }
+                return TileReorderSupport.move(appID: dropped, relativeTo: itemID, after: after,
+                                               model: model, reduceMotion: reduceMotion)
+            },
+            ownItemID: itemID,
+            performItemReorder: acceptsReorder ? { dropped, after in
+                TileReorderSupport.moveItem(dropped, relativeTo: itemID, after: after,
+                                            model: model, reduceMotion: reduceMotion)
+            } : nil,
+            supportsFiles: insideFolder ? nil : { urls in TileFileOpening.canOpen(urls, with: app) },
+            openFiles: { urls in TileFileOpening.open(urls, with: app, model: model) },
+            fileTarget: { isFileTarget = $0 }
         )
         .contextMenu {
             AppContextMenu(app: app, model: model, insideFolder: insideFolder,
                            inPinnedRow: selectionID?.hasPrefix("pinned:") == true,
                            inMainGrid: acceptsReorder)
+        }
+    }
+}
+
+extension AppIconView {
+    /// VoiceOver alternatives to the context menu and to drag and drop (folders).
+    @ViewBuilder
+    fileprivate func voiceOverActions(isRunning: Bool) -> some View {
+        Button("Показати у Finder") { model.revealInFinder(app) }
+        if model.isPinned(app.id) {
+            Button("Відкріпити") { withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.unpin(app.id) } }
+        } else {
+            Button("Закріпити") { withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.pin(app.id) } }
+        }
+        // Drag-and-drop alternative: move the app into an existing manual folder.
+        ForEach(model.layout.folders.filter { !$0.isFinder && !$0.appIDs.contains(app.id) }.prefix(12), id: \.id) { folder in
+            Button(String(localized: "Перемістити до папки «\(folder.name)»")) {
+                withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.add(app.id, to: folder.id) }
+                AccessibilityNotification.Announcement(
+                    String(localized: "Додано до папки \(folder.name)")
+                ).post()
+            }
+        }
+        if insideFolder {
+            Button("Прибрати з папки") {
+                withAnimation(Theme.motion(Theme.content, reduceMotion: reduceMotion)) { model.removeFromFolder(app.id) }
+            }
+        }
+        if isRunning {
+            Button("Завершити") { RunningAppsMonitor.shared.quit(app.id) }
+        }
+        if model.canTrash(app) {
+            Button("Перемістити в Кошик…") { model.pendingTrashAppID = app.id }
         }
     }
 }
@@ -140,7 +203,8 @@ private struct AppIconArtwork: View {
     let launchPulse: Int
 
     @Environment(\.isTilePressed) private var isPressed
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldContrast) private var contrast
 
     private var scale: CGFloat {
         if reduceMotion { return 1 }
@@ -158,7 +222,7 @@ private struct AppIconArtwork: View {
             .interpolation(.high)
             .frame(width: size, height: size)
             .shadow(
-                color: .black.opacity(lifted ? 0.22 : 0),
+                color: .black.opacity(lifted ? Theme.liftShadowOpacity : 0),
                 radius: lifted ? 6 : 0,
                 y: lifted ? 3 : 0
             )
@@ -173,12 +237,15 @@ private struct AppIconArtwork: View {
                     RoundedRectangle(cornerRadius: GridMetrics.tileCorner + 4, style: .continuous)
                         .fill(.clear)
                         .glassEffect(
-                            .regular.tint(Color.accentColor.opacity(0.35)),
+                            .regular.tint(Color.accentColor.opacity(Theme.dropTargetTintOpacity)),
                             in: .rect(cornerRadius: GridMetrics.tileCorner + 4, style: .continuous)
                         )
                         .overlay {
                             RoundedRectangle(cornerRadius: GridMetrics.tileCorner + 4, style: .continuous)
-                                .strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5)
+                                .strokeBorder(
+                                    Color.accentColor.opacity(contrast == .increased
+                                        ? Theme.dropTargetStrokeOpacityHighContrast : Theme.dropTargetStrokeOpacity),
+                                    lineWidth: contrast == .increased ? Theme.dropTargetStrokeWidthHighContrast : 1.5)
                         }
                         .padding(-6)
                         .transition(
@@ -187,12 +254,12 @@ private struct AppIconArtwork: View {
                 }
             }
             .scaleEffect(scale)
-            .animation(Theme.snappy, value: isPressed)
+            .themedAnimation(Theme.snappy, value: isPressed)
             .keyframeAnimator(initialValue: CGFloat(1), trigger: reduceMotion ? 0 : launchPulse) { content, pulse in
                 content.scaleEffect(pulse)
             } keyframes: { _ in
-                SpringKeyframe(1.14, duration: 0.09, spring: .snappy)
-                SpringKeyframe(1.0, duration: 0.16, spring: .bouncy)
+                SpringKeyframe(Theme.pulsePeak, duration: Theme.pulseUpDuration, spring: .snappy)
+                SpringKeyframe(1.0, duration: Theme.pulseDownDuration, spring: .bouncy)
             }
     }
 }
@@ -200,11 +267,16 @@ private struct AppIconArtwork: View {
 /// Accent ring around a keyboard-selected tile's artwork.
 struct SelectionRing: View {
     let cornerRadius: CGFloat
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+    @Environment(\.menuFoldContrast) private var contrast
 
     var body: some View {
+        let high = contrast == .increased
         RoundedRectangle(cornerRadius: cornerRadius - Theme.selectionRingInset, style: .continuous)
-            .strokeBorder(Color.accentColor.opacity(Theme.selectionRingOpacity), lineWidth: Theme.selectionRingWidth)
+            .strokeBorder(
+                Color.accentColor.opacity(high ? Theme.selectionRingOpacityHighContrast : Theme.selectionRingOpacity),
+                lineWidth: high ? Theme.selectionRingWidthHighContrast : Theme.selectionRingWidth
+            )
             .padding(Theme.selectionRingInset)
             .allowsHitTesting(false)
             .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
@@ -213,11 +285,26 @@ struct SelectionRing: View {
 
 /// Small accent dot on a recently installed app's icon (`GridModel.isNew`).
 struct NewAppDot: View {
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    @Environment(\.menuFoldContrast) private var contrast
+
     var body: some View {
-        Circle()
-            .fill(Color.accentColor)
-            .frame(width: 9, height: 9)
-            .overlay(Circle().strokeBorder(.white.opacity(0.85), lineWidth: 1.5))
+        let strong = differentiateWithoutColor || contrast == .increased
+        // Without colour the marker gets a shape (a star), not only a hue.
+        Group {
+            if differentiateWithoutColor {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(2)
+                    .background(.white.opacity(0.9), in: Circle())
+            } else {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: strong ? 11 : 9, height: strong ? 11 : 9)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.85), lineWidth: 1.5))
+            }
+        }
             .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -248,12 +335,15 @@ struct AppContextMenu: View {
                     Button("Завершити примусово") { RunningAppsMonitor.shared.quit(app.id, force: true) }
                 }
         }
+        Button("Інформація про програму") { model.infoAppID = app.id }
+            .keyboardShortcut("i", modifiers: .command)
         Divider()
         pinItems
         if inMainGrid {
             ItemMoveMenuItems(itemID: MenuFoldCore.GridItem.app(app).id, model: model)
         }
         Divider()
+        Button("Гаряча клавіша…") { HotkeyEditRequest.request(key: AppHotkey.key(appID: app.id)) }
         Button("Змінити значок…") { CustomIconPicker.choose(for: app, model: model) }
         if model.customIconURL(for: app.id) != nil {
             Button("Стандартний значок") { model.resetCustomIcon(for: app.id) }

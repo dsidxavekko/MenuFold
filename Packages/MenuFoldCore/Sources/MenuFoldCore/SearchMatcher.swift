@@ -8,8 +8,9 @@ import Foundation
 /// typed in the wrong keyboard layout, and fuzzy matches lose points for gaps. Equal scores are
 /// left to the caller (usage, then name).
 ///
-/// Everything is computed per call (no global caches that could go stale); folding a few hundred
-/// short names per keystroke is cheap.
+/// Names are folded once into a `Target` (kept by the model until the catalog changes), so a
+/// keystroke only folds the query. Besides names, a `Target` can carry keywords (category synonyms,
+/// "browser") and the bundle ID; those score below every name tier (see `metadataScore`).
 public enum SearchMatcher {
     /// Match quality of `query` against `text`, higher is better; nil = no match.
     public static func score(_ text: String, query: String) -> Double? {
@@ -29,7 +30,7 @@ public enum SearchMatcher {
         init(_ raw: String) {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             direct = SearchMatcher.fold(trimmed)
-            let swapped = KeyboardLayout.convert(trimmed)
+            let swapped = KeyboardLayout.shouldConvert(trimmed) ? KeyboardLayout.convert(trimmed) : nil
             let folded = swapped.map(SearchMatcher.fold)
             converted = folded == direct ? nil : folded
         }
@@ -40,7 +41,12 @@ public enum SearchMatcher {
     /// Best score of `text` for a prepared query (direct, or slightly lower through the layout swap).
     static func score(_ text: String, _ query: Query) -> Double? {
         guard !query.isEmpty else { return nil }
-        let candidate = Candidate(text)
+        return score(Candidate(text), query)
+    }
+
+    /// Same for a name folded in advance.
+    static func score(_ candidate: Candidate, _ query: Query) -> Double? {
+        guard !query.isEmpty else { return nil }
         let direct = rawScore(candidate, query.direct).map { $0 + directBonus }
         let swapped = query.converted.flatMap { rawScore(candidate, $0) }
         switch (direct, swapped) {
@@ -56,6 +62,53 @@ public enum SearchMatcher {
         var best: Double?
         for text in texts {
             if let s = score(text, query), s > (best ?? -1) { best = s }
+        }
+        return best
+    }
+
+    // MARK: - Prepared targets
+
+    /// Everything one app (or other item) is matched by, folded in advance.
+    struct Target {
+        let names: [Candidate]
+        /// Folded keywords: category synonyms, kind words ("browser").
+        let keywords: [String]
+        /// Folded bundle ID, if it may be searched.
+        let bundleID: String?
+
+        init(names: [String], keywords: [String] = [], bundleID: String? = nil) {
+            self.names = names.map(Candidate.init)
+            self.keywords = keywords.map(SearchMatcher.fold)
+            self.bundleID = bundleID.map(SearchMatcher.fold)
+        }
+    }
+
+    /// Best score over the names, else over keywords / bundle ID; nil when nothing matches.
+    static func score(_ target: Target, _ query: Query) -> Double? {
+        var best: Double?
+        for name in target.names {
+            if let s = score(name, query), s > (best ?? -1) { best = s }
+        }
+        if best == nil { best = metadataScore(target, query) }
+        return best
+    }
+
+    /// Keywords and bundle ID rank below every name tier (a name match always wins). Only the query
+    /// as typed counts (no layout swap), and short queries are ignored: three letters for keywords,
+    /// four for a bundle ID (or any query with a dot, which is clearly an ID: "com.apple").
+    static let keywordExact = 55.0, keywordPrefix = 50.0, idPrefix = 45.0, idContains = 40.0
+
+    static func metadataScore(_ target: Target, _ query: Query) -> Double? {
+        let q = query.direct
+        var best: Double?
+        if q.count >= 3 {
+            for k in target.keywords {
+                if k == q { return keywordExact }
+                if k.hasPrefix(q) { best = keywordPrefix }
+            }
+        }
+        if best == nil, let id = target.bundleID, q.count >= 4 || q.contains(".") {
+            if id.hasPrefix(q) { best = idPrefix } else if id.contains(q) { best = idContains }
         }
         return best
     }
@@ -209,6 +262,23 @@ enum KeyboardLayout {
         map["ы"] = "s"; map["э"] = "'"; map["ъ"] = "]"; map["ё"] = "`"
         return map
     }()
+
+    /// False for queries that are clearly not mistyped words: digits ("1.5", "office365"), symbols
+    /// that sit on no letter key ("c++", "node-js") or a dot inside a Latin word ("node.js").
+    /// `.` `,` `;` `'` `[` `]` stay convertible: they are б ю ж є х ї on the Ukrainian layout.
+    static func shouldConvert(_ query: String) -> Bool {
+        let chars = Array(query)
+        for (i, ch) in chars.enumerated() {
+            if ch.isNumber { return false }
+            if ch.isLetter || ch.isWhitespace { continue }
+            guard latinToCyrillic[ch] != nil else { return false }
+            if ch == ".", i > 0, i + 1 < chars.count,
+               chars[i - 1].isASCII, chars[i - 1].isLetter, chars[i + 1].isASCII, chars[i + 1].isLetter {
+                return false
+            }
+        }
+        return true
+    }
 
     /// The query re-typed in the other layout, or nil when it has no letters to swap. Cyrillic
     /// letters go to Latin; otherwise Latin keys go to Cyrillic. Other characters stay as they are.
