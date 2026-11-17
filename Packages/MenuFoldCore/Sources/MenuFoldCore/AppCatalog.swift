@@ -24,6 +24,10 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
     private var observers: [NSObjectProtocol] = []
     private var debounceTask: Task<Void, Never>?
     private var generation = 0
+    /// Seconds to wait before each restart of the query while it keeps returning no apps (see `deliver`).
+    private static let emptyRetryDelays: [Double] = [1, 2, 4, 8, 15, 30]
+    private var emptyRetries = 0
+    private var retryTask: Task<Void, Never>?
 
     public init() {}
 
@@ -56,6 +60,8 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         observers = []
         debounceTask?.cancel()
         debounceTask = nil
+        retryTask?.cancel()
+        retryTask = nil
         generation += 1
     }
 
@@ -132,6 +138,23 @@ public final class SpotlightAppCatalog: AppCatalogProviding {
         apps = entries
         isLoaded = true
         onChange?(entries)
+        if entries.isEmpty { retryAfterEmptyResult() } else { emptyRetries = 0 }
+    }
+
+    /// Right after login Spotlight can finish its first gathering with no results (its index is
+    /// still warming up) and never send an update, which leaves the panel without apps until the
+    /// app is relaunched. Restart the query a few times, with growing pauses, to do the same.
+    private func retryAfterEmptyResult() {
+        guard emptyRetries < Self.emptyRetryDelays.count, query != nil else { return }
+        let delay = Self.emptyRetryDelays[emptyRetries]
+        emptyRetries += 1
+        retryTask?.cancel()
+        retryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled, let self, self.apps.isEmpty else { return }
+            self.stop()
+            self.start()
+        }
     }
 }
 
