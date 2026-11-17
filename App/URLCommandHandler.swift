@@ -152,6 +152,7 @@ extension AppDelegate {
     private static func matches(_ tab: GridTab, _ name: String) -> Bool {
         let candidates: [String]
         switch tab {
+        case .clipboard: candidates = ["clipboard", String(localized: "Буфер обміну")]
         case .all: candidates = ["all", String(localized: "Все")]
         case .running: candidates = ["running", String(localized: "Запущені")]
         case .recent: candidates = ["recent", String(localized: "Недавні")]

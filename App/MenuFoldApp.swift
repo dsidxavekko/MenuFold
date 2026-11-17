@@ -105,6 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.keepsPanelOpenAfterLaunch = prefs.keepsPanelOpenAfterLaunch
         model.rememberLastTab = prefs.rememberLastTab
         model.showsRecentTab = prefs.showsRecentTab
+        model.showsClipboardTab = prefs.showsClipboardTab
+        ClipboardMonitor.shared.attach(to: model)
+        ClipboardMonitor.shared.setEnabled(prefs.showsClipboardTab)
         model.showsPinned = prefs.showsPinned
         // The "Часті" row fills one grid row.
         model.frequentLimit = GridMetrics.columns

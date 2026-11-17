@@ -159,7 +159,7 @@ extension GridModel {
         let scored = availableTabs.enumerated().compactMap { offset, tab -> (GridTab, Double, Int)? in
             let title: String
             switch tab {
-            case .all: return nil
+            case .all, .clipboard: return nil
             case .running: title = L("Запущені")
             case .recent: title = L("Недавні")
             case .category(let c): title = c.displayName

@@ -80,7 +80,13 @@ struct MenuFoldRootView: View {
                         )
                 }
 
-                GridView(model: model, namespace: folderNamespace)
+                Group {
+                    if model.tab == .clipboard && model.query.isEmpty {
+                        ClipboardView(model: model)
+                    } else {
+                        GridView(model: model, namespace: folderNamespace)
+                    }
+                }
                     .contentMargins(.vertical, Self.edgeFade, for: .scrollContent)
                     .mask(edgeFadeMask)
                     .padding(.top, 8)

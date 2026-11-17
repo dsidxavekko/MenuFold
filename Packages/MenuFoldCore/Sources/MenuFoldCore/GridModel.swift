@@ -11,6 +11,9 @@ public struct FinderFolderRef: Identifiable, Hashable, Sendable {
 }
 
 public enum GridTab: Hashable, Sendable {
+    /// Clipboard history (`GridModel.clipboard`). The very first tab, before "Все"; not reorderable;
+    /// `showsClipboardTab` hides it.
+    case clipboard
     case all
     /// Apps running right now (`GridModel.runningAppIDs`). Fixed right after "Все", not reorderable.
     case running
@@ -121,6 +124,12 @@ public final class GridModel {
     public var showsRecentTab = false {
         didSet { if showsRecentTab != oldValue { validateTab() } }
     }
+    /// Shows the clipboard tab in front of "Все" (a Settings switch; off by default here, like the others).
+    public var showsClipboardTab = false {
+        didSet { if showsClipboardTab != oldValue { validateTab() } }
+    }
+    /// Copied texts, fed by the app's pasteboard monitor. Memory only.
+    public var clipboard = ClipboardHistory()
     /// Shows the "Закріплені" row on "Все" (a Settings switch the app persists).
     public var showsPinned = true { didSet { if showsPinned != oldValue { clearSelectionIfGone() } } }
     /// `panelDidOpen` keeps the current tab instead of going back to "Все" (a Settings switch).
@@ -281,7 +290,7 @@ public final class GridModel {
             let l = rank[lhs.element.id] ?? Int.max, r = rank[rhs.element.id] ?? Int.max
             return l != r ? l < r : lhs.offset < rhs.offset
         }
-        return [.all] + (showsRunningTab ? [.running] : []) + (showsRecentTab ? [.recent] : [])
+        return (showsClipboardTab ? [.clipboard] : []) + [.all] + (showsRunningTab ? [.running] : []) + (showsRecentTab ? [.recent] : [])
             + ordered.map { .category($0.element) }
     }
 
@@ -327,6 +336,8 @@ public final class GridModel {
             return searchItems(query: q)
         }
         switch tab {
+        case .clipboard:
+            return []
         case .running:
             return Self.sorted(visibleApps.filter { runningAppIDs.contains($0.id) }).map { .app($0) }
         case .recent:

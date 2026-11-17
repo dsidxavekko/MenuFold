@@ -65,70 +65,6 @@
         }
       }
     },
-    "«Запущені» — програми, які зараз відкриті. «Недавні» — програми, які ви нещодавно запускали." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "„Geöffnet“ zeigt die Apps, die gerade geöffnet sind. „Zuletzt benutzt“ zeigt die Apps, die du kürzlich geöffnet hast."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Running” shows the apps that are open right now. “Recent” shows the apps you opened recently."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Abiertas” muestra las apps abiertas en este momento. “Recientes” muestra las apps que has abierto hace poco."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "« Ouvertes » affiche les apps ouvertes en ce moment. « Récentes » affiche les apps que vous avez ouvertes récemment."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "„Uruchomione” to aplikacje, które są teraz otwarte. „Ostatnie” to aplikacje, które niedawno uruchamiano."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“In esecuzione” mostra le app aperte in questo momento. “Recenti” mostra le app aperte di recente."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Em Execução” mostra os apps abertos agora. “Recentes” mostra os apps que você abriu recentemente."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「実行中」は現在開いているアプリを、「最近」は最近開いたアプリを表示します。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“正在运行”显示当前已打开的 App。“最近”显示你最近打开过的 App。"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Çalışanlar” şu anda açık olan uygulamaları gösterir. “Son Kullanılanlar” yakın zamanda açtığınız uygulamaları gösterir."
-          }
-        }
-      }
-    },
     "%@ — папка з Finder" : {
       "localizations" : {
         "de" : {
@@ -33019,6 +32955,390 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Yeni sürümü olan uygulamaları işaretler. Homebrew: brew outdated çalıştırılır. App Store: Apple sunucusuna yalnızca bu uygulamaların kimlikleri gönderilir. Sparkle: uygulamanın kendi güncelleme akışı indirilir. MenuFold hiçbir şey yüklemez."
+          }
+        }
+      }
+    },
+    "Буфер обміну" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clipboard"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwischenablage"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schowek"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presse-papiers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portapapeles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appunti"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Área de transferência"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クリップボード"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪贴板"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pano"
+          }
+        }
+      }
+    },
+    "Буфер обміну порожній" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clipboard is empty"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Zwischenablage ist leer"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schowek jest pusty"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le presse-papiers est vide"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El portapapeles está vacío"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli appunti sono vuoti"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A área de transferência está vazia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クリップボードは空です"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪贴板为空"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pano boş"
+          }
+        }
+      }
+    },
+    "Скопійований текст з’явиться тут." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied text will appear here."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopierter Text erscheint hier."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skopiowany tekst pojawi się tutaj."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le texte copié apparaîtra ici."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El texto copiado aparecerá aquí."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il testo copiato apparirà qui."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O texto copiado aparecerá aqui."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーしたテキストがここに表示されます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制的文本会显示在这里。"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopyalanan metin burada görünür."
+          }
+        }
+      }
+    },
+    "Копіює текст у буфер обміну" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copies the text to the clipboard"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiert den Text in die Zwischenablage"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiuje tekst do schowka"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie le texte dans le presse-papiers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia el texto al portapapeles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia il testo negli appunti"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia o texto para a área de transferência"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テキストをクリップボードにコピーします"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将文本复制到剪贴板"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metni panoya kopyalar"
+          }
+        }
+      }
+    },
+    "Показувати вкладку «Буфер обміну»" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the “Clipboard” tab"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab „Zwischenablage“ anzeigen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuj kartę „Schowek”"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher l’onglet « Presse-papiers »"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar la pestaña “Portapapeles”"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra il riquadro “Appunti”"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar a aba “Área de transferência”"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「クリップボード」タブを表示"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示“剪贴板”标签页"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Pano” sekmesini göster"
+          }
+        }
+      }
+    },
+    "«Запущені» — програми, які зараз відкриті. «Недавні» — програми, які ви нещодавно запускали. «Буфер обміну» — історія скопійованого тексту: зберігається лише в пам’яті, паролі з менеджерів паролів не записуються." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Running” shows the apps that are open right now. “Recent” shows the apps you opened recently. “Clipboard” is the history of copied text: it is kept in memory only, and passwords from password managers are not recorded."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Geöffnet“ zeigt die Apps, die gerade geöffnet sind. „Zuletzt benutzt“ zeigt die Apps, die du kürzlich geöffnet hast. „Zwischenablage“ ist der Verlauf des kopierten Texts: Er wird nur im Speicher gehalten, Passwörter aus Passwortmanagern werden nicht aufgezeichnet."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Uruchomione” to aplikacje, które są teraz otwarte. „Ostatnie” to aplikacje, które niedawno uruchamiano. „Schowek” to historia skopiowanego tekstu: jest trzymana tylko w pamięci, a hasła z menedżerów haseł nie są zapisywane."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "« Ouvertes » affiche les apps ouvertes en ce moment. « Récentes » affiche les apps que vous avez ouvertes récemment. « Presse-papiers » est l’historique du texte copié : il reste uniquement en mémoire et les mots de passe des gestionnaires de mots de passe ne sont pas enregistrés."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Abiertas” muestra las apps abiertas en este momento. “Recientes” muestra las apps que has abierto hace poco. “Portapapeles” es el historial del texto copiado: solo se guarda en memoria y las contraseñas de los gestores de contraseñas no se registran."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“In esecuzione” mostra le app aperte in questo momento. “Recenti” mostra le app aperte di recente. “Appunti” è la cronologia del testo copiato: resta solo in memoria e le password dei gestori di password non vengono registrate."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Em Execução” mostra os apps abertos agora. “Recentes” mostra os apps que você abriu recentemente. “Área de transferência” é o histórico do texto copiado: fica apenas na memória, e as senhas de gerenciadores de senhas não são registradas."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「実行中」は現在開いているアプリを、「最近」は最近開いたアプリを表示します。 「クリップボード」はコピーしたテキストの履歴です。メモリ内にのみ保持され、パスワード管理アプリのパスワードは記録されません。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“正在运行”显示当前已打开的 App。“最近”显示你最近打开过的 App。 “剪贴板”是复制文本的历史记录：仅保存在内存中，不会记录来自密码管理器的密码。"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Çalışanlar” şu anda açık olan uygulamaları gösterir. “Son Kullanılanlar” yakın zamanda açtığınız uygulamaları gösterir. “Pano” kopyalanan metnin geçmişidir: yalnızca bellekte tutulur, parola yöneticilerinden gelen parolalar kaydedilmez."
           }
         }
       }

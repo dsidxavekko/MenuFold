@@ -90,6 +90,10 @@ final class AppPreferences {
     var showsRecentTab: Bool {
         didSet { defaults.set(showsRecentTab, forKey: "showsRecentTab"); changed() }
     }
+    /// Shows the clipboard history tab in front of "Все" and watches the pasteboard (default on).
+    var showsClipboardTab: Bool {
+        didSet { defaults.set(showsClipboardTab, forKey: "showsClipboardTab"); changed() }
+    }
     /// Shows the "Закріплені" row (→ `GridModel.showsPinned`, default on).
     var showsPinned: Bool {
         didSet { defaults.set(showsPinned, forKey: "showsPinned"); changed() }
@@ -173,6 +177,7 @@ final class AppPreferences {
         keepsPanelOpenAfterLaunch = defaults.object(forKey: "keepsPanelOpenAfterLaunch") as? Bool ?? false
         rememberLastTab = defaults.object(forKey: "rememberLastTab") as? Bool ?? false
         showsRecentTab = defaults.object(forKey: "showsRecentTab") as? Bool ?? true
+        showsClipboardTab = defaults.object(forKey: "showsClipboardTab") as? Bool ?? true
         showsPinned = defaults.object(forKey: "showsPinned") as? Bool ?? true
         showsFolderCounts = defaults.object(forKey: "showsFolderCounts") as? Bool ?? true
         showsNewAppDots = defaults.object(forKey: "showsNewAppDots") as? Bool ?? true

@@ -139,3 +139,7 @@ Release without CI: while GitHub Actions is unavailable, run `scripts/release.sh
 - Folder picker (`GridModel+FolderPicker.swift`, `FolderPickerCard`): "Створити папку з…" in the tile menu and VoiceOver.
 - `importLayout(from:) async` decodes off the main actor; `sizeCache` entries carry the bundle's modification date.
 - App tests: `Tests/MenuFoldTests`, run `scripts/test-app.sh` (hosted by the app, so the panel flashes; needs Xcode and xcodegen).
+
+## 0.8 additions
+
+- Clipboard tab (`GridTab.clipboard`, `GridModel.showsClipboardTab` / `clipboard`): the first tab, before "Все", not reorderable. `ClipboardHistory` (Core, `ClipboardHistory.swift`) is pure: text only, newest first, dedupe, pins, limit 50, memory only (never written to disk). `App/ClipboardMonitor.swift` polls `NSPasteboard.general.changeCount` every 0.5 s while the switch (`AppPreferences.showsClipboardTab`, default on) is on, skips concealed/transient/auto-generated pasteboard types, and forgets the history when turned off. `ClipboardView` is shown by `MenuFoldRootView` instead of `GridView` on that tab with an empty query; a click copies back (`ClipboardMonitor.copy`) and closes the panel. No keyboard selection yet; no auto-paste (needs Accessibility).

@@ -215,6 +215,7 @@ struct CategoryTabs: View {
     /// Scroll id: stable across renames (the tab value carries the display name).
     private func tabID(_ tab: GridTab) -> String {
         switch tab {
+        case .clipboard: "clipboard"
         case .all: "all"
         case .running: "running"
         case .recent: "recent"
@@ -224,6 +225,7 @@ struct CategoryTabs: View {
 
     private func title(for tab: GridTab) -> String {
         switch tab {
+        case .clipboard: String(localized: "Буфер обміну")
         case .all: String(localized: "Все")
         case .running: String(localized: "Запущені")
         case .recent: String(localized: "Недавні")

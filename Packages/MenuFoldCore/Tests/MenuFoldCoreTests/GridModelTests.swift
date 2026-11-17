@@ -337,6 +337,7 @@ import Testing
         let (m, _) = makeModel()
         let names = m.availableTabs.map { tab -> String in
             switch tab {
+            case .clipboard: return "📋"
             case .all: return "*"
             case .running: return "▶"
             case .recent: return "⏱"

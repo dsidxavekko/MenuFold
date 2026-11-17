@@ -37,6 +37,7 @@ struct TabChipsView: View {
     /// Same titles as the tab strip.
     static func title(for tab: GridTab) -> String {
         switch tab {
+        case .clipboard: String(localized: "Буфер обміну")
         case .all: String(localized: "Все")
         case .running: String(localized: "Запущені")
         case .recent: String(localized: "Недавні")
@@ -46,6 +47,7 @@ struct TabChipsView: View {
 
     private static func symbol(for tab: GridTab) -> String {
         switch tab {
+        case .clipboard: "doc.on.clipboard"
         case .all: "square.grid.2x2"
         case .running: "circle.fill"
         case .recent: "clock"
