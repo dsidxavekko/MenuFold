@@ -62,6 +62,10 @@ extension GridModel {
             guard !name.isEmpty else { return [] }
             categoryIDs = matchingCategoryIDs(name)
         }
+        if scope == .everything, Self.isUpdatesQuery(text), !availableUpdates.isEmpty {
+            let withUpdates = appsWithUpdates.map { GridItem.app($0) }
+            if !withUpdates.isEmpty { return withUpdates }
+        }
         let q = SearchMatcher.Query(text)
         if q.isEmpty && scope == .everything { return [] }
         let date = now()
@@ -177,6 +181,30 @@ extension GridModel {
         }
         return scored.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.2 < $1.2 }
             .prefix(Self.settingsPaneLimit).map(\.0)
+    }
+
+    /// Selection id of the calculator row.
+    public static var calculatorSelectionID: String { "calc" }
+
+    /// The calculation or unit conversion the current query asks for ("2+2", "5 km in mi"); nil for
+    /// anything else, and under a prefix scope (`>`, `/`, `@`, `?`). See `Calculator`.
+    public var calculatorResult: CalculatorResult? {
+        let (scope, text) = Self.parseSearch(query)
+        guard scope == .everything, !text.isEmpty else { return nil }
+        return Calculator.evaluate(text)
+    }
+
+    /// Copies the calculator value to the pasteboard and flashes `calculatorCopied`.
+    /// The panel stays open.
+    public func copyCalculatorResult() {
+        guard let result = calculatorResult else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(result.value, forType: .string)
+        calculatorCopied = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            self?.calculatorCopied = false
+        }
     }
 
     /// Most System Settings results shown at once.

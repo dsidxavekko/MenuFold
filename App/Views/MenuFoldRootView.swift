@@ -30,6 +30,16 @@ struct MenuFoldRootView: View {
         model.infoAppID.flatMap { id in model.apps.first { $0.id == id } }
     }
 
+    /// App whose Tab action list is open (nil once it is gone from the catalog).
+    private var quickActionsApp: AppEntry? {
+        model.quickActionsAppID.flatMap { id in model.apps.first { $0.id == id } }
+    }
+
+    /// Source app of the "Створити папку з…" picker (nil once it is gone from the catalog).
+    private var pickerApp: AppEntry? {
+        model.folderPickerSourceID.flatMap { id in model.apps.first { $0.id == id } }
+    }
+
     /// First-run gesture hints: once the catalog has apps to try them on, until dismissed.
     private var showsFirstRunHint: Bool {
         !AppPreferences.shared.hasSeenFirstRunHint && model.isLoaded && !model.apps.isEmpty
@@ -50,7 +60,9 @@ struct MenuFoldRootView: View {
         let trashApp = trashApp
         let infoApp = infoApp
         let showsShortcuts = model.showsShortcutsHelp
-        let isModal = trashApp != nil || infoApp != nil || showsShortcuts
+        let quickApp = quickActionsApp
+        let pickerApp = pickerApp
+        let isModal = trashApp != nil || infoApp != nil || showsShortcuts || pickerApp != nil || quickApp != nil
         let showsHint = showsFirstRunHint && !isOpen && !isModal
         // Read in body (GridMetrics reads the observable AppPreferences), so a Settings change of
         // columns/rows re-renders and resizes the content right away.
@@ -126,6 +138,31 @@ struct MenuFoldRootView: View {
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
             }
 
+            if let quickApp {
+                Color.black
+                    .opacity(Theme.cardBackdropDim)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.quickActionsAppID = nil }
+                    .zIndex(2)
+                    .transition(.opacity)
+                QuickActionsList(app: quickApp, model: model).id(quickApp.id)
+                    .zIndex(3)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+            }
+
+            if let pickerApp {
+                Color.black
+                    .opacity(Theme.cardBackdropDim)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.cancelFolderPicker() }
+                    .zIndex(2)
+                    .transition(.opacity)
+                FolderPickerCard(source: pickerApp, model: model)
+                    .id(pickerApp.id)
+                    .zIndex(3)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+            }
+
             if infoApp != nil || showsShortcuts {
                 // ⌘I / ⌘/ cards: modal, a click outside closes them.
                 Color.black
@@ -150,6 +187,14 @@ struct MenuFoldRootView: View {
         }
         .animation(backdropMotion(opening: isModal), value: model.pendingTrashAppID)
         .animation(backdropMotion(opening: isModal), value: model.infoAppID)
+        .animation(backdropMotion(opening: isModal), value: model.folderPickerSourceID)
+        .onChange(of: model.folderPickerSourceID != nil && pickerApp == nil) { _, stale in
+            if stale { model.folderPickerSourceID = nil }
+        }
+        .animation(backdropMotion(opening: isModal), value: model.quickActionsAppID)
+        .onChange(of: model.quickActionsAppID != nil && quickApp == nil) { _, stale in
+            if stale { model.quickActionsAppID = nil }
+        }
         .animation(backdropMotion(opening: isModal), value: model.showsShortcutsHelp)
         .onChange(of: model.infoAppID != nil && infoApp == nil) { _, stale in
             if stale { model.infoAppID = nil }
@@ -167,6 +212,14 @@ struct MenuFoldRootView: View {
             if model.pendingTrashAppID != nil {
                 // While the system is trashing, the card stays so its result is seen.
                 if !model.isTrashing { model.pendingTrashAppID = nil }
+                return .handled
+            }
+            if model.quickActionsAppID != nil {
+                model.quickActionsAppID = nil
+                return .handled
+            }
+            if model.folderPickerSourceID != nil {
+                model.folderPickerSourceID = nil
                 return .handled
             }
             if model.infoAppID != nil || model.showsShortcutsHelp {

@@ -4,6 +4,24 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.7.0
+
+### Search and quick actions
+- **Calculator and converter**: type `2+2*3`, `sqrt(144)`, `5 km in mi` or `100 f to c` and the result appears first; Return copies it. Length, weight, temperature, data and time units (no currencies).
+- **Tab on a selected app** opens an action list: Quit, Hide, Restart, Show package contents, Reveal in Finder, Copy path, Copy bundle ID.
+
+### Updates
+- **App update reminders** (opt-in, Settings → General): a badge on apps with a newer version from Homebrew, the Mac App Store or the app's own Sparkle feed. Only bundle IDs of App Store apps are sent to Apple. Search "updates" lists them.
+
+### Gestures and automation
+- Two-finger swipe switches tabs; pinch changes the grid size (can be turned off in Settings → Appearance).
+- New `menufold://` commands: `pin`, `unpin`, `new-folder`, `move-to-folder`, `remove-from-folder`, `category`, `quit`, `hide`, `reveal`, `copy-path` (see docs/url-scheme.md).
+
+### Accessibility and fixes
+- "Create folder with…" in the tile menu and as a VoiceOver action: make a folder without dragging.
+- Importing a large layout no longer freezes the panel.
+- The app-size cache for smart categories refreshes after an app is updated.
+
 ## 0.6.5
 
 ### Languages

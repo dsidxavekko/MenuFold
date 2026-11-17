@@ -73,6 +73,14 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
+                Toggle("Жести трекпада", isOn: $prefs.usesGestures)
+            } footer: {
+                Text("Проведення двома пальцями вбік перемикає вкладки, щипок змінює розмір сітки.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle("Зменшити рух усередині програми", isOn: $prefs.forcesReduceMotion)
                 Toggle("Підвищений контраст", isOn: $prefs.forcesIncreaseContrast)
             } header: {

@@ -107,6 +107,7 @@ struct SearchField: View {
         case .folder(let folder, _):
             withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) { model.openFolderID = folder.id }
         case nil:
+            if model.calculatorResult != nil { model.copyCalculatorResult(); return }
             if let pane = model.settingsPaneResults.first { model.openSettingsPane(pane) }
         }
     }

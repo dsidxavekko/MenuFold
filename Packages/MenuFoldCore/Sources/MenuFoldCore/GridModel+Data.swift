@@ -264,6 +264,30 @@ extension GridModel {
         }
     }
 
+    /// Same as `importLayout(from:)`, but the JSON decoding and the icon re-encoding (up to 1000
+    /// images) run off the main actor; only the commit happens here.
+    public func importLayout(from url: URL) async throws {
+        let directory = iconsDirectory
+        let (imported, written) = try await Task.detached(priority: .userInitiated) { () throws -> (Layout, [URL]) in
+            let transfer = try LayoutTransfer.decode(contentsOf: url)
+            var written: [URL] = []
+            do {
+                return (try transfer.installIcons(into: directory, written: &written), written)
+            } catch {
+                written.forEach { try? FileManager.default.removeItem(at: $0) }
+                throw error
+            }
+        }.value
+        do {
+            try replaceLayout(with: imported)
+        } catch {
+            if Set(layout.customIcons.values).isDisjoint(with: written.map(\.lastPathComponent)) {
+                written.forEach { try? FileManager.default.removeItem(at: $0) }
+            }
+            throw error
+        }
+    }
+
     /// Commits a whole new layout (undoable) and closes UI state that pointed into the old one.
     private func replaceLayout(with newLayout: Layout) throws {
         renamingFolderID = nil

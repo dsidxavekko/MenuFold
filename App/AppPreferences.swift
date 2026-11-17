@@ -68,7 +68,7 @@ extension Notification.Name {
 final class AppPreferences {
     static let shared = AppPreferences()
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     /// Global shortcut that toggles the panel; nil = none (default).
     var hotKey: HotKey? {
@@ -102,6 +102,10 @@ final class AppPreferences {
     var showsNewAppDots: Bool {
         didSet { defaults.set(showsNewAppDots, forKey: "showsNewAppDots"); changed() }
     }
+    /// Looks for newer versions of installed apps (Homebrew, App Store, Sparkle feeds); network, default off.
+    var checksForAppUpdates: Bool {
+        didSet { defaults.set(checksForAppUpdates, forKey: "checksForAppUpdates"); changed() }
+    }
     /// Grid columns of the panel, `columnRange` (default 7, like the system Apps launcher).
     var columns: Int {
         didSet { defaults.set(columns, forKey: "gridColumns"); changed() }
@@ -127,6 +131,10 @@ final class AppPreferences {
     /// Which display the panel opens on (default: under the pointer).
     var panelScreenPolicy: PanelScreenPolicy {
         didSet { defaults.set(panelScreenPolicy.rawValue, forKey: "panelScreenPolicy"); changed() }
+    }
+    /// Trackpad gestures in the panel: two-finger swipe switches tabs, pinch changes the grid size.
+    var usesGestures: Bool {
+        didSet { defaults.set(usesGestures, forKey: "usesGestures"); changed() }
     }
     /// Forces "reduce motion" inside MenuFold even when the system switch is off (see `ThemeOverrides`).
     var forcesReduceMotion: Bool {
@@ -157,7 +165,9 @@ final class AppPreferences {
         dataDirectory?.appendingPathComponent("layout.json") ?? LayoutStore.defaultURL
     }
 
-    private init() {
+    /// `defaults` is injectable for tests; the app only uses `shared`.
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         hotKey = Self.loadCodable(HotKey.self, "hotKey", defaults)
         showsMenuBarIcon = defaults.object(forKey: "showsMenuBarIcon") as? Bool ?? false
         keepsPanelOpenAfterLaunch = defaults.object(forKey: "keepsPanelOpenAfterLaunch") as? Bool ?? false
@@ -166,11 +176,13 @@ final class AppPreferences {
         showsPinned = defaults.object(forKey: "showsPinned") as? Bool ?? true
         showsFolderCounts = defaults.object(forKey: "showsFolderCounts") as? Bool ?? true
         showsNewAppDots = defaults.object(forKey: "showsNewAppDots") as? Bool ?? true
+        checksForAppUpdates = defaults.object(forKey: "checksForAppUpdates") as? Bool ?? false
         let c = defaults.object(forKey: "gridColumns") as? Int ?? 7
         columns = min(max(c, Self.columnRange.lowerBound), Self.columnRange.upperBound)
         let r = defaults.object(forKey: "gridRows") as? Int ?? 4
         rows = min(max(r, Self.rowRange.lowerBound), Self.rowRange.upperBound)
         panelScreenPolicy = defaults.string(forKey: "panelScreenPolicy").flatMap(PanelScreenPolicy.init(rawValue:)) ?? .cursor
+        usesGestures = defaults.object(forKey: "usesGestures") as? Bool ?? true
         forcesReduceMotion = defaults.bool(forKey: "forcesReduceMotion")
         forcesIncreaseContrast = defaults.bool(forKey: "forcesIncreaseContrast")
         hasSeenFirstRunHint = defaults.bool(forKey: "hasSeenFirstRunHint")

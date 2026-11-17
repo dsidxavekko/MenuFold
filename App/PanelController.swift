@@ -77,6 +77,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var activationObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
     private var keyMonitor: Any?
+    private var gestures: PanelGestures?
     /// Records `lastPanelInput` (mouse-downs and key presses in the panel).
     private var panelInputMonitor: Any?
     private var preferencesObserver: NSObjectProtocol?
@@ -125,6 +126,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         configurePanel()
         observeAppDrags()
         installKeyMonitor()
+        gestures = PanelGestures(model: model, panel: panel)
         // Coming back to MenuFold (Dock click, ⌘-Tab) ends any "this click came from the Dock" guess.
         // `didBecomeActiveNotification` is the ObjC `NSApplicationDidBecomeActiveNotification`.
         activationObserver = NotificationCenter.default.addObserver(
@@ -186,6 +188,11 @@ final class PanelController: NSObject, NSWindowDelegate {
             if self.model.pendingTrashAppID != nil {
                 // While the system is trashing, the card stays so its result is seen.
                 if !self.model.isTrashing { self.model.pendingTrashAppID = nil }
+            } else if self.model.quickActionsAppID != nil {
+                // Esc closes only the Tab action list.
+                self.model.quickActionsAppID = nil
+            } else if self.model.folderPickerSourceID != nil {
+                self.model.folderPickerSourceID = nil
             } else if self.model.infoAppID != nil || self.model.showsShortcutsHelp {
                 self.model.infoAppID = nil
                 self.model.showsShortcutsHelp = false
@@ -313,6 +320,38 @@ final class PanelController: NSObject, NSWindowDelegate {
             if modifiers == .command, let key = latinKey(event), appShortcuts.contains(key) { return false }
             return true
         }
+        // Tab action list: arrows move, Return runs, Esc (reaches `onCancel`) closes it.
+        if let id = model.quickActionsAppID {
+            let actions = QuickActionRunner.actions(for: id)
+            if event.keyCode == KeyCode.escape { return false }
+            if modifiers.isEmpty {
+                switch event.keyCode {
+                case KeyCode.down, KeyCode.up:
+                    guard !actions.isEmpty else { return true }
+                    let step = event.keyCode == KeyCode.down ? 1 : -1
+                    model.quickActionIndex = (model.quickActionIndex + step + actions.count) % actions.count
+                    return true
+                case KeyCode.tab:
+                    model.quickActionsAppID = nil
+                    return true
+                default: break
+                }
+                if isReturn {
+                    if let app = model.apps.first(where: { $0.id == id }), actions.indices.contains(model.quickActionIndex) {
+                        QuickActionRunner.run(actions[model.quickActionIndex], app: app, model: model)
+                    }
+                    model.quickActionsAppID = nil
+                    return true
+                }
+            }
+            if modifiers == .command, let key = latinKey(event), ["q", "w", "h", ","].contains(key) { return false }
+            return true
+        }
+        // Folder picker: its search field takes typing and Return; Esc reaches `onCancel`.
+        if model.folderPickerSourceID != nil {
+            if modifiers == .command, let key = latinKey(event), !["q", "w", "h", ",", "v", "c", "x", "a", "z"].contains(key) { return true }
+            return false
+        }
         // ⌘I / ⌘/ cards: Return and Esc close them (Esc reaches `onCancel`), ⌘I and ⌘/ toggle, the
         // app-level ⌘Q/⌘W/⌘H/⌘, keep working, and everything else is swallowed.
         if model.infoAppID != nil || model.showsShortcutsHelp {
@@ -339,6 +378,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         if event.keyCode == KeyCode.tab, model.openFolderID == nil,
            modifiers == .control || modifiers == [.control, .shift] {
             withAnimation(Self.contentAnimation) { model.cycleTab(by: modifiers.contains(.shift) ? -1 : 1) }
+            return true
+        }
+        // Tab on a selected app tile opens its action list.
+        if event.keyCode == KeyCode.tab, modifiers.isEmpty, let app = model.selectedApp {
+            model.quickActionIndex = 0
+            withAnimation(ThemeOverrides.reduceMotion ? Theme.crossfade : Theme.content) { model.quickActionsAppID = app.id }
             return true
         }
         // Quick actions on the selected tile.

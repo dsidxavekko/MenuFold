@@ -39,6 +39,7 @@ struct AppIconView: View {
         let isRunning = RunningAppsMonitor.shared.isRunning(app.id)
         // Read the preference in `body` so toggling it in Settings re-renders the tile.
         let isNew = AppPreferences.shared.showsNewAppDots && model.isNew(app.id)
+        let hasUpdate = AppPreferences.shared.checksForAppUpdates && model.hasUpdate(app.id)
         Button {
             launchPulse += 1
             model.launch(app)
@@ -74,8 +75,17 @@ struct AppIconView: View {
                             .transition(reduceMotion ? .opacity : .scale(scale: 0.2).combined(with: .opacity))
                     }
                 }
+                // Update available: a small arrow badge at the top-left corner.
+                .overlay(alignment: .topLeading) {
+                    if hasUpdate {
+                        UpdateBadge()
+                            .offset(x: -3, y: -3)
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.2).combined(with: .opacity))
+                    }
+                }
                 .themedAnimation(Theme.snappy, value: isRunning)
                 .themedAnimation(Theme.snappy, value: isNew)
+                .themedAnimation(Theme.snappy, value: hasUpdate)
                 Text(app.name)
                     .tileLabelFont()
                     .foregroundStyle(.primary)
@@ -110,6 +120,7 @@ struct AppIconView: View {
         .accessibilityLabel(app.name)
         .accessibilityValue([
             isNew ? String(localized: "Нова") : nil,
+            hasUpdate ? String(localized: "Доступне оновлення") : nil,
             isRunning ? String(localized: "Запущено") : nil,
         ].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -177,6 +188,9 @@ extension AppIconView {
                     String(localized: "Додано до папки \(folder.name)")
                 ).post()
             }
+        }
+        if acceptsFolderDrops && model.canOfferFolderPicker {
+            Button("Створити папку з…") { model.beginFolderPicker(for: app.id) }
         }
         if insideFolder {
             Button("Прибрати з папки") {
@@ -311,6 +325,51 @@ struct NewAppDot: View {
     }
 }
 
+/// Arrow badge on an app whose newer version was found (`GridModel.hasUpdate`). The arrow is a
+/// shape, so it needs no colour; Increase Contrast makes it larger.
+struct UpdateBadge: View {
+    @Environment(\.menuFoldContrast) private var contrast
+
+    var body: some View {
+        let size: CGFloat = contrast == .increased ? 16 : 14
+        Image(systemName: "arrow.down.circle.fill")
+            .font(.system(size: size, weight: .bold))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.white, Color.accentColor)
+            .background(.white.opacity(0.9), in: Circle().inset(by: 1.5))
+            .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Tile menu item for an app with an update: copies the brew command, opens the App Store page,
+/// or launches the app (Sparkle apps update themselves on launch).
+struct UpdateMenuItem: View {
+    let app: AppEntry
+    let model: GridModel
+
+    var body: some View {
+        if let update = model.availableUpdates[app.id] {
+            switch update.kind {
+            case .homebrew:
+                if let command = update.brewCommand {
+                    Button("Скопіювати команду оновлення") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }
+                }
+            case .appStore:
+                if let url = update.storeURL {
+                    Button("Оновити в App Store") { NSWorkspace.shared.open(url) }
+                }
+            case .sparkle:
+                Button("Відкрити, щоб оновити") { model.launch(app) }
+            }
+        }
+    }
+}
+
 /// Context menu for an app tile.
 struct AppContextMenu: View {
     let app: AppEntry
@@ -337,10 +396,14 @@ struct AppContextMenu: View {
         }
         Button("Інформація про програму") { model.infoAppID = app.id }
             .keyboardShortcut("i", modifiers: .command)
+        UpdateMenuItem(app: app, model: model)
         Divider()
         pinItems
         if inMainGrid {
             ItemMoveMenuItems(itemID: MenuFoldCore.GridItem.app(app).id, model: model)
+        }
+        if inMainGrid && model.canOfferFolderPicker {
+            Button("Створити папку з…") { model.beginFolderPicker(for: app.id) }
         }
         Divider()
         Button("Гаряча клавіша…") { HotkeyEditRequest.request(key: AppHotkey.key(appID: app.id)) }

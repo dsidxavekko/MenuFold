@@ -402,3 +402,41 @@ private let day: TimeInterval = 24 * 3600
         #expect(SpotlightAppCatalog.storeID(nil) == nil)
     }
 }
+
+// MARK: - Async import and size cache
+
+@MainActor
+struct AsyncImportAndSizeCacheTests {
+    @Test func asyncImportMatchesSync() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let model = GridModel(catalog: StaticAppCatalog(apps: []), store: LayoutStore(fileURL: dir.appendingPathComponent("layout.json")))
+        let file = dir.appendingPathComponent("f.json")
+        try Data(#"{"format":"menufold-layout","version":1,"layout":{"hidden":["q"]},"icons":{}}"#.utf8).write(to: file)
+        try await model.importLayout(from: file)
+        #expect(model.layout.hidden == ["q"])
+        try Data(#"{"hello":1}"#.utf8).write(to: file)
+        await #expect(throws: LayoutDataError.notMenuFoldFile) { try await model.importLayout(from: file) }
+    }
+
+    @Test func sizeCacheRemeasuresWhenModificationDateChanges() async throws {
+        final class Box: @unchecked Sendable { var date = Date(timeIntervalSince1970: 100); var calls = 0 }
+        let box = Box()
+        let app = AppEntry(id: "com.foo.big", name: "Big", url: URL(fileURLWithPath: "/Applications/Big.app"))
+        let model = GridModel(catalog: StaticAppCatalog(apps: [app]), store: nil)
+        model.sizeProvider = { _ in box.calls += 1; return Int64(box.calls) * 1_000_000 }
+        model.modificationDateProvider = { _ in box.date }
+        _ = model.addSmartRule(SmartRule(name: "Big", minSizeMB: 1))
+        for _ in 0..<100 where model.appSizes["com.foo.big"] == nil { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(box.calls == 1)
+        model.refreshAppSizes()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(box.calls == 1) // same date: cached
+        box.date = Date(timeIntervalSince1970: 200)
+        model.refreshAppSizes()
+        for _ in 0..<100 where model.appSizes["com.foo.big"] == 1_000_000 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(box.calls == 2)
+        #expect(model.appSizes["com.foo.big"] == 2_000_000)
+    }
+}

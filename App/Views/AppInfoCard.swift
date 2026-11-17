@@ -31,6 +31,9 @@ struct AppInfoCard: View {
                 row(String(localized: "Розмір"), sizeText)
                 row(String(localized: "Встановлено"), date(info?.installedDate))
                 row(String(localized: "Джерело"), info?.source.title)
+                if let update = model.availableUpdates[app.id] {
+                    row(String(localized: "Оновлення"), String(localized: "Доступна версія \(update.newVersion)"))
+                }
                 row(String(localized: "Ідентифікатор"), app.id, monospaced: true)
                 row(String(localized: "Шлях"), (app.url.path as NSString).abbreviatingWithTildeInPath,
                     monospaced: true, help: app.url.path)

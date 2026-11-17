@@ -71,8 +71,18 @@ public final class GridModel {
     public var pendingTrashAppID: String?
     /// App whose ⌘I info card is shown in the panel; nil when none.
     public var infoAppID: String?
+    /// Newer versions found by `refreshAvailableUpdates(using:)`, by bundle id (empty while the feature is off).
+    public internal(set) var availableUpdates: [String: AvailableUpdate] = [:]
+    /// App for which the "Створити папку з…" picker is open; nil when none.
+    public var folderPickerSourceID: String?
+    /// App whose Tab quick-action list is shown in the panel; nil when none. `quickActionIndex` is
+    /// the highlighted row.
+    public var quickActionsAppID: String?
+    public var quickActionIndex = 0
     /// The ⌘/ list of keyboard shortcuts is shown in the panel.
     public var showsShortcutsHelp = false
+    /// True for a moment after the calculator result was copied (the row shows "Скопійовано").
+    public var calculatorCopied = false
 
     /// Launch statistics behind `frequentApps`.
     public internal(set) var usage = UsageStats()
@@ -86,7 +96,9 @@ public final class GridModel {
     /// Bundle ID → size on disk in bytes, measured off the main actor when a smart rule needs sizes
     /// (see SmartRules.swift). Empty until measured.
     public internal(set) var appSizes: [String: Int64] = [:] { didSet { invalidateDerivedCaches(catalogChanged: false) } }
-    @ObservationIgnored var sizeCache: [String: Int64] = [:]
+    /// Measured bundle sizes per path, valid while the bundle's modification date is unchanged.
+    @ObservationIgnored var sizeCache: [String: CachedAppSize] = [:]
+    @ObservationIgnored var modificationDateProvider: @Sendable (URL) -> Date? = { try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate }
     /// Measures a bundle (injectable for tests).
     @ObservationIgnored var sizeProvider: @Sendable (URL) -> Int64? = { AppSizer.size(of: $0) }
     /// Bundle IDs of the apps running right now. The model can't watch processes itself, so the app
@@ -857,6 +869,7 @@ public final class GridModel {
         selectedItemID = nil
         pendingTrashAppID = nil
         infoAppID = nil
+        quickActionsAppID = nil
         showsShortcutsHelp = false
     }
 
@@ -865,7 +878,7 @@ public final class GridModel {
     /// Removes the app from every folder it is in. Does NOT dissolve anything: the caller dissolves
     /// afterwards, with `dissolveSingleAppFolders`, once the layout is in its final shape. Keeping the
     /// two apart is what stops a move from destroying an unrelated folder (e.g. the drop target's).
-    private static func detach(_ appID: String, from l: inout Layout) {
+    static func detach(_ appID: String, from l: inout Layout) {
         for i in l.folders.indices where l.folders[i].appIDs.contains(appID) {
             l.folders[i].appIDs.removeAll { $0 == appID }
         }
@@ -874,7 +887,7 @@ public final class GridModel {
     /// Dissolves manual folders left with ≤1 app. Counting is on the stored `appIDs`, so a folder keeps
     /// the IDs of uninstalled (or hidden) apps. Call only after the layout has its final shape for the
     /// intent, so a folder that was just given its members survives.
-    private static func dissolveSingleAppFolders(_ l: inout Layout) {
+    static func dissolveSingleAppFolders(_ l: inout Layout) {
         l.folders.removeAll { $0.appIDs.count <= 1 }
     }
 

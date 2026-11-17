@@ -128,3 +128,14 @@ In-app accessibility overrides: `AppPreferences.forcesReduceMotion/forcesIncreas
 Accessibility: use `Theme.motion(_:reduceMotion:)` or `.themedAnimation(_:value:)` (View extension in Theme.swift, falls back to `Theme.crossfade`) instead of raw `.animation`/`withAnimation`; floating cards use `.cardShadow()`, tile labels `.tileLabelFont()` (semibold under Bold Text). Tiles expose VoiceOver actions (`AppIconView.voiceOverActions`, folder tile `accessibilityActions`) as the alternative to drag and drop; the folder overlay is `.isModal`. Views read `colorSchemeContrast`, `accessibilityDifferentiateWithoutColor` and `accessibilityReduceTransparency` for dots, badges and the selection ring.
 
 Release without CI: while GitHub Actions is unavailable, run `scripts/release.sh` locally and publish with `gh release create`; `scripts/check-localization.py` checks the string catalog (also run by CI).
+
+## 0.7 additions
+
+- Calculator (`Calculator.swift`, `GridModel.calculatorResult`, selection id "calc", `CalculatorRow`): recursive-descent parser, static unit conversions, no currencies; nil under prefix scopes.
+- Quick actions list: Tab on a selected app (`QuickAction`, `GridModel.quickActionsAppID`, `QuickActionsList.swift`, `QuickActionRunner`).
+- App updates (`AppUpdates.swift`, `GridModel+Updates.swift`, `AppUpdateScheduler`): `AppUpdateChecker` protocol, brew/iTunes/Sparkle sources, `availableUpdates`, `checksForAppUpdates` default OFF (network), 12 h interval.
+- Gestures (`GestureAccumulators.swift`, `App/PanelGestures.swift`, `usesGestures`): swipe = tabs, pinch = grid size.
+- URL commands live in `URLCommand.parse` (Core) and `GridModel.apply`; documented in docs/url-scheme.md.
+- Folder picker (`GridModel+FolderPicker.swift`, `FolderPickerCard`): "Створити папку з…" in the tile menu and VoiceOver.
+- `importLayout(from:) async` decodes off the main actor; `sizeCache` entries carry the bundle's modification date.
+- App tests: `Tests/MenuFoldTests`, run `scripts/test-app.sh` (hosted by the app, so the panel flashes; needs Xcode and xcodegen).

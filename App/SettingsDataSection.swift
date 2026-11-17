@@ -13,6 +13,7 @@ struct DataSettingsView: View {
 
     @State private var backups: [LayoutBackup] = []
     @State private var confirmReset = false
+    @State private var isImporting = false
     @Bindable private var prefs = AppPreferences.shared
 
     var body: some View {
@@ -26,7 +27,9 @@ struct DataSettingsView: View {
                     Button("Експортувати…") { exportLayout() }
                         .buttonStyle(.glass)
                         .controlSize(.small)
+                    if isImporting { ProgressView().controlSize(.small) }
                     Button("Імпортувати…") { importLayout() }
+                        .disabled(isImporting)
                         .buttonStyle(.glass)
                         .controlSize(.small)
                 }
@@ -216,12 +219,16 @@ struct DataSettingsView: View {
             message: String(localized: "Поточну розкладку буде замінено вмістом файлу. Це можна скасувати сполученням ⌘Z у панелі."),
             confirm: String(localized: "Імпортувати")
         ) else { return }
-        do {
-            try model.importLayout(from: url)
-        } catch {
-            SettingsAlerts.showError(error, title: String(localized: "Не вдалося імпортувати"))
+        isImporting = true
+        Task { @MainActor in
+            defer { isImporting = false }
+            do {
+                try await model.importLayout(from: url)
+            } catch {
+                SettingsAlerts.showError(error, title: String(localized: "Не вдалося імпортувати"))
+            }
+            refreshAllTabs()
         }
-        refreshAllTabs()
     }
 
     private func restore(_ backup: LayoutBackup) {

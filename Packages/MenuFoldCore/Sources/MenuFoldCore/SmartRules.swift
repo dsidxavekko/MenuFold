@@ -172,18 +172,23 @@ extension GridModel {
         commit(l)
     }
 
-    /// Measures the bundles of apps whose size is not known yet, off the main actor, when a rule
-    /// needs sizes. Measured sizes are cached per path for the session.
+    /// Measures the bundles of apps whose size is not known yet (or whose bundle changed since it
+    /// was measured), off the main actor, when a rule needs sizes. Sizes are cached per path and
+    /// bundle modification date for the session.
     func refreshAppSizes() {
         guard layout.smartRules.contains(where: { ($0.minSizeMB ?? 0) > 0 }) else { return }
-        let todo = apps.filter { sizeCache[$0.url.path] == nil }
-        guard !todo.isEmpty else { applyCachedSizes(); return }
+        let items = apps.map { ($0.url.path, $0.url) }
+        let cache = sizeCache
         let provider = sizeProvider
-        let items = todo.map { ($0.url.path, $0.url) }
+        let dateOf = modificationDateProvider
         Task { @MainActor [weak self] in
-            let result = await Task.detached(priority: .utility) { () -> [String: Int64] in
-                var found: [String: Int64] = [:]
-                for (path, url) in items { if let s = provider(url) { found[path] = s } }
+            let result = await Task.detached(priority: .utility) { () -> [String: CachedAppSize] in
+                var found: [String: CachedAppSize] = [:]
+                for (path, url) in items {
+                    let date = dateOf(url)
+                    if let c = cache[path], c.modified == date { continue }
+                    if let s = provider(url) { found[path] = CachedAppSize(size: s, modified: date) }
+                }
                 return found
             }.value
             guard let self else { return }
@@ -194,9 +199,14 @@ extension GridModel {
 
     private func applyCachedSizes() {
         var sizes: [String: Int64] = [:]
-        for app in apps { if let s = sizeCache[app.url.path] { sizes[app.id] = s } }
+        for app in apps { if let s = sizeCache[app.url.path] { sizes[app.id] = s.size } }
         if sizes != appSizes { appSizes = sizes }
     }
+}
+
+struct CachedAppSize: Sendable, Equatable {
+    var size: Int64
+    var modified: Date?
 }
 
 extension Layout {

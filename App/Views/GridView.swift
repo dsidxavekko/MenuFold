@@ -42,7 +42,7 @@ struct GridView: View {
         let phase: Phase = !model.isLoaded ? .loading
             : model.apps.isEmpty ? .noApps
             // A search with only System Settings matches still shows them instead of "nothing found".
-            : items.isEmpty && panes.isEmpty ? .empty : .grid
+            : items.isEmpty && panes.isEmpty && !(isSearching && model.calculatorResult != nil) ? .empty : .grid
         Group {
             switch phase {
             case .loading:
@@ -107,6 +107,7 @@ struct GridView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     if isSearching {
+                        CalculatorRow(model: model)
                         TabChipsView(model: model)
                     }
                     if !pinned.isEmpty {

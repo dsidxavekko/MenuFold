@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeys.onTargetPress = { [weak self] key in self?.handleHotkey(key: key) }
         hotKeys.model = model
         SpotlightIndexer.shared.start(model: model)
+        AppUpdateScheduler.shared.start(model: model)
         hotKeys.start()
         statusItem = StatusItemController(
             onToggle: { [weak self] in self?.panel.toggle(bypassingDockGuard: true) },

@@ -16,6 +16,7 @@ enum PanelShortcuts {
                 ("↩", String(localized: "Запустити або відкрити папку")),
                 ("⌥↩", String(localized: "Новий екземпляр програми")),
                 ("⇧↩  ⌘R", String(localized: "Показати у Finder")),
+                ("⇥", String(localized: "Дії з програмою")),
                 ("⌘I", String(localized: "Інформація про програму")),
                 ("⌘⌫", String(localized: "Перемістити в Кошик")),
             ]),

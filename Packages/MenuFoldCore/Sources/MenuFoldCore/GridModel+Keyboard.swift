@@ -66,7 +66,8 @@ extension GridModel {
         if let id = openFolderID, let folder = folder(id: id) {
             return [apps(in: folder).map { "app:" + $0.id }]
         }
-        return [pinnedApps.map { Self.pinnedSelectionID($0.id) },
+        let calc: [[String]] = calculatorResult == nil ? [] : [[Self.calculatorSelectionID]]
+        return calc + [pinnedApps.map { Self.pinnedSelectionID($0.id) },
                 frequentApps.map { Self.frequentSelectionID($0.id) },
                 visibleItems.map(\.id),
                 settingsPaneResults.map { Self.paneSelectionID($0.id) }]
@@ -117,6 +118,10 @@ extension GridModel {
         if let id = selectedItemID, id.hasPrefix("folder:"),
            let uuid = UUID(uuidString: String(id.dropFirst("folder:".count))), folder(id: uuid) != nil {
             openFolderID = uuid
+            return true
+        }
+        if selectedItemID == Self.calculatorSelectionID, calculatorResult != nil {
+            copyCalculatorResult()
             return true
         }
         if let id = selectedItemID, id.hasPrefix("pane:"),

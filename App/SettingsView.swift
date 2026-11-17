@@ -167,6 +167,8 @@ struct SettingsView: View {
 
             SpotlightSettingsSection()
 
+            AppUpdatesSettingsSection(model: model)
+
             if Updater.shared.isEnabled {
                 updatesSection
             }

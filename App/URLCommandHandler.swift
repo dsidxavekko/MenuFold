@@ -10,6 +10,7 @@ import MenuFoldCore
 /// - `menufold://launch?id=BUNDLE_ID`: launch (or bring forward) that app, without showing the panel
 /// - `menufold://settings`
 ///
+/// Parsing lives in `MenuFoldCore.URLCommand`; see docs/url-scheme.md for every command.
 /// Anything else is logged and ignored.
 @MainActor
 enum URLCommandHandler {
@@ -17,52 +18,53 @@ enum URLCommandHandler {
 
     static func handle(_ url: URL, delegate: AppDelegate) {
         guard url.scheme?.lowercased() == scheme else { return }
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        // `menufold://search?q=x` has the command as its host; `menufold:search?q=x` as its path.
-        let command = (components?.host ?? components?.path ?? "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-        let items = components?.queryItems ?? []
         delegate.noteExternalCommand()
-        func value(_ name: String) -> String? {
-            items.first { $0.name.lowercased() == name }?.value
+        guard let command = URLCommand.parse(url) else {
+            NSLog("%@", "MenuFold: ignoring unknown or malformed URL \(url.absoluteString)")
+            return
         }
+        let model = delegate.model
+        func fail() { NSLog("%@", "MenuFold: could not apply \(url.absoluteString)") }
 
         switch command {
-        case "toggle":
+        case .toggle:
             delegate.togglePanelFromCommand()
-        case "show", "open", "":
+        case .show:
             delegate.showPanel()
-        case "hide":
+        case .hide:
             delegate.panel.hide()
-        case "search":
-            delegate.showPanel(search: value("q") ?? value("query") ?? "")
-        case "folder":
-            guard let name = value("name"), delegate.showPanel(folderNamed: name) else {
-                NSLog("%@", "MenuFold: no folder for \(url.absoluteString)")
-                return
+        case .search(let text):
+            delegate.showPanel(search: text)
+        case .folder(let name):
+            if !delegate.showPanel(folderNamed: name) { fail() }
+        case .tab(let name):
+            if !delegate.showPanel(tabNamed: name) { fail() }
+        case .profile(let name):
+            if name.isEmpty {
+                model.setActiveProfile(nil)
+            } else if !model.setActiveProfile(named: name) {
+                fail()
             }
-        case "tab":
-            guard let name = value("name"), delegate.showPanel(tabNamed: name) else {
-                NSLog("%@", "MenuFold: no tab for \(url.absoluteString)")
-                return
-            }
-        case "profile":
-            // `menufold://profile?name=Робота`; an empty name or "none" leaves profiles.
-            let name = (value("name") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if name.isEmpty || name.lowercased() == "none" {
-                delegate.model.setActiveProfile(nil)
-            } else if !delegate.model.setActiveProfile(named: name) {
-                NSLog("%@", "MenuFold: no profile for \(url.absoluteString)")
-            }
-        case "launch":
-            guard let id = value("id") ?? value("bundleid"), delegate.launchApp(id: id) else {
-                NSLog("%@", "MenuFold: no app for \(url.absoluteString)")
-                return
-            }
-        case "settings", "preferences":
+        case .launch(let ref):
+            // Only apps the panel shows: a hidden app is not launchable from a URL.
+            if let app = model.resolveApp(ref) { model.launch(app) } else { fail() }
+        case .settings:
             delegate.showSettings()
-        default:
-            NSLog("%@", "MenuFold: ignoring unknown URL \(url.absoluteString)")
+        case .pin, .unpin, .newFolder, .moveToFolder, .removeFromFolder, .category:
+            if !model.apply(command) { fail() }
+        case .quit(let ref):
+            if let app = model.resolveApp(ref) { RunningAppsMonitor.shared.quit(app.id) } else { fail() }
+        case .hideApp(let ref):
+            if let app = model.resolveApp(ref) {
+                NSRunningApplication.runningApplications(withBundleIdentifier: app.id).forEach { $0.hide() }
+            } else { fail() }
+        case .reveal(let ref):
+            if let app = model.resolveApp(ref) { model.revealInFinder(app) } else { fail() }
+        case .copyPath(let ref):
+            if let app = model.resolveApp(ref) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(app.url.path, forType: .string)
+            } else { fail() }
         }
     }
 }

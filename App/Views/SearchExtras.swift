@@ -84,6 +84,53 @@ private struct TabChip: View {
     }
 }
 
+/// First row of the results for a calculation or unit conversion ("2+2", "5 km in mi"). Return
+/// (or a click) copies the value and shows "Скопійовано" for a moment. Selection id "calc".
+struct CalculatorRow: View {
+    @Bindable var model: GridModel
+    @State private var isHovered = false
+    @Environment(\.menuFoldReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if let result = model.calculatorResult {
+            let isSelected = model.selectedItemID == GridModel.calculatorSelectionID
+            Button { model.copyCalculatorResult() } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "equal.square")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text(result.display)
+                        .font(.system(size: 22, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .textSelection(.disabled)
+                    Spacer(minLength: 8)
+                    Text(model.calculatorCopied ? String(localized: "Скопійовано") : String(localized: "Return — скопіювати"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 52)
+                .glassEffect(.regular.tint(isHovered || isSelected ? Color.accentColor.opacity(0.18) : nil).interactive(),
+                             in: .rect(cornerRadius: 14))
+                .overlay {
+                    if isSelected { SelectionRing(cornerRadius: 14) }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 8)
+            .id(GridModel.calculatorSelectionID)
+            .accessibilityLabel(result.display)
+            .accessibilityHint(String(localized: "Копіює результат"))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+    }
+}
+
 /// "Системні параметри" section with `model.settingsPaneResults`, placed by GridView at the end of
 /// the scroll content while searching. Each tile has `.id(GridModel.paneSelectionID(pane.id))` and
 /// shows the keyboard selection like app tiles. Draws nothing when there are no results.
