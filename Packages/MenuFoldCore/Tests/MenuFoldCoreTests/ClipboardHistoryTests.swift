@@ -47,6 +47,52 @@ import Testing
         model.showsClipboardTab = true
         #expect(model.availableTabs.first == .clipboard)
     }
+
+    private func image(_ seed: UInt8, size: Int = 100) -> ClipboardImage {
+        ClipboardImage(data: Data(repeating: seed, count: size), thumbnail: Data([seed]), width: 800, height: 600)
+    }
+
+    @Test func imagesAreDeduplicatedByContentAndKeepTextsApart() {
+        var h = ClipboardHistory()
+        h.add("a")
+        let first = h.add(image: image(1))
+        h.add(image: image(2))
+        let again = h.add(image: image(1))
+        #expect(first && again)
+        #expect(h.entries.compactMap { $0.image?.data.first } == [1, 2])
+        #expect(h.entries.count == 3)
+        let repeated = h.add(image: image(1))
+        #expect(repeated == false)
+    }
+
+    @Test func oversizedAndEmptyImagesIgnored() {
+        var h = ClipboardHistory()
+        let huge = h.add(image: image(1, size: ClipboardHistory.maxImageBytes + 1))
+        let empty = h.add(image: ClipboardImage(data: Data(), thumbnail: Data(), width: 1, height: 1))
+        #expect(!huge && !empty)
+        #expect(h.entries.isEmpty)
+    }
+
+    @Test func imageBytesAreCappedOldestFirstPinsExempt() {
+        var h = ClipboardHistory()
+        let big = ClipboardHistory.maxImageBytes
+        h.add(image: image(1, size: big))
+        h.togglePin(id: h.entries[0].id)
+        for seed in 2...8 { h.add(image: image(UInt8(seed), size: big)) }
+        let unpinned = h.entries.filter { !$0.isPinned }
+        #expect(unpinned.count == 4)
+        #expect(unpinned.first?.image?.data.first == 8)
+        #expect(h.entries.first?.image?.data.first == 1)
+    }
+
+    @Test func imagePreviewAndFilter() {
+        var h = ClipboardHistory()
+        h.add("hello"); h.add(image: image(1))
+        #expect(h.entries[0].preview.hasSuffix("800×600"))
+        #expect(h.filtered("image").count == 1)
+        #expect(h.filtered("800").count == 1)
+        #expect(h.filtered("hello").map(\.text) == ["hello"])
+    }
 }
 
 @MainActor
@@ -65,5 +111,58 @@ import Testing
         }
         catalog.replace([AppEntry(id: "a", name: "A", url: URL(fileURLWithPath: "/Applications/A.app"), infoCategory: "public.app-category.productivity")])
         #expect(fired)
+    }
+}
+
+@MainActor
+@Suite struct ClipboardKeyboardTests {
+    private func model(_ texts: [String]) -> GridModel {
+        let m = GridModel(catalog: StaticAppCatalog(apps: []), store: nil)
+        for t in texts.reversed() { m.clipboard.add(t) }
+        m.tab = .clipboard
+        return m
+    }
+
+    @Test func arrowsPickRowsAndStopAtEnds() {
+        let m = model(["a", "b", "c"])
+        m.moveClipboardSelection(by: 1)
+        #expect(m.selectedClipboardEntry?.text == "a")
+        m.moveClipboardSelection(by: 1); m.moveClipboardSelection(by: 1); m.moveClipboardSelection(by: 1)
+        #expect(m.selectedClipboardEntry?.text == "c")
+        m.moveClipboardSelection(by: -1)
+        #expect(m.selectedClipboardEntry?.text == "b")
+    }
+
+    @Test func upFromNothingPicksLast() {
+        let m = model(["a", "b"])
+        m.moveClipboardSelection(by: -1)
+        #expect(m.selectedClipboardEntry?.text == "b")
+    }
+
+    @Test func queryFiltersHistoryAndReturnUsesFirstMatch() {
+        let m = model(["alpha", "beta", "gamma"])
+        #expect(m.clipboardEntryToUse == nil)
+        m.query = "ta"
+        #expect(m.clipboardEntries.map(\.text) == ["beta"])
+        #expect(m.clipboardEntryToUse?.text == "beta")
+    }
+
+    @Test func removeMovesPickToNeighbourAndPinKeepsPick() {
+        let m = model(["a", "b", "c"])
+        m.moveClipboardSelection(by: 1); m.moveClipboardSelection(by: 1)
+        let removed = m.removeClipboardSelection()
+        #expect(removed)
+        #expect(m.selectedClipboardEntry?.text == "c")
+        let pinned = m.togglePinOnClipboardSelection()
+        #expect(pinned)
+        #expect(m.selectedClipboardEntry?.isPinned == true)
+    }
+
+    @Test func leavingTabClearsFilterAndPick() {
+        let m = model(["a"])
+        m.query = "a"
+        m.moveClipboardSelection(by: 1)
+        m.tab = .all
+        #expect(m.query.isEmpty && m.clipboardSelectedID == nil)
     }
 }

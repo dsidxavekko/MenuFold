@@ -1,10 +1,13 @@
 import AppKit
+import ImageIO
 import MenuFoldCore
+import UniformTypeIdentifiers
 
 /// Watches the general pasteboard and feeds `GridModel.clipboard`. Polls `changeCount` (macOS has no
 /// pasteboard notification) once a second (and on every panel open, see `refresh()`), only while enabled. Texts a password manager or another
 /// app marks as concealed, transient or auto-generated (nspasteboard.org) are never recorded, and the
-/// history lives in memory only.
+/// history lives in memory only. A copied picture (no text on the pasteboard) is encoded to PNG and
+/// shrunk to a thumbnail off the main thread (`ClipboardImageEncoder`).
 @MainActor
 final class ClipboardMonitor {
     static let shared = ClipboardMonitor()
@@ -50,9 +53,17 @@ final class ClipboardMonitor {
     func copy(_ entry: ClipboardEntry) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(entry.text, forType: .string)
+        if let image = entry.image {
+            pasteboard.setData(image.data, forType: .png)
+        } else {
+            pasteboard.setString(entry.text, forType: .string)
+        }
         lastChangeCount = pasteboard.changeCount
-        model?.clipboard.add(entry.text)
+        if let image = entry.image {
+            model?.clipboard.add(image: image)
+        } else {
+            model?.clipboard.add(entry.text)
+        }
     }
 
     /// Catches a copy made within the last polling interval; called when the panel opens.
@@ -66,8 +77,57 @@ final class ClipboardMonitor {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
         let types = Set(pasteboard.types ?? [])
-        guard types.isDisjoint(with: Self.ignoredTypes),
-              let text = pasteboard.string(forType: .string) else { return }
-        model?.clipboard.add(text)
+        guard types.isDisjoint(with: Self.ignoredTypes) else { return }
+        if let text = pasteboard.string(forType: .string) {
+            model?.clipboard.add(text)
+            return
+        }
+        // A picture: PNG as is, else TIFF (screenshots to clipboard, most editors).
+        let source: Data?
+        if types.contains(.png) { source = pasteboard.data(forType: .png) }
+        else if types.contains(.tiff) { source = pasteboard.data(forType: .tiff) }
+        else { source = nil }
+        guard let source, source.count <= ClipboardImageEncoder.maxSourceBytes else { return }
+        let count = lastChangeCount
+        Task { @MainActor [weak self] in
+            let image = await Task.detached(priority: .utility) { ClipboardImageEncoder.encode(source) }.value
+            // The user copied something else meanwhile: that copy is recorded on its own.
+            guard let self, let image, self.lastChangeCount == count else { return }
+            self.model?.clipboard.add(image: image)
+        }
+    }
+}
+
+/// Turns copied picture data into a `ClipboardImage` (PNG + small thumbnail). Pure ImageIO, so it
+/// runs off the main actor.
+enum ClipboardImageEncoder {
+    /// Raw pasteboard data larger than this is not even decoded (TIFF is uncompressed).
+    static let maxSourceBytes = 60_000_000
+    static let thumbnailPixels = 120
+
+    static func encode(_ data: Data) -> ClipboardImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              image.width > 0, image.height > 0 else { return nil }
+        // Already PNG: keep the bytes untouched.
+        let isPNG = (CGImageSourceGetType(source) as String?) == UTType.png.identifier
+        guard let png = isPNG ? data : pngData(image) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailPixels,
+        ]
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+              let thumbData = pngData(thumb) else { return nil }
+        return ClipboardImage(data: png, thumbnail: thumbData, width: image.width, height: image.height)
+    }
+
+    private static func pngData(_ image: CGImage) -> Data? {
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out, UTType.png.identifier as CFString, 1, nil) else {
+            return nil
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        return CGImageDestinationFinalize(destination) ? out as Data : nil
     }
 }

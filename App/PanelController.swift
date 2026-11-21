@@ -388,6 +388,10 @@ final class PanelController: NSObject, NSWindowDelegate {
             withAnimation(Self.contentAnimation) { model.cycleTab(by: modifiers.contains(.shift) ? -1 : 1) }
             return true
         }
+        // Clipboard tab: the rows have their own selection.
+        if model.tab == .clipboard, model.openFolderID == nil, let handled = handleClipboardKey(event, modifiers: modifiers, isReturn: isReturn) {
+            return handled
+        }
         // Tab on a selected app tile opens its action list.
         if event.keyCode == KeyCode.tab, modifiers.isEmpty, let app = model.selectedApp {
             model.quickActionIndex = 0
@@ -454,6 +458,37 @@ final class PanelController: NSObject, NSWindowDelegate {
             }
         }
         return false
+    }
+
+    /// Keys of the clipboard tab: ↑/↓ pick a row, Return copies the picked one (without a pick the
+    /// search field's own Enter copies the first match), ⌘D pins, ⌘⌫ deletes (with an empty query).
+    /// Nil when the event is not for the list, so it goes on to the usual handling.
+    private func handleClipboardKey(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, isReturn: Bool) -> Bool? {
+        if modifiers.isEmpty {
+            switch event.keyCode {
+            case KeyCode.down, KeyCode.up:
+                model.moveClipboardSelection(by: event.keyCode == KeyCode.down ? 1 : -1)
+                return true
+            case KeyCode.returnKey, KeyCode.keypadEnter:
+                guard let entry = model.selectedClipboardEntry else { return nil }
+                ClipboardMonitor.shared.copy(entry)
+                model.onLaunched?()
+                return true
+            default: return nil
+            }
+        }
+        if modifiers == .command, model.selectedClipboardEntry != nil {
+            if latinKey(event) == "d" {
+                withAnimation(Self.contentAnimation) { _ = model.togglePinOnClipboardSelection() }
+                return true
+            }
+            // With text in the search field ⌘⌫ keeps deleting the line.
+            if event.keyCode == KeyCode.delete, model.query.isEmpty {
+                withAnimation(Self.contentAnimation) { _ = model.removeClipboardSelection() }
+                return true
+            }
+        }
+        return nil
     }
 
     /// ⌘/ (keys list), ⌘I (info), ⌘D (pin/unpin), ⌥+arrows (move the tile), ⌥Return (new instance),

@@ -46,7 +46,7 @@ struct MenuFoldRootView: View {
     }
 
     private var showsTabs: Bool {
-        model.query.isEmpty && model.availableTabs.count > 1
+        (model.query.isEmpty || model.tab == .clipboard) && model.availableTabs.count > 1
     }
 
     /// Backdrop blur/dim follow the folder: the morph on open, the quicker spring on close.
@@ -81,7 +81,7 @@ struct MenuFoldRootView: View {
                 }
 
                 Group {
-                    if model.tab == .clipboard && model.query.isEmpty {
+                    if model.tab == .clipboard {
                         ClipboardView(model: model)
                     } else {
                         GridView(model: model, namespace: folderNamespace)

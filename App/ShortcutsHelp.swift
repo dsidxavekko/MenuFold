@@ -25,6 +25,12 @@ enum PanelShortcuts {
                 ("⌥← ⌥→ ⌥↑ ⌥↓", String(localized: "Пересунути плитку на «Все»")),
                 ("⌘Z  ⇧⌘Z", String(localized: "Скасувати й повторити зміни")),
             ]),
+            Group(title: String(localized: "Буфер обміну"), items: [
+                ("↑ ↓", String(localized: "Вибрати запис")),
+                ("↩", String(localized: "Скопіювати запис і закрити панель")),
+                ("⌘D", String(localized: "Закріпити або відкріпити")),
+                ("⌘⌫", String(localized: "Видалити запис")),
+            ]),
             Group(title: String(localized: "Вкладки й панель"), items: [
                 ("⌘1 … ⌘9", String(localized: "Перейти на вкладку")),
                 ("⌃⇥  ⌃⇧⇥", String(localized: "Наступна й попередня вкладка")),
@@ -60,14 +66,14 @@ private struct ShortcutRow: View {
 
 /// ⌘/ overlay: a glass card over a dimmed panel (an alert or sheet would close the panel).
 struct ShortcutsHelpCard: View {
+    static let width: CGFloat = 720
+
     @Bindable var model: GridModel
     @Environment(\.menuFoldReduceMotion) private var reduceMotion
 
-    var body: some View {
+    private func column(_ groups: [PanelShortcuts.Group]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Гарячі клавіші")
-                .font(.headline)
-            ForEach(PanelShortcuts.groups) { group in
+            ForEach(groups) { group in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(group.title)
                         .font(.caption.weight(.semibold))
@@ -78,6 +84,19 @@ struct ShortcutsHelpCard: View {
                     }
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Гарячі клавіші")
+                .font(.headline)
+            // Two columns: with the clipboard keys one column is taller than the panel.
+            HStack(alignment: .top, spacing: 24) {
+                column(Array(PanelShortcuts.groups.prefix(2)))
+                column(Array(PanelShortcuts.groups.dropFirst(2)))
+            }
             HStack {
                 Spacer()
                 Button("Готово") { model.showsShortcutsHelp = false }
@@ -87,7 +106,7 @@ struct ShortcutsHelpCard: View {
             }
         }
         .padding(22)
-        .frame(width: 440)
+        .frame(width: Self.width)
         .glassEffect(.regular, in: .rect(cornerRadius: Theme.cardCorner, style: .continuous))
         .cardShadow()
         .accessibilityElement(children: .contain)

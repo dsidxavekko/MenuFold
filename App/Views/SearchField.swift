@@ -22,7 +22,8 @@ struct SearchField: View {
                 .font(.system(size: 20))
                 .foregroundStyle(isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .accessibilityHidden(true)
-            TextField("Пошук", text: $model.query)
+            TextField(model.tab == .clipboard ? String(localized: "Пошук у буфері обміну") : String(localized: "Пошук"),
+                      text: $model.query)
                 .textFieldStyle(.plain)
                 .font(Theme.headerFont)
                 .focused($isFocused)
@@ -101,6 +102,13 @@ struct SearchField: View {
     /// (same morph as its tile), and with no app or folder the first System Settings pane opens.
     private func launchFirst() {
         guard model.openFolderID == nil else { return }
+        if model.tab == .clipboard {
+            if let entry = model.clipboardEntryToUse {
+                ClipboardMonitor.shared.copy(entry)
+                model.onLaunched?()
+            }
+            return
+        }
         switch model.visibleItems.first {
         case .app(let app):
             model.launch(app)

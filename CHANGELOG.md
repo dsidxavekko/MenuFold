@@ -4,6 +4,12 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.9.0
+
+- **Clipboard tab with the keyboard**: ↑/↓ pick an entry, Return copies it and closes the panel, ⌘D pins it, ⌘⌫ deletes it. Typing in the search field now filters the history (Return copies the first match). The keys are listed in the ⌘/ help.
+- **Pictures in the clipboard history**: a copied image (a screenshot, a picture from a browser or an editor) appears as a thumbnail next to the texts, and clicking it puts the image back. Pictures stay in memory only, are capped at 10 MB each and 48 MB together (the oldest unpinned ones go first), and password-manager copies are still skipped.
+- The ⌘/ shortcut list is laid out in two columns, so it still fits the panel with the new keys.
+
 ## 0.8.5
 
 - Lower memory use: the panel's views are released after it has been hidden for 30 seconds and rebuilt when you open it again, and cached icons and freed memory go back to the system.

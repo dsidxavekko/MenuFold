@@ -62,8 +62,17 @@ public final class GridModel {
     /// True when an unusable layout could not be moved aside: saving is blocked to protect it.
     public var quarantineFailedInPlace: Bool { store?.lastQuarantineFailed ?? false }
 
-    public var tab: GridTab = .all { didSet { if tab != oldValue { selectedItemID = nil } } }
-    public var query: String = "" { didSet { if query != oldValue { selectedItemID = nil } } }
+    public var tab: GridTab = .all {
+        didSet {
+            guard tab != oldValue else { return }
+            selectedItemID = nil
+            clipboardSelectedID = nil
+            // On the clipboard tab the search field filters the history; leaving it must not turn
+            // that text into an app search.
+            if oldValue == .clipboard, !query.isEmpty { query = "" }
+        }
+    }
+    public var query: String = "" { didSet { if query != oldValue { selectedItemID = nil; clipboardSelectedID = nil } } }
     /// Folder currently expanded over the grid.
     public var openFolderID: UUID? { didSet { if openFolderID != oldValue { selectedItemID = nil } } }
     /// Keyboard selection: a `GridItem.id` ("app:…" / "folder:…"), or `frequentSelectionID(_:)` for
@@ -130,6 +139,8 @@ public final class GridModel {
     }
     /// Copied texts, fed by the app's pasteboard monitor. Memory only.
     public var clipboard = ClipboardHistory()
+    /// The history row picked with the arrow keys (see GridModel+Clipboard.swift).
+    public var clipboardSelectedID: UUID?
     /// Shows the "Закріплені" row on "Все" (a Settings switch the app persists).
     public var showsPinned = true { didSet { if showsPinned != oldValue { clearSelectionIfGone() } } }
     /// `panelDidOpen` keeps the current tab instead of going back to "Все" (a Settings switch).
@@ -886,6 +897,7 @@ public final class GridModel {
         renamingCategoryID = nil
         if !rememberLastTab { tab = .all } else { validateTab() }
         selectedItemID = nil
+        clipboardSelectedID = nil
         pendingTrashAppID = nil
         infoAppID = nil
         quickActionsAppID = nil
