@@ -4,6 +4,11 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.8.5
+
+- Lower memory use: the panel's views are released after it has been hidden for 30 seconds and rebuilt when you open it again, and cached icons and freed memory go back to the system.
+- Fewer background wakeups: the clipboard history is checked once a second instead of twice (and again every time the panel opens, so nothing is missed).
+
 ## 0.8.4
 
 - Fixed the category tabs sometimes showing only your own categories right after launch (the automatic ones such as Developer Tools or Utilities were missing until the app was restarted). The tab strip now always refreshes when the app list loads.

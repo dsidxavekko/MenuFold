@@ -2,7 +2,7 @@ import AppKit
 import MenuFoldCore
 
 /// Watches the general pasteboard and feeds `GridModel.clipboard`. Polls `changeCount` (macOS has no
-/// pasteboard notification) twice a second, only while enabled. Texts a password manager or another
+/// pasteboard notification) once a second (and on every panel open, see `refresh()`), only while enabled. Texts a password manager or another
 /// app marks as concealed, transient or auto-generated (nspasteboard.org) are never recorded, and the
 /// history lives in memory only.
 @MainActor
@@ -32,10 +32,10 @@ final class ClipboardMonitor {
             guard timer == nil else { return }
             lastChangeCount = NSPasteboard.general.changeCount
             // What is on the clipboard now is not recorded: every launch starts with an empty history.
-            let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.poll() }
             }
-            timer.tolerance = 0.2
+            timer.tolerance = 0.5
             RunLoop.main.add(timer, forMode: .common)
             self.timer = timer
         } else {
@@ -53,6 +53,12 @@ final class ClipboardMonitor {
         pasteboard.setString(entry.text, forType: .string)
         lastChangeCount = pasteboard.changeCount
         model?.clipboard.add(entry.text)
+    }
+
+    /// Catches a copy made within the last polling interval; called when the panel opens.
+    func refresh() {
+        guard timer != nil else { return }
+        poll()
     }
 
     private func poll() {

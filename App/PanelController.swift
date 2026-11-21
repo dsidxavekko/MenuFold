@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import MenuFoldCore
 import SwiftUI
 
@@ -56,6 +57,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let panel: MenuFoldPanel
     private let glass = NSGlassEffectView()
     private let hostingView: NSHostingView<AnyView>
+    /// The SwiftUI root, kept so the tree can be rebuilt after `unloadViewsWhenIdle` dropped it.
+    private let rootContent: AnyView
+    private var unloadTask: Task<Void, Never>?
+    private var viewsUnloaded = false
+    /// How long the panel stays hidden before its SwiftUI tree is torn down to give the memory back.
+    private static let unloadDelay: Duration = .seconds(30)
     private var lastHide: Date = .distantPast
     /// Whether the last hide was caused by a click in the Dock area (see `hide(reason:)`).
     private var lastHideWasDockClick = false
@@ -113,7 +120,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         let root = MenuFoldRootView(model: model)
             .environment(model)
             .themeOverrides()
-        hostingView = NSHostingView(rootView: AnyView(root))
+        rootContent = AnyView(root)
+        hostingView = NSHostingView(rootView: rootContent)
         hostingView.sizingOptions = [.intrinsicContentSize]
 
         panel = MenuFoldPanel(
@@ -541,6 +549,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             return
         }
         let anchor = NSEvent.mouseLocation
+        restoreViewsIfNeeded()
+        ClipboardMonitor.shared.refresh()
         model.panelDidOpen()
 
         // Resolve the screen once: the activeWindow policy walks CGWindowList, which is not free.
@@ -602,6 +612,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 panel.orderOut(nil)
                 self.resetMotion()
                 panel.alphaValue = 1
+                self.scheduleViewUnload()
                 return
             }
             // Also gives focus back to the previous app unless another MenuFold window (Settings) is open.
@@ -826,6 +837,32 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.alphaValue = 1
         let otherVisible = NSApp.windows.contains { $0 !== panel && $0.isVisible && $0.canBecomeMain }
         if !otherVisible, NSApp.isActive { NSApp.hide(nil) }
+        scheduleViewUnload()
+    }
+
+    /// A hidden panel still keeps its whole SwiftUI tree (tiles, display lists, decoded icons), tens of
+    /// MB. After a while without use the tree is dropped; `show()` rebuilds it while the panel is
+    /// still transparent. View-local state (scroll position) is lost, the model's state is not.
+    private func scheduleViewUnload() {
+        unloadTask?.cancel()
+        unloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.unloadDelay)
+            guard !Task.isCancelled, let self, !self.isShown, !self.panel.isVisible else { return }
+            self.hostingView.rootView = AnyView(EmptyView())
+            // A hidden window is not re-rendered, so without this the old graph would linger.
+            self.hostingView.layoutSubtreeIfNeeded()
+            self.viewsUnloaded = true
+            IconCache.shared.removeAll()
+            malloc_zone_pressure_relief(nil, 0)
+        }
+    }
+
+    private func restoreViewsIfNeeded() {
+        unloadTask?.cancel()
+        unloadTask = nil
+        guard viewsUnloaded else { return }
+        hostingView.rootView = rootContent
+        viewsUnloaded = false
     }
 
     private func setDragPassthrough(_ on: Bool) {
