@@ -18,7 +18,9 @@ final class RunningAppsMonitor {
 
     private init() {
         observation = NSWorkspace.shared.observe(\.runningApplications, options: [.initial, .new]) { [weak self] workspace, _ in
-            // KVO for this key is delivered on the main thread.
+            // KVO for this key is delivered on the main thread. Only `workspace` crosses into the
+            // isolated part, and it stays on this thread, so the value is passed through unchecked.
+            nonisolated(unsafe) let workspace = workspace
             MainActor.assumeIsolated {
                 let ids = Set(workspace.runningApplications.compactMap(\.bundleIdentifier))
                 guard let self, ids != self.bundleIDs else { return }

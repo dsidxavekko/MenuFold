@@ -74,6 +74,13 @@ extension AppDelegate {
         about.target = self
         about.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         menu.addItem(about)
+        // Next to «Про MenuFold»: both are about the app itself, and the panel has no settings button
+        // the report could hide behind (see DiagnosticsExport).
+        let diagnostics = NSMenuItem(title: String(localized: "Експортувати діагностику…"),
+                                     action: #selector(menuExportDiagnostics(_:)), keyEquivalent: "")
+        diagnostics.target = self
+        diagnostics.image = NSImage(systemSymbolName: "stethoscope", accessibilityDescription: nil)
+        menu.addItem(diagnostics)
         if Updater.shared.isEnabled {
             menu.addItem(updateItem())
         }
@@ -200,6 +207,12 @@ extension AppDelegate {
 
     @objc func menuOpenAbout(_ sender: Any?) {
         showSettings(tab: .about)
+    }
+
+    /// Writes a JSON report the user can attach to a bug report; the save panel and the alerts live
+    /// in `DiagnosticsExport`.
+    @objc func menuExportDiagnostics(_ sender: Any?) {
+        DiagnosticsExport.write(model: model)
     }
 
     @objc func menuCheckForUpdates(_ sender: Any?) {

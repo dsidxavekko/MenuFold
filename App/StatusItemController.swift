@@ -8,7 +8,9 @@ final class StatusItemController: NSObject {
     private var item: NSStatusItem?
     private let onToggle: () -> Void
     private let makeMenu: () -> NSMenu
-    private var observer: NSObjectProtocol?
+    /// `nonisolated(unsafe)` for the same reason as `PanelController`'s tokens: it is written on the
+    /// main actor only, and read from the nonisolated `deinit` once nothing else can reach it.
+    private nonisolated(unsafe) var observer: NSObjectProtocol?
 
     static let symbolName = "square.grid.3x3.fill"
 

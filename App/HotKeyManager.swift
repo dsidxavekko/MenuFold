@@ -36,9 +36,14 @@ final class HotKeyManager {
     @ObservationIgnored private var hasApplied = false
 
     static let mainKey = "main"
+    /// Key of the clipboard shortcut in `registered`, `conflicts` and the Settings list. It can never
+    /// clash with a layout entry, whose keys are "app:…" / "folder:…".
+    static let clipboardKey = "clipboard"
 
     /// Called on the main actor when a per-app or per-folder shortcut is pressed (the `AppHotkey` key).
     @ObservationIgnored var onTargetPress: ((String) -> Void)?
+    /// Called when `AppPreferences.clipboardHotKey` is pressed.
+    @ObservationIgnored var onClipboardPress: (() -> Void)?
 
     /// Shortcuts that macOS refused (`eventHotKeyExistsErr`: another app owns the combination),
     /// by key. Settings shows them; the entry stays stored and is retried when anything changes.
@@ -122,7 +127,10 @@ final class HotKeyManager {
 
     private func pressed(_ id: UInt32) {
         if id == Self.mainID { onPress?(); return }
-        if let key = idToKey[id] { onTargetPress?(key) }
+        guard let key = idToKey[id] else { return }
+        // The clipboard shortcut has its own handler; every other key here belongs to a layout entry.
+        if key == Self.clipboardKey { onClipboardPress?(); return }
+        onTargetPress?(key)
     }
 
     /// The shortcuts that should be registered now.
@@ -132,6 +140,7 @@ final class HotKeyManager {
             all[key] = HotKey(keyCode: value.keyCode, carbonModifiers: value.modifiers)
         }
         if let main = AppPreferences.shared.hotKey { all[Self.mainKey] = main }
+        if let clipboard = AppPreferences.shared.clipboardHotKey { all[Self.clipboardKey] = clipboard }
         return all
     }
 

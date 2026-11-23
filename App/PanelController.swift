@@ -81,21 +81,25 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// is live (ordering out mid-drag would cancel the session), but this hide *is* the drag's end.
     private var inDragEnd = false
 
-    private var activationObserver: NSObjectProtocol?
-    private var screenObserver: NSObjectProtocol?
-    private var keyMonitor: Any?
+    // The notification and event-monitor tokens are only written on the main actor (in the methods
+    // below) but `nonisolated(unsafe)` so `deinit`, which is nonisolated for a `@MainActor` class,
+    // can uninstall them: by then the last reference is gone, so no other thread can be using them.
+    private nonisolated(unsafe) var activationObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var screenObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var keyMonitor: Any?
     private var gestures: PanelGestures?
     /// Records `lastPanelInput` (mouse-downs and key presses in the panel).
-    private var panelInputMonitor: Any?
-    private var preferencesObserver: NSObjectProtocol?
-    private var launchObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var panelInputMonitor: Any?
+    private nonisolated(unsafe) var preferencesObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var launchObserver: NSObjectProtocol?
     /// System uptime of the last mouse-down / key press in the panel (the click or Return that
     /// launched an app, in keep-open mode). `NSEvent.timestamp` uses the same clock.
     private var lastPanelInput: TimeInterval = -.infinity
     /// System uptime at which an app launched while the panel was up (keep-open mode); `-infinity`
     /// when no launch is pending. Only counts while it is newer than `lastPanelInput`.
     private var lastLaunchFromPanel: TimeInterval = -.infinity
-    private var dragWatchdog: Timer?
+    /// Like the observer tokens above: written on the main actor, invalidated from `deinit`.
+    private nonisolated(unsafe) var dragWatchdog: Timer?
     private var deferredHideRetryTask: Task<Void, Never>?
 
     private static let scaleKey = "menuFold.panelScale"
@@ -259,8 +263,9 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: Keyboard
 
-    /// Arrow keys, Return, ⌘R and ⌘⌫ for the keyboard selection. A local monitor, because the search
-    /// field (first responder) swallows them before SwiftUI's `onKeyPress` would see them.
+    /// Every key press goes through `PanelKeyRouter` (MenuFoldCore) for the decision and through
+    /// `perform(_:context:)` for its effect. A local monitor, because the search field (first
+    /// responder) swallows the keys before SwiftUI's `onKeyPress` would see them.
     private func installKeyMonitor() {
         // Passive: only notes when the user last clicked or typed in the panel (keep-open grace).
         panelInputMonitor = NSEvent.addLocalMonitorForEvents(
@@ -294,6 +299,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         static let right: UInt16 = 124
         static let down: UInt16 = 125
         static let up: UInt16 = 126
+        static let home: UInt16 = 115
+        static let end: UInt16 = 119
+        static let pageUp: UInt16 = 116
+        static let pageDown: UInt16 = 121
     }
 
     /// The pressed letter for shortcut matching: the typed character on a Latin layout (so Dvorak
@@ -308,231 +317,206 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     /// True when the event was used (and must not reach the first responder).
+    ///
+    /// The decision itself is `PanelKeyRouter`'s (pure, tested in the package); this method only
+    /// translates the event, gathers the model's state and executes the action with the same calls
+    /// and animations the panel has always made.
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard event.window === panel, panel.isKeyWindow, isShown else { return false }
+        let context = keyContext()
+        return perform(PanelKeyRouter.action(for: keyEvent(from: event), context: context), context: context)
+    }
+
+    // MARK: Key translation
+
+    /// NSEvent → the router's logical key: key codes for the special keys (layout-independent),
+    /// `latinKey` and `digit` for letters and the number row.
+    private func keyEvent(from event: NSEvent) -> PanelKeyEvent {
+        var modifiers: PanelKeyModifiers = []
+        if event.modifierFlags.contains(.command) { modifiers.insert(.command) }
+        if event.modifierFlags.contains(.option) { modifiers.insert(.option) }
+        if event.modifierFlags.contains(.control) { modifiers.insert(.control) }
+        if event.modifierFlags.contains(.shift) { modifiers.insert(.shift) }
         // An input method is composing (candidate list, Return to commit): the keys are its own.
-        if (panel.firstResponder as? NSTextView)?.hasMarkedText() == true { return false }
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let isReturn = event.keyCode == KeyCode.returnKey || event.keyCode == KeyCode.keypadEnter
+        let composing = (panel.firstResponder as? NSTextView)?.hasMarkedText() == true
+        return PanelKeyEvent(key: logicalKey(of: event), modifiers: modifiers, hasMarkedText: composing)
+    }
 
-        // Trash card up: Return runs its default button, Esc reaches `onCancel`, the app-level
-        // ⌘Q/⌘W/⌘H/⌘, keep working, and everything else is swallowed so the hidden search query
-        // can't change underneath (typing, ⌘V, ⌘Z, ⌘⌫…).
+    private func logicalKey(of event: NSEvent) -> PanelKeyEvent.Key {
+        switch event.keyCode {
+        case KeyCode.up: return .up
+        case KeyCode.down: return .down
+        case KeyCode.left: return .left
+        case KeyCode.right: return .right
+        case KeyCode.home: return .home
+        case KeyCode.end: return .end
+        case KeyCode.pageUp: return .pageUp
+        case KeyCode.pageDown: return .pageDown
+        case KeyCode.returnKey: return .return
+        case KeyCode.keypadEnter: return .keypadEnter
+        case KeyCode.escape: return .escape
+        case KeyCode.tab: return .tab
+        case KeyCode.delete: return .delete
+        default: break
+        }
+        // ⌘1…⌘9 must work where the number row types symbols without Shift (AZERTY) and from the
+        // keypad: the physical row first, then whatever digit was actually typed.
+        if let digit = Self.digit(event) ?? latinKey(event).flatMap({ Int($0) }) { return .digit(digit) }
+        if let character = latinKey(event) { return .character(character) }
+        return .other
+    }
+
+    /// What the router needs to know about the panel, gathered from the model. The overlay order is
+    /// the order the keys were checked in before: only one of them can be up at a time.
+    private func keyContext() -> PanelKeyContext {
+        let overlay: PanelKeyContext.Overlay
         if model.pendingTrashAppID != nil {
-            if isReturn, modifiers.isEmpty {
-                NotificationCenter.default.post(name: .menuFoldTrashConfirm, object: nil)
-                return true
-            }
-            if event.keyCode == KeyCode.escape { return false }
-            let appShortcuts: Set<String> = ["q", "w", "h", ","]
-            if modifiers == .command, let key = latinKey(event), appShortcuts.contains(key) { return false }
-            return true
+            overlay = .pendingTrash
+        } else if let id = model.quickActionsAppID {
+            overlay = .quickActions(appID: id, actionCount: QuickActionRunner.actions(for: id).count,
+                                    index: model.quickActionIndex)
+        } else if model.folderPickerSourceID != nil {
+            overlay = .folderPicker
+        } else if model.infoAppID != nil || model.showsShortcutsHelp {
+            overlay = .card(infoShown: model.infoAppID != nil, shortcutsShown: model.showsShortcutsHelp)
+        } else if model.renamingFolderID != nil || model.renamingCategoryID != nil {
+            overlay = .renaming
+        } else {
+            overlay = .none
         }
-        // Tab action list: arrows move, Return runs, Esc (reaches `onCancel`) closes it.
-        if let id = model.quickActionsAppID {
-            let actions = QuickActionRunner.actions(for: id)
-            if event.keyCode == KeyCode.escape { return false }
-            if modifiers.isEmpty {
-                switch event.keyCode {
-                case KeyCode.down, KeyCode.up:
-                    guard !actions.isEmpty else { return true }
-                    let step = event.keyCode == KeyCode.down ? 1 : -1
-                    model.quickActionIndex = (model.quickActionIndex + step + actions.count) % actions.count
-                    return true
-                case KeyCode.tab:
-                    model.quickActionsAppID = nil
-                    return true
-                default: break
-                }
-                if isReturn {
-                    if let app = model.apps.first(where: { $0.id == id }), actions.indices.contains(model.quickActionIndex) {
-                        QuickActionRunner.run(actions[model.quickActionIndex], app: app, model: model)
-                    }
-                    model.quickActionsAppID = nil
-                    return true
-                }
-            }
-            if modifiers == .command, let key = latinKey(event), ["q", "w", "h", ","].contains(key) { return false }
-            return true
-        }
-        // Folder picker: its search field takes typing and Return; Esc reaches `onCancel`.
-        if model.folderPickerSourceID != nil {
-            if modifiers == .command, let key = latinKey(event), !["q", "w", "h", ",", "v", "c", "x", "a", "z"].contains(key) { return true }
-            return false
-        }
-        // ⌘I / ⌘/ cards: Return and Esc close them (Esc reaches `onCancel`), ⌘I and ⌘/ toggle, the
-        // app-level ⌘Q/⌘W/⌘H/⌘, keep working, and everything else is swallowed.
-        if model.infoAppID != nil || model.showsShortcutsHelp {
-            if event.keyCode == KeyCode.escape { return false }
-            if isReturn, modifiers.isEmpty {
-                model.infoAppID = nil
-                model.showsShortcutsHelp = false
-                return true
-            }
-            if modifiers == .command || modifiers == [.command, .shift], let key = latinKey(event) {
-                if key == "/" { model.showsShortcutsHelp.toggle(); model.infoAppID = nil; return true }
-                if key == "i", model.infoAppID != nil { model.infoAppID = nil; return true }
-                if modifiers == .command, ["q", "w", "h", ","].contains(key) { return false }
-            }
-            return true
-        }
-        // Inline renames own the keyboard: a category tab, or the open folder's title (the search
-        // field is disabled while a folder is open, so a field editor there is the title's).
-        if model.renamingFolderID != nil || model.renamingCategoryID != nil { return false }
-        if model.openFolderID != nil, panel.firstResponder is NSText { return false }
+        let folderOpen = model.openFolderID != nil
+        let app = model.selectedApp
+        return PanelKeyContext(
+            overlay: overlay,
+            folderOpen: folderOpen,
+            // The search field is disabled while a folder is open, so a field editor there is the
+            // folder title's.
+            folderTitleEditing: folderOpen && panel.firstResponder is NSText,
+            clipboardTab: model.tab == .clipboard,
+            clipboardSelection: model.selectedClipboardEntry != nil,
+            selectedAppID: app?.id,
+            selectionExists: model.selectedItemID != nil,
+            queryEmpty: model.query.isEmpty,
+            canUndo: model.canUndo,
+            canRedo: model.canRedo,
+            canTrash: app.map { model.canTrash($0) } ?? false,
+            rows: folderOpen ? Self.folderRows : AppPreferences.shared.effectiveRows
+        )
+    }
 
+    /// Rows of the folder overlay that fit its fixed height, so PageUp/PageDown step inside a folder
+    /// too (it has no Settings-driven row count of its own).
+    private static var folderRows: Int { max(1, Int(GridMetrics.folderHeight / GridMetrics.rowHeight)) }
+
+    // MARK: Action execution
+
+    /// Runs the router's action with the calls and animations the panel has always used. False only
+    /// when the key must still reach the first responder.
+    private func perform(_ action: PanelKeyAction, context: PanelKeyContext) -> Bool {
         let columns = model.openFolderID != nil ? GridMetrics.folderColumns : GridMetrics.columns
-        // ⌃Tab / ⌃⇧Tab: next / previous tab, as in browsers. Not inside an open folder (no tabs there).
-        if event.keyCode == KeyCode.tab, model.openFolderID == nil,
-           modifiers == .control || modifiers == [.control, .shift] {
-            withAnimation(Self.contentAnimation) { model.cycleTab(by: modifiers.contains(.shift) ? -1 : 1) }
-            return true
-        }
-        // Clipboard tab: the rows have their own selection.
-        if model.tab == .clipboard, model.openFolderID == nil, let handled = handleClipboardKey(event, modifiers: modifiers, isReturn: isReturn) {
-            return handled
-        }
-        // Tab on a selected app tile opens its action list.
-        if event.keyCode == KeyCode.tab, modifiers.isEmpty, let app = model.selectedApp {
-            model.quickActionIndex = 0
-            withAnimation(ThemeOverrides.reduceMotion ? Theme.crossfade : Theme.content) { model.quickActionsAppID = app.id }
-            return true
-        }
-        // Quick actions on the selected tile.
-        if let handled = handleQuickAction(event, modifiers: modifiers, isReturn: isReturn, columns: columns) {
-            return handled
-        }
-        if modifiers.isEmpty {
-            switch event.keyCode {
-            case KeyCode.down:
-                model.moveSelection(.down, columns: columns)
-                return true
-            case KeyCode.up:
-                model.moveSelection(.up, columns: columns)
-                return true
-            case KeyCode.left, KeyCode.right:
-                // Without a selection the caret moves in the search field.
-                guard model.selectedItemID != nil else { return false }
-                model.moveSelection(event.keyCode == KeyCode.left ? .left : .right, columns: columns)
-                return true
-            case KeyCode.returnKey, KeyCode.keypadEnter:
-                // No selection: the search field's onSubmit launches the first app.
-                guard model.selectedItemID != nil else { return false }
-                // Opening a folder morphs like a click on its tile.
-                let reduceMotion = ThemeOverrides.reduceMotion
-                withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) {
-                    _ = model.activateSelection()
-                }
-                return true
-            default:
-                return false
-            }
-        }
-        if modifiers == .command, model.openFolderID == nil, let digit = Self.digit(event) ?? Int(latinKey(event) ?? ""),
-           (1...9).contains(digit) {
-            // ⌘1…⌘9: the n-th tab, like browser tabs.
-            withAnimation(Self.contentAnimation) { model.selectTab(at: digit - 1) }
-            return true
-        }
-        // ⌘Z / ⇧⌘Z undo layout changes, but only while the search field is empty: with text in it
-        // the keys stay the field's own text undo. (Inline renames returned above.)
-        if latinKey(event) == "z", model.query.isEmpty,
-           modifiers == .command || modifiers == [.command, .shift] {
-            let redo = modifiers.contains(.shift)
-            guard redo ? model.canRedo : model.canUndo else { return false }
-            withAnimation(Self.contentAnimation) {
-                if redo { model.redo() } else { model.undo() }
-            }
-            return true
-        }
-        if modifiers == .command {
-            if latinKey(event) == "r", let app = model.selectedApp {
-                model.revealInFinder(app)
-                return true
-            }
-            // With text in the search field ⌘⌫ keeps deleting the line, as in any text field.
-            if event.keyCode == KeyCode.delete, model.query.isEmpty,
-               let app = model.selectedApp, model.canTrash(app) {
-                model.pendingTrashAppID = app.id
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Keys of the clipboard tab: ↑/↓ pick a row, Return copies the picked one (without a pick the
-    /// search field's own Enter copies the first match), ⌘D pins, ⌘⌫ deletes (with an empty query).
-    /// Nil when the event is not for the list, so it goes on to the usual handling.
-    private func handleClipboardKey(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, isReturn: Bool) -> Bool? {
-        if modifiers.isEmpty {
-            switch event.keyCode {
-            case KeyCode.down, KeyCode.up:
-                model.moveClipboardSelection(by: event.keyCode == KeyCode.down ? 1 : -1)
-                return true
-            case KeyCode.returnKey, KeyCode.keypadEnter:
-                guard let entry = model.selectedClipboardEntry else { return nil }
-                ClipboardMonitor.shared.copy(entry)
-                model.onLaunched?()
-                return true
-            default: return nil
-            }
-        }
-        if modifiers == .command, model.selectedClipboardEntry != nil {
-            if latinKey(event) == "d" {
-                withAnimation(Self.contentAnimation) { _ = model.togglePinOnClipboardSelection() }
-                return true
-            }
-            // With text in the search field ⌘⌫ keeps deleting the line.
-            if event.keyCode == KeyCode.delete, model.query.isEmpty {
-                withAnimation(Self.contentAnimation) { _ = model.removeClipboardSelection() }
-                return true
-            }
-        }
-        return nil
-    }
-
-    /// ⌘/ (keys list), ⌘I (info), ⌘D (pin/unpin), ⌥+arrows (move the tile), ⌥Return (new instance),
-    /// ⇧Return (show in Finder). Nil when the event is none of these, or has nothing to act on, so it
-    /// goes on to the usual handling (the search field keeps ⌥←/→ word jumps and Return).
-    private func handleQuickAction(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, isReturn: Bool,
-                                   columns: Int) -> Bool? {
         let reduceMotion = ThemeOverrides.reduceMotion
-        if modifiers == .command || modifiers == [.command, .shift], latinKey(event) == "/" {
-            withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { model.showsShortcutsHelp = true }
+        switch action {
+        case .passToFirstResponder:
+            return false
+        case .swallow:
             return true
-        }
-        if modifiers == .command, model.selectedApp != nil {
-            switch latinKey(event) {
-            case "i":
-                withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { _ = model.showInfoForSelection() }
-                return true
-            case "d":
-                withAnimation(Self.contentAnimation) { _ = model.togglePinOnSelection() }
-                return true
-            default: break
+        case .confirmTrash:
+            NotificationCenter.default.post(name: .menuFoldTrashConfirm, object: nil)
+        case .setQuickActionIndex(let index):
+            model.quickActionIndex = index
+        case .closeQuickActions:
+            model.quickActionsAppID = nil
+        case .runQuickAction(let index):
+            if let id = model.quickActionsAppID, let app = model.apps.first(where: { $0.id == id }) {
+                let actions = QuickActionRunner.actions(for: app.id)
+                if actions.indices.contains(index) {
+                    QuickActionRunner.run(actions[index], app: app, model: model)
+                }
             }
+            model.quickActionsAppID = nil
+        case .closeCards:
+            model.infoAppID = nil
+            model.showsShortcutsHelp = false
+        case .toggleShortcutsHelp:
+            model.showsShortcutsHelp.toggle()
+            model.infoAppID = nil
+        case .closeInfoCard:
+            model.infoAppID = nil
+        case .cycleTab(let offset):
+            withAnimation(Self.contentAnimation) { model.cycleTab(by: offset) }
+        case .selectTab(let index):
+            withAnimation(Self.contentAnimation) { model.selectTab(at: index) }
+        case .openQuickActions(let appID):
+            model.quickActionIndex = 0
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { model.quickActionsAppID = appID }
+        case .showShortcutsHelp:
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { model.showsShortcutsHelp = true }
+        case .showInfo:
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.content) { _ = model.showInfoForSelection() }
+        case .togglePin:
+            withAnimation(Self.contentAnimation) { _ = model.togglePinOnSelection() }
+        case .moveTile(let direction):
+            // Nothing moved (a search, another tab, the edge of the grid): let the event reach the
+            // search field, which uses ⌥←/→ for word jumps.
+            var moved = false
+            withAnimation(Self.contentAnimation) { moved = model.moveSelectedTile(direction, columns: columns) }
+            return moved
+        case .launchNewInstance:
+            return model.launchNewInstanceOfSelection()
+        case .revealSelection:
+            return model.revealSelectionInFinder()
+        case .moveSelection(let direction):
+            model.moveSelection(direction, columns: columns)
+        case .jumpToStart:
+            navigate(to: GridNavigation.home(from: flatSelectionIndex, sections: sectionSizes))
+        case .jumpToEnd:
+            navigate(to: GridNavigation.end(from: flatSelectionIndex, sections: sectionSizes))
+        case .page(let pages):
+            navigate(to: GridNavigation.page(from: flatSelectionIndex, sections: sectionSizes,
+                                             columns: columns, rows: max(1, context.rows), pages: pages))
+        case .activateSelection:
+            // Opening a folder morphs like a click on its tile.
+            withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) { _ = model.activateSelection() }
+        case .undo:
+            withAnimation(Self.contentAnimation) { model.undo() }
+        case .redo:
+            withAnimation(Self.contentAnimation) { model.redo() }
+        case .requestTrash:
+            guard let app = model.selectedApp else { return false }
+            model.pendingTrashAppID = app.id
+        case .clipboardMove(let step):
+            model.moveClipboardSelection(by: step)
+        case .clipboardCopy:
+            guard let entry = model.selectedClipboardEntry else { return false }
+            ClipboardMonitor.shared.copy(entry)
+            model.onLaunched?()
+        case .clipboardPin:
+            withAnimation(Self.contentAnimation) { _ = model.togglePinOnClipboardSelection() }
+        case .clipboardDelete:
+            withAnimation(Self.contentAnimation) { _ = model.removeClipboardSelection() }
         }
-        if modifiers == .option, model.selectedItemID != nil {
-            let direction: MoveDirection?
-            switch event.keyCode {
-            case KeyCode.left: direction = .left
-            case KeyCode.right: direction = .right
-            case KeyCode.up: direction = .up
-            case KeyCode.down: direction = .down
-            default: direction = nil
-            }
-            if let direction {
-                var moved = false
-                withAnimation(Self.contentAnimation) { moved = model.moveSelectedTile(direction, columns: columns) }
-                // Nothing moved: let the event reach the search field (⌥←/→ word jumps).
-                return moved ? true : nil
-            }
-        }
-        if isReturn, model.selectedApp != nil {
-            if modifiers == .option { return model.launchNewInstanceOfSelection() }
-            if modifiers == .shift { return model.revealSelectionInFinder() }
+        return true
+    }
+
+    /// Item counts of the navigation sections, and where the selection sits in their flat order.
+    private var sectionSizes: [Int] { model.navigableSections.map(\.count) }
+
+    private var flatSelectionIndex: Int? {
+        guard let id = model.selectedItemID else { return nil }
+        var offset = 0
+        for section in model.navigableSections {
+            if let index = section.firstIndex(of: id) { return offset + index }
+            offset += section.count
         }
         return nil
+    }
+
+    /// Applies a flat index from `GridNavigation` (Home/End/PageUp/PageDown) to the selection.
+    private func navigate(to target: Int?) {
+        guard let target else { return }
+        let flat = model.navigableSections.flatMap { $0 }
+        guard flat.indices.contains(target) else { return }
+        model.selectedItemID = flat[target]
     }
 
     /// Tab switches and undo re-flow the grid; Reduce Motion gets a crossfade.
@@ -616,6 +600,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         // animateIn bumps motionGeneration first: any pending out-completion is stale from here on.
         animateIn()
+    }
+
+    /// Opens the panel on `tab` (the clipboard shortcut): pressing the same shortcut again hides it,
+    /// so one key toggles one tab the way the main shortcut toggles the panel.
+    func show(tab: GridTab) {
+        if isShown, model.tab == tab {
+            hide()
+            return
+        }
+        show()
+        model.tab = tab
     }
 
     func hide(reason: HideReason = .dismissed) {
@@ -768,7 +763,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// The completion is tagged with its `motionGeneration`, and only the newest motion may run it:
     /// a fade-out that was superseded halfway (reopen, or a second hide) must not order the panel out
     /// or call `NSApp.hide` behind the newer presentation's back.
-    private func animateOut(completion: @escaping @MainActor (Int) -> Void) {
+    /// `@Sendable`: AppKit's animation completion handler is one, and the closure only runs on the
+    /// main actor (it is called through `MainActor.assumeIsolated`), so nothing crosses a thread.
+    private func animateOut(completion: @escaping @Sendable @MainActor (Int) -> Void) {
         motionGeneration += 1
         let generation = motionGeneration
         let reduceMotion = ThemeOverrides.reduceMotion
@@ -888,6 +885,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             self.hostingView.layoutSubtreeIfNeeded()
             self.viewsUnloaded = true
             IconCache.shared.removeAll()
+            FileIconCache.shared.removeAll()
             malloc_zone_pressure_relief(nil, 0)
         }
     }

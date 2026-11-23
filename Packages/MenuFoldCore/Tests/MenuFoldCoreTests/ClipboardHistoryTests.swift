@@ -103,7 +103,9 @@ import Testing
         let catalog = StaticAppCatalog(apps: [])
         let model = GridModel(catalog: catalog, store: nil)
         _ = model.availableTabs // fills the caches while the catalog is empty
-        var fired = false
+        // `nonisolated(unsafe)`: `onChange` runs on the thread that mutates the model, i.e. the main
+        // actor here, so it never runs concurrently with the test body.
+        nonisolated(unsafe) var fired = false
         withObservationTracking {
             _ = model.availableTabs // a second read: cache hit
         } onChange: {

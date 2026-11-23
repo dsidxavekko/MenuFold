@@ -20327,70 +20327,6 @@
         }
       }
     },
-    "Сполучення відкриває й закриває панель з будь-якої програми; потрібен ⌘, ⌥ або ⌃ (або окрема клавіша F1–F12). Якщо панель не ховається, програми відкриваються у фоні, і можна запустити кілька поспіль." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Tastenkombination öffnet und schließt das Fenster aus jeder App; sie braucht ⌘, ⌥ oder ⌃ (oder eine einzelne Taste F1–F12). Bleibt das Fenster geöffnet, werden Apps im Hintergrund geöffnet, sodass du mehrere nacheinander starten kannst."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The shortcut opens and closes the panel from any app; it needs ⌘, ⌥ or ⌃ (or a single F1–F12 key). If the panel stays open, apps open in the background, so you can launch several in a row."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La combinación abre y cierra el panel desde cualquier app; necesita ⌘, ⌥ o ⌃ (o una sola tecla F1–F12). Si el panel no se oculta, las apps se abren en segundo plano y puedes abrir varias seguidas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le raccourci ouvre et ferme le panneau depuis n’importe quelle app ; il nécessite ⌘, ⌥ ou ⌃ (ou une seule touche F1–F12). Si le panneau reste ouvert, les apps s’ouvrent en arrière-plan et vous pouvez en lancer plusieurs à la suite."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skrót otwiera i zamyka panel z dowolnej aplikacji; wymaga ⌘, ⌥ lub ⌃ (albo pojedynczego klawisza F1–F12). Jeśli panel się nie ukrywa, aplikacje otwierają się w tle i można uruchomić kilka po kolei."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La scorciatoia apre e chiude il pannello da qualsiasi app; richiede ⌘, ⌥ o ⌃ (oppure un solo tasto F1–F12). Se il pannello resta aperto, le app si aprono in secondo piano e puoi aprirne diverse di seguito."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O atalho abre e fecha o painel a partir de qualquer app; é necessário ⌘, ⌥ ou ⌃ (ou uma única tecla F1–F12). Se o painel permanecer aberto, os apps abrem em segundo plano e você pode abrir vários em sequência."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ショートカットは、どのアプリからでもパネルを開閉します。⌘、⌥、⌃(またはF1〜F12の単独のキー)が必要です。パネルを閉じない設定にすると、アプリはバックグラウンドで開くため、続けて複数起動できます。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快捷键可在任意 App 中打开和关闭面板；需要 ⌘、⌥ 或 ⌃（或单独的 F1–F12 键）。如果面板不隐藏，App 会在后台打开，因此可以连续启动多个。"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kestirme, paneli herhangi bir uygulamadan açar ve kapatır; ⌘, ⌥ veya ⌃ gerekir (ya da tek bir F1–F12 tuşu). Panel açık kalırsa uygulamalar arka planda açılır ve art arda birkaç tanesini başlatabilirsiniz."
-          }
-        }
-      }
-    },
     "Спорт" : {
       "comment" : "MenuFoldCore (looked up with L())",
       "extractionState" : "manual",
@@ -28668,70 +28604,6 @@
         }
       }
     },
-    "Enter запускає перший результат. Префікси: > програми, / папки, @ категорія, ? налаштування" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Eingabetaste startet das erste Ergebnis. Präfixe: > Apps, / Ordner, @ Kategorie, ? Einstellungen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter launches the first result. Prefixes: > apps, / folders, @ category, ? settings"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intro abre el primer resultado. Prefijos: > apps, / carpetas, @ categoría, ? ajustes"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entrée lance le premier résultat. Préfixes : > apps, / dossiers, @ catégorie, ? réglages"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter uruchamia pierwszy wynik. Prefiksy: > aplikacje, / foldery, @ kategoria, ? ustawienia"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Invio apre il primo risultato. Prefissi: > app, / cartelle, @ categoria, ? impostazioni"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Return abre o primeiro resultado. Prefixos: > apps, / pastas, @ categoria, ? ajustes"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enterで最初の結果を起動します。プレフィックス: > アプリ、/ フォルダ、@ カテゴリ、? 設定"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按 Enter 启动第一个结果。前缀：> App，/ 文件夹，@ 类别，? 设置"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter ilk sonucu başlatır. Önekler: > uygulamalar, / klasörler, @ kategori, ? ayarlar"
-          }
-        }
-      }
-    },
     "Новий профіль" : {
       "localizations" : {
         "de" : {
@@ -33724,6 +33596,710 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Öğeyi kopyala ve paneli kapat"
+          }
+        }
+      }
+    },
+    "Документи" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumente"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documents"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documents"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumenty"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documenti"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentos"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "書類"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文档"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Belgeler"
+          }
+        }
+      }
+    },
+    "Відкриває файл" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet die Datei"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the file"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre el archivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre le fichier"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otwiera plik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apre il file"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre o arquivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを開きます"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开文件"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosyayı açar"
+          }
+        }
+      }
+    },
+    "Копіювати шлях" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pfad kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar ruta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier le chemin"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiuj ścieżkę"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia percorso"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar Caminho"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パスをコピー"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝路径"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yolu Kopyala"
+          }
+        }
+      }
+    },
+    "Шукати файли й документи" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien und Dokumente durchsuchen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search files and documents"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar archivos y documentos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans les fichiers et les documents"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przeszukuj pliki i dokumenty"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca file e documenti"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar arquivos e documentos"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルと書類を検索する"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索文件和文档"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosyaları ve belgeleri ara"
+          }
+        }
+      }
+    },
+    "Знайдені файли з’являються під результатами програм, після системних параметрів. Префікс «~» у полі пошуку шукає лише документи. Пошук іде локально через Spotlight у вашій домашній теці: назви файлів нікуди не надсилаються, інтернет не використовується." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gefundene Dateien erscheinen unter den App-Ergebnissen, nach den Systemeinstellungen. Das Präfix „~“ im Suchfeld durchsucht nur Dokumente. Die Suche läuft lokal über Spotlight in deinem Benutzerordner: Dateinamen werden nirgendwohin gesendet, das Internet wird nicht genutzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found files appear below the app results, after the System Settings items. The “~” prefix in the search field searches documents only. The search runs locally through Spotlight in your home folder: file names are never sent anywhere, and no internet is used."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos encontrados aparecen bajo los resultados de apps, después de los ajustes del sistema. El prefijo “~” en el campo de búsqueda busca solo documentos. La búsqueda se hace localmente con Spotlight en tu carpeta personal: los nombres de archivo no se envían a ningún sitio y no se usa internet."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les fichiers trouvés apparaissent sous les résultats des apps, après les réglages système. Le préfixe « ~ » dans le champ de recherche ne cherche que des documents. La recherche se fait localement via Spotlight dans votre dossier personnel : les noms de fichiers ne sont jamais envoyés nulle part et aucune connexion internet n’est utilisée."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Znalezione pliki pojawiają się pod wynikami aplikacji, po ustawieniach systemowych. Prefiks „~” w polu wyszukiwania przeszukuje tylko dokumenty. Wyszukiwanie odbywa się lokalnie przez Spotlight w folderze domowym: nazwy plików nie są nigdzie wysyłane, internet nie jest używany."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I file trovati compaiono sotto i risultati delle app, dopo le impostazioni di sistema. Il prefisso “~” nel campo di ricerca cerca solo documenti. La ricerca avviene localmente tramite Spotlight nella tua cartella personale: i nomi dei file non vengono inviati da nessuna parte e non serve internet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os arquivos encontrados aparecem abaixo dos resultados de apps, depois dos ajustes do sistema. O prefixo “~” no campo de busca procura apenas documentos. A busca é feita localmente pelo Spotlight na sua pasta pessoal: os nomes dos arquivos não são enviados a lugar nenhum e a internet não é usada."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "見つかったファイルは、システム設定の項目に続いて、アプリの検索結果の下に表示されます。検索フィールドで「~」を付けると書類だけを検索します。検索はホームフォルダ内のSpotlightによってローカルで行われ、ファイル名が外部に送信されることはなく、インターネットも使用しません。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到的文件会显示在 App 结果下方、系统设置项目之后。在搜索框中加“~”前缀可只搜索文档。搜索通过 Spotlight 在你的个人文件夹中本地完成：文件名称不会被发送到任何地方，也不使用互联网。"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bulunan dosyalar, sistem ayarlarından sonra uygulama sonuçlarının altında görünür. Arama alanındaki “~” öneki yalnızca belgelerde arar. Arama, Spotlight aracılığıyla kişisel klasörünüzde yerel olarak yapılır: dosya adları hiçbir yere gönderilmez, internet kullanılmaz."
+          }
+        }
+      }
+    },
+    "Експортувати діагностику" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnose exportieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Diagnostics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar diagnóstico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le diagnostic"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksportuj diagnostykę"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta diagnostica"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar Diagnóstico"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "診断情報を書き出す"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出诊断信息"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tanılama Bilgilerini Dışa Aktar"
+          }
+        }
+      }
+    },
+    "Експортувати діагностику…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnose exportieren…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Diagnostics…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar diagnóstico…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le diagnostic…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksportuj diagnostykę…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta diagnostica…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar Diagnóstico…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "診断情報を書き出す…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出诊断信息…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tanılama Bilgilerini Dışa Aktar…"
+          }
+        }
+      }
+    },
+    "Перший або останній у розділі" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum ersten oder letzten Eintrag im Abschnitt springen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First or last in the section"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir al primero o al último de la sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aller au premier ou au dernier élément de la section"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przejdź do pierwszego lub ostatniego elementu w sekcji"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vai al primo o all’ultimo elemento della sezione"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir para o primeiro ou o último da seção"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションの先頭または末尾へ移動"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳到分区第一项或最后一项"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bölümdeki ilk veya son öğeye git"
+          }
+        }
+      }
+    },
+    "Сторінка вгору або вниз" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite nach oben oder unten blättern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page up or page down"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir una página arriba o abajo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page vers le haut ou vers le bas"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przewiń o stronę w górę lub w dół"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagina su o giù"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir uma página para cima ou para baixo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ページ単位で上下に移動"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向上或向下一页"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir sayfa yukarı veya aşağı"
+          }
+        }
+      }
+    },
+    "Enter запускає перший результат. Префікси: > програми, / папки, @ категорія, ? налаштування, ~ файли" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Eingabetaste startet das erste Ergebnis. Präfixe: > Apps, / Ordner, @ Kategorie, ? Einstellungen, ~ Dateien"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter launches the first result. Prefixes: > apps, / folders, @ category, ? settings, ~ files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intro abre el primer resultado. Prefijos: > apps, / carpetas, @ categoría, ? ajustes, ~ archivos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrée lance le premier résultat. Préfixes : > apps, / dossiers, @ catégorie, ? réglages, ~ fichiers"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter uruchamia pierwszy wynik. Prefiksy: > aplikacje, / foldery, @ kategoria, ? ustawienia, ~ pliki"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invio apre il primo risultato. Prefissi: > app, / cartelle, @ categoria, ? impostazioni, ~ file"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return abre o primeiro resultado. Prefixos: > apps, / pastas, @ categoria, ? ajustes, ~ arquivos"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enterで最初の結果を起動します。プレフィックス: > アプリ、/ フォルダ、@ カテゴリ、? 設定、~ ファイル"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按 Enter 启动第一个结果。前缀：> App，/ 文件夹，@ 类别，? 设置，~ 文件"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter ilk sonucu başlatır. Önekler: > uygulamalar, / klasörler, @ kategori, ? ayarlar, ~ dosyalar"
+          }
+        }
+      }
+    },
+    "Сполучення відкриває й закриває панель з будь-якої програми; потрібен ⌘, ⌥ або ⌃ (або окрема клавіша F1–F12). Друге сполучення відкриває відразу вкладку буфера обміну. Якщо панель не ховається, програми відкриваються у фоні, і можна запустити кілька поспіль." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Tastenkombination öffnet und schließt das Fenster aus jeder App; sie braucht ⌘, ⌥ oder ⌃ (oder eine einzelne Taste F1–F12). Die zweite Kombination öffnet sofort den Tab „Zwischenablage“. Bleibt das Fenster geöffnet, werden Apps im Hintergrund geöffnet, sodass du mehrere nacheinander starten kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The shortcut opens and closes the panel from any app; it needs ⌘, ⌥ or ⌃ (or a single F1–F12 key). The second shortcut opens the “Clipboard” tab right away. If the panel stays open, apps open in the background, so you can launch several in a row."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La combinación abre y cierra el panel desde cualquier app; necesita ⌘, ⌥ o ⌃ (o una sola tecla F1–F12). La segunda combinación abre directamente la pestaña “Portapapeles”. Si el panel no se oculta, las apps se abren en segundo plano y puedes abrir varias seguidas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le raccourci ouvre et ferme le panneau depuis n’importe quelle app ; il nécessite ⌘, ⌥ ou ⌃ (ou une seule touche F1–F12). Le second raccourci ouvre directement l’onglet « Presse-papiers ». Si le panneau reste ouvert, les apps s’ouvrent en arrière-plan et vous pouvez en lancer plusieurs à la suite."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skrót otwiera i zamyka panel z dowolnej aplikacji; wymaga ⌘, ⌥ lub ⌃ (albo pojedynczego klawisza F1–F12). Drugi skrót od razu otwiera kartę „Schowek”. Jeśli panel się nie ukrywa, aplikacje otwierają się w tle i można uruchomić kilka po kolei."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La scorciatoia apre e chiude il pannello da qualsiasi app; richiede ⌘, ⌥ o ⌃ (oppure un solo tasto F1–F12). La seconda scorciatoia apre subito il riquadro “Appunti”. Se il pannello resta aperto, le app si aprono in secondo piano e puoi aprirne diverse di seguito."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O atalho abre e fecha o painel a partir de qualquer app; é necessário ⌘, ⌥ ou ⌃ (ou uma única tecla F1–F12). O segundo atalho abre direto a aba “Área de transferência”. Se o painel permanecer aberto, os apps abrem em segundo plano e você pode abrir vários em sequência."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ショートカットは、どのアプリからでもパネルを開閉します。⌘、⌥、⌃(またはF1〜F12の単独のキー)が必要です。2つ目のショートカットは「クリップボード」タブを直接開きます。パネルを閉じない設定にすると、アプリはバックグラウンドで開くため、続けて複数起動できます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快捷键可在任意 App 中打开和关闭面板；需要 ⌘、⌥ 或 ⌃（或单独的 F1–F12 键）。第二个快捷键直接打开“剪贴板”标签页。如果面板不隐藏，App 会在后台打开，因此可以连续启动多个。"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kestirme, paneli herhangi bir uygulamadan açar ve kapatır; ⌘, ⌥ veya ⌃ gerekir (ya da tek bir F1–F12 tuşu). İkinci kestirme doğrudan “Pano” sekmesini açar. Panel açık kalırsa uygulamalar arka planda açılır ve art arda birkaç tanesini başlatabilirsiniz."
           }
         }
       }

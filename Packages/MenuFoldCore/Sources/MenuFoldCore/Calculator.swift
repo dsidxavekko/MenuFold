@@ -342,7 +342,9 @@ public enum Calculator {
             }
         }
 
-        static let functions: [String: (Double) -> Double] = [
+        /// `@Sendable` values: a plain function dictionary in a `static let` is shared state, which
+        /// Swift 6 rejects unless the element type can cross isolation.
+        static let functions: [String: @Sendable (Double) -> Double] = [
             "sqrt": { $0 >= 0 ? sqrt($0) : .nan }, "cbrt": cbrt,
             "sin": sin, "cos": cos, "tan": tan, "asin": asin, "acos": acos, "atan": atan,
             "ln": { $0 > 0 ? log($0) : .nan }, "log": { $0 > 0 ? log10($0) : .nan },

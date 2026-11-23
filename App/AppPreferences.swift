@@ -78,6 +78,11 @@ final class AppPreferences {
     var showsMenuBarIcon: Bool {
         didSet { defaults.set(showsMenuBarIcon, forKey: "showsMenuBarIcon"); changed() }
     }
+    /// Global shortcut that opens the panel on the clipboard tab; nil = none (default). Separate from
+    /// `hotKey` on purpose: the clipboard is the surface people want one key away, not two clicks deep.
+    var clipboardHotKey: HotKey? {
+        didSet { saveCodable(clipboardHotKey, "clipboardHotKey"); changed() }
+    }
     /// Apps launch in the background and the panel stays open (→ `GridModel.keepsPanelOpenAfterLaunch`).
     var keepsPanelOpenAfterLaunch: Bool {
         didSet { defaults.set(keepsPanelOpenAfterLaunch, forKey: "keepsPanelOpenAfterLaunch"); changed() }
@@ -97,6 +102,11 @@ final class AppPreferences {
     /// Shows the "Закріплені" row (→ `GridModel.showsPinned`, default on).
     var showsPinned: Bool {
         didSet { defaults.set(showsPinned, forKey: "showsPinned"); changed() }
+    }
+    /// Looks for files and documents under the panel's search results (→ `GridModel.searchesFiles`,
+    /// default on): local Spotlight queries only, no network.
+    var searchesFiles: Bool {
+        didSet { defaults.set(searchesFiles, forKey: "searchesFiles"); changed() }
     }
     /// Shows count badges on folder tiles (default on).
     var showsFolderCounts: Bool {
@@ -179,6 +189,7 @@ final class AppPreferences {
         showsRecentTab = defaults.object(forKey: "showsRecentTab") as? Bool ?? true
         showsClipboardTab = defaults.object(forKey: "showsClipboardTab") as? Bool ?? true
         showsPinned = defaults.object(forKey: "showsPinned") as? Bool ?? true
+        searchesFiles = defaults.object(forKey: "searchesFiles") as? Bool ?? true
         showsFolderCounts = defaults.object(forKey: "showsFolderCounts") as? Bool ?? true
         showsNewAppDots = defaults.object(forKey: "showsNewAppDots") as? Bool ?? true
         checksForAppUpdates = defaults.object(forKey: "checksForAppUpdates") as? Bool ?? false

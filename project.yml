@@ -17,8 +17,11 @@ packages:
     exactVersion: 2.10.1
 settings:
   base:
-    SWIFT_VERSION: "5.0"
+    SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
+    # Full data-race checking (the Swift 6 language mode implies it). Kept explicit so dropping a
+    # target back to SWIFT_VERSION "5.0" would still report every concurrency diagnostic.
+    SWIFT_STRICT_CONCURRENCY: complete
 targets:
   MenuFold:
     type: application
@@ -47,8 +50,8 @@ targets:
         ENABLE_PREVIEWS: YES
         # Lets Xcode keep App/Localizable.xcstrings in sync with the strings in the code.
         SWIFT_EMIT_LOC_STRINGS: YES
-        SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "0.9.0"
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.9.1"
         # Debug builds only: scripts/release.sh sets the build number to the commit count, which
         # Sparkle compares to decide whether an update is newer.
         CURRENT_PROJECT_VERSION: "7"
@@ -72,7 +75,7 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: ""
-        SWIFT_VERSION: "5.0"
+        SWIFT_VERSION: "6.0"
 schemes:
   MenuFold:
     build:

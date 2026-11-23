@@ -10,18 +10,55 @@ import AppKit
 enum InstallLocation {
     private static let applications = URL(filePath: "/Applications", directoryHint: .isDirectory)
 
+    /// What a launch should say about where the app lives.
+    enum Advice: Equatable {
+        /// The copy is where it belongs (or nothing can be done): say nothing.
+        case nothing
+        /// A read-only volume, i.e. a mounted disk image: offer to copy into /Applications.
+        case offerMove
+        /// macOS runs a translocated copy: only explain how to move it.
+        case explainTranslocation
+    }
+
     /// Returns true when MenuFold is about to quit because its copy in /Applications is opening.
     static func offerMoveIfNeeded(onOpenFailed: @escaping () -> Void = {}) -> Bool {
         let bundle = Bundle.main.bundleURL.standardizedFileURL
-        // A deliberately installed copy on an external/secondary volume lives in /Volumes too, but
-        // its volume is writable — only a mounted disk image (read-only) gets the move offer.
-        if bundle.path.hasPrefix("/Volumes/"), !volumeIsWritable(at: bundle) {
+        switch advice(forBundleAt: bundle.path, isWritableOnVolume: volumeIsWritable(at: bundle)) {
+        case .nothing:
+            return false
+        case .offerMove:
             return offerMove(from: bundle, onOpenFailed: onOpenFailed)
-        }
-        if bundle.path.contains("/AppTranslocation/") {
+        case .explainTranslocation:
             explainTranslocation()
+            return false
         }
-        return false
+    }
+
+    /// The location rule, kept pure so it can be tested without a real bundle, a mounted image or
+    /// the user's disk. The caller runs it once per launch and only then shows UI, so the prompt is
+    /// seen at most once per launch; a copy in /Applications never asks again.
+    ///
+    /// A deliberately installed copy on an external/secondary volume lives in /Volumes too, but its
+    /// volume is writable — only a mounted disk image (read-only) gets the move offer.
+    static func advice(forBundleAt path: String, isWritableOnVolume: Bool) -> Advice {
+        if path.hasPrefix("/Volumes/"), !isWritableOnVolume { return .offerMove }
+        if path.contains("/AppTranslocation/") { return .explainTranslocation }
+        return .nothing
+    }
+
+    /// Where the copy goes: the same bundle name inside /Applications. The existing copy there, if
+    /// any, is moved to the Trash first (see `copy`).
+    static func installDestination(for bundle: URL) -> URL {
+        applications.appending(path: bundle.lastPathComponent, directoryHint: .isDirectory)
+    }
+
+    /// Volume a bundle on it lives on (`/Volumes/MenuFold` for `/Volumes/MenuFold/MenuFold.app`), or
+    /// nil when the path is not inside a volume. Only a disk image is detached after the copy, so
+    /// anything else must not reach `hdiutil detach`.
+    static func volumeRoot(ofBundleAt path: String) -> String? {
+        let parts = URL(fileURLWithPath: path).pathComponents
+        guard parts.count >= 3, parts[1] == "Volumes" else { return nil }
+        return "/Volumes/" + parts[2]
     }
 
     /// False when it cannot be determined: falling back to the move offer keeps the old behavior.
@@ -33,7 +70,7 @@ enum InstallLocation {
     }
 
     private static func offerMove(from source: URL, onOpenFailed: @escaping () -> Void) -> Bool {
-        let destination = applications.appending(path: source.lastPathComponent, directoryHint: .isDirectory)
+        let destination = installDestination(for: source)
         let replacing = FileManager.default.fileExists(atPath: destination.path)
 
         let alert = NSAlert()
@@ -58,6 +95,9 @@ enum InstallLocation {
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
+        // `nonisolated(unsafe)`: the completion handler is a `@Sendable` closure only nominally. The
+        // failure callback is used strictly inside its `Task { @MainActor }` body, i.e. on the main actor.
+        nonisolated(unsafe) let onOpenFailed = onOpenFailed
         NSWorkspace.shared.openApplication(at: destination, configuration: configuration) { _, error in
             Task { @MainActor in
                 guard let error else {
@@ -107,9 +147,7 @@ enum InstallLocation {
 
     /// Detaches the DMG a moment after this process quits (its files are in use until then).
     private static func ejectWhenGone(volumeOf source: URL) {
-        let parts = source.pathComponents  // ["/", "Volumes", "MenuFold", "MenuFold.app"]
-        guard parts.count >= 3 else { return }
-        let volume = "/Volumes/" + parts[2]
+        guard let volume = volumeRoot(ofBundleAt: source.path) else { return }
         let process = Process()
         process.executableURL = URL(filePath: "/bin/sh")
         process.arguments = ["-c", "sleep 2; /usr/bin/hdiutil detach -quiet \"$0\"", volume]

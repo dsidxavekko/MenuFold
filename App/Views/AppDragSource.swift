@@ -489,8 +489,10 @@ struct AppDropDelegate: DropDelegate {
         guard let provider = info.itemProviders(for: [.menuFoldAppID]).first else { return false }
         // Read the closures out of `self` once (rather than shadowing the property names, which is
         // ambiguous: a local named like a property is "captured before it is declared").
-        let apply: (String) -> Bool = perform
-        let isLiveApp: (String) -> Bool = isKnownApp
+        // `nonisolated(unsafe)`: the pasteboard callback is a `@Sendable` closure only nominally —
+        // both closures are used strictly inside its `DispatchQueue.main.async` body, on the main actor.
+        nonisolated(unsafe) let apply: (String) -> Bool = perform
+        nonisolated(unsafe) let isLiveApp: (String) -> Bool = isKnownApp
         provider.loadDataRepresentation(forTypeIdentifier: UTType.menuFoldAppID.identifier) { data, _ in
             guard let data, let id = String(data: data, encoding: .utf8) else { return }
             DispatchQueue.main.async {

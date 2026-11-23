@@ -16,7 +16,8 @@ import Testing
 @Suite("Localized layout")
 struct LocalizedLayoutTests {
     /// The source language plus every language of Localizable.xcstrings.
-    static let languages = ["uk", "en", "de", "pl", "fr", "es", "it", "pt-BR", "ja", "zh-Hans", "tr"]
+    /// `nonisolated`: the `@Test(arguments:)` macro reads it from outside the main actor.
+    nonisolated static let languages = ["uk", "en", "de", "pl", "fr", "es", "it", "pt-BR", "ja", "zh-Hans", "tr"]
 
     /// Room the panel leaves for a card: its height minus the margins the root view keeps.
     private static var maxCardHeight: CGFloat { GridMetrics.panelHeight - 2 * 16 }

@@ -84,7 +84,9 @@ struct AppPreferencesTests {
 
     @Test func changeNotificationIsPosted() async {
         let p = AppPreferences(defaults: suite())
-        var count = 0
+        // `nonisolated(unsafe)`: `queue: nil` delivers on the posting thread, which is the main
+        // actor here, so the observer never runs concurrently with the test body.
+        nonisolated(unsafe) var count = 0
         let token = NotificationCenter.default.addObserver(forName: .menuFoldPreferencesChanged, object: nil, queue: nil) { _ in count += 1 }
         defer { NotificationCenter.default.removeObserver(token) }
         p.showsPinned = false

@@ -39,10 +39,17 @@ struct FolderArtwork: View {
                     ForEach(0..<3, id: \.self) { col in
                         let index = row * 3 + col
                         if index < shown.count {
-                            Image(nsImage: IconCache.shared.icon(for: shown[index]))
-                                .resizable()
-                                .interpolation(.high)
-                                .frame(width: cell, height: cell)
+                            let app = shown[index]
+                            // Cache only, like the big tiles: the folder draws at once and the tile
+                            // below prefetches these icons (see `FolderTileView`'s `.task`).
+                            if let icon = IconCache.shared.cachedIcon(for: app) {
+                                Image(nsImage: icon)
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .frame(width: cell, height: cell)
+                            } else {
+                                AppIconPlaceholder(name: app.name, size: cell)
+                            }
                         } else {
                             Color.clear.frame(width: cell, height: cell)
                         }
@@ -89,6 +96,17 @@ struct FolderTileView: View {
     }
     /// Drops into Finder folders are virtual (files are not moved).
     private var canAcceptDrops: Bool { acceptsDrops }
+
+    /// Spring-loaded folder: an app held over the tile for `Theme.springLoadDelay` opens it. Kept out
+    /// of the modifier chain in `body`, where the closure literal alone was too much for the type checker.
+    private var springLoadAction: (@MainActor @Sendable () -> Void)? {
+        guard canAcceptDrops else { return nil }
+        return { @MainActor in
+            withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) {
+                model.openFolderID = folder.id
+            }
+        }
+    }
 
     private func open() {
         withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) {
@@ -146,6 +164,9 @@ struct FolderTileView: View {
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
+        // The mini-grid reads the cache only, so ask for its (at most nine) icons off the render
+        // pass; the same queue the app tiles use.
+        .task { IconCache.shared.prefetch(Array(apps.prefix(9))) }
         .themedAnimation(Theme.snappy, value: isHovered)
         .themedAnimation(Theme.snappy, value: isTargeted)
         .themedAnimation(Theme.snappy, value: isSelected)
@@ -192,12 +213,7 @@ struct FolderTileView: View {
                 TileReorderSupport.moveItem(dropped, relativeTo: itemID, after: after,
                                             model: model, reduceMotion: reduceMotion)
             } : nil,
-            // Spring-loaded folder: an app held over the tile opens it.
-            springLoad: canAcceptDrops ? {
-                withAnimation(Theme.motion(Theme.morph, reduceMotion: reduceMotion)) {
-                    model.openFolderID = folder.id
-                }
-            } : nil
+            springLoad: springLoadAction
         )
         .contextMenu {
             FolderContextMenu(folder: folder, model: model,

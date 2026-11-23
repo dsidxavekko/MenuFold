@@ -75,6 +75,40 @@ enum GridMetrics {
     static let folderHeight: CGFloat = 450
 }
 
+/// Stand-in for an icon `IconCache` has not loaded yet: the app's initial in a soft rounded square
+/// (or the generic app symbol when the name has no letter). It occupies exactly the square the real
+/// artwork will, so a tile never changes size or jumps when the icon arrives.
+struct AppIconPlaceholder: View {
+    /// Name whose first letter stands in for the icon.
+    let name: String
+    var size: CGFloat = GridMetrics.iconSize
+
+    private var initial: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "" }
+        return String(first).uppercased()
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
+            .fill(.quaternary)
+            .overlay {
+                if initial.isEmpty {
+                    Image(systemName: "app")
+                        .font(.system(size: size * 0.36, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Text(verbatim: initial)
+                        .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: size, height: size)
+            // Decorative: the tile already carries the app name as its accessibility label.
+            .accessibilityHidden(true)
+    }
+}
+
 /// Icons offered for folders in the "Іконка" menu: SF Symbols in groups, plus a fixed emoji palette.
 ///
 /// `Folder.symbol` stays a plain string so the core needs no schema change: an SF Symbol name, or

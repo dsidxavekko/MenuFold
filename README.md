@@ -48,7 +48,12 @@ Accessibility or Screen Recording permission.
 - **Search.** Results are ranked, with initials ("vsc") and fuzzy matches, and a query typed in the wrong
   keyboard layout still works. Names match in the system language and in English, folders and categories
   are found by name, and System Settings panes open right from the results.
-- **Keyboard.** Use the arrow keys to move, Return to launch, ⌘1…⌘9 or ⌃Tab to switch tabs, ⌘R to show in
+- **Files and documents.** From three letters on, the search also lists files and documents in a
+  "Documents" section under the apps — Return opens one, ⌘R shows it in Finder. Type `~` (or `file:`)
+  to search files only. The lookup goes through Spotlight on this Mac, nothing is sent anywhere, and it
+  can be switched off in Settings.
+- **Keyboard.** Use the arrow keys to move, Home/End to jump to the first or last tile and Page Up/Page
+  Down to move a screen at a time, Return to launch, ⌘1…⌘9 or ⌃Tab to switch tabs, ⌘R to show in
   Finder and ⌘⌫ to move to the Trash. Esc closes a folder, then the panel.
 - **More ways to open it.** A global shortcut, an optional menu bar icon, `menufold://` links, Shortcuts
   actions, and a Dock icon menu with your pinned apps, frequent apps and folders.
@@ -57,7 +62,8 @@ Accessibility or Screen Recording permission.
   category or move it to the Trash together with its support files (MenuFold asks first).
 - **Your data.** Export and import the layout, restore one of the daily backups, or keep it in iCloud Drive
   or Dropbox to share folders and categories between Macs. Settings also list apps you haven't opened in a
-  long time, with their size.
+  long time, with their size. If something goes wrong, **Export Diagnostics…** writes a JSON report
+  (versions, settings, counts — no app names and no paths) that you can attach to a bug report.
 - **Dock icon.** Choose the MenuFold logo, the macOS launcher icon, the Applications folder icon or your own
   picture.
 - **Grid size.** Choose the number of columns and rows.

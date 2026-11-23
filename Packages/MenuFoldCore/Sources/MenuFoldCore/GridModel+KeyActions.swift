@@ -57,6 +57,11 @@ extension GridModel {
     /// ⇧Return: shows the selected app in Finder. False when no app is selected.
     @discardableResult
     public func revealSelectionInFinder() -> Bool {
+        // A file result has no app behind it; ⌘R means the same thing for both ("show it in Finder").
+        if let file = selectedFile {
+            revealFile(file)
+            return true
+        }
         guard let app = selectedApp else { return false }
         revealInFinder(app)
         return true

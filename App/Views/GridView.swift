@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Grid of `model.visibleItems` (apps and folders) with empty states, under the "Закріплені"
 /// (`model.pinnedApps`) and "Часті" (`model.frequentApps`) rows, which the model only fills on "Все"
-/// with an empty query. While searching, matching tabs come as chips on top and System Settings
-/// panes as a section at the bottom.
+/// with an empty query. While searching, matching tabs come as chips on top, System Settings panes
+/// and then the matching files ("Документи") as sections at the bottom.
 struct GridView: View {
     @Bindable var model: GridModel
     var namespace: Namespace.ID?
@@ -39,10 +39,16 @@ struct GridView: View {
     var body: some View {
         let items = model.visibleItems
         let panes = isSearching ? model.settingsPaneResults : []
+        let files = isSearching ? model.fileResults : []
+        let hasResults = !items.isEmpty || !panes.isEmpty || !files.isEmpty
+        // A search with only System Settings or file matches still shows them instead of "nothing
+        // found". A file query still running keeps the grid too (an empty one for a files-only
+        // query): announcing "нічого не знайдено" before the answer is in would be a flash of text
+        // the user then has to watch disappear.
+        let pending = isSearching && (model.calculatorResult != nil || model.isSearchingFiles)
         let phase: Phase = !model.isLoaded ? .loading
             : model.apps.isEmpty ? .noApps
-            // A search with only System Settings matches still shows them instead of "nothing found".
-            : items.isEmpty && panes.isEmpty && !(isSearching && model.calculatorResult != nil) ? .empty : .grid
+            : hasResults || pending ? .grid : .empty
         Group {
             switch phase {
             case .loading:
@@ -79,7 +85,7 @@ struct GridView: View {
             guard !model.query.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
-            let count = model.visibleItems.count + model.settingsPaneResults.count
+            let count = model.visibleItems.count + model.settingsPaneResults.count + model.fileResults.count
             AccessibilityNotification.Announcement(
                 count == 0 ? String(localized: "Нічого не знайдено") : String(localized: "Знайдено: \(count)")
             ).post()
@@ -138,6 +144,14 @@ struct GridView: View {
                     if isSearching {
                         // Its tiles carry `GridModel.paneSelectionID` ids, so `scrollTo` finds them.
                         SettingsPaneSection(model: model)
+                        // Documents come last, below the panes (a files-only query is the case where
+                        // this section is everything the panel shows).
+                        FileResultsSection(model: model)
+                            .task(id: model.fileResults.map(\.id)) {
+                                // Icons are read off the disk, so the rows are warmed in batches
+                                // before the first draw asks for them (`FileIconCache`).
+                                FileIconCache.shared.warm(model.fileResults)
+                            }
                     }
                 }
                 .padding(.vertical, 4)
@@ -150,8 +164,8 @@ struct GridView: View {
             .onChange(of: model.tab) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
             .onChange(of: model.query) { proxy.scrollTo(ScrollTop.id, anchor: .top) }
             // Keyboard selection: keep the selected tile in view (inside an open folder the
-            // overlay scrolls its own grid). Covers "app:", "folder:", "pinned:", "frequent:" and
-            // "pane:" ids alike.
+            // overlay scrolls its own grid). Covers "app:", "folder:", "pinned:", "frequent:",
+            // "pane:" and "file:" ids alike.
             .onChange(of: model.selectedItemID) { _, id in
                 guard let id, model.openFolderID == nil else { return }
                 withAnimation(reduceMotion ? nil : Theme.snappy) { proxy.scrollTo(id) }

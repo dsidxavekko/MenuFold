@@ -4,6 +4,25 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.9.1
+
+### Search
+- **Files and documents**: from three letters on, the results end with a "Documents" section that lists matching files and documents — Return opens one, ⌘R shows it in Finder, the right-click menu copies its path. The `~` prefix (`~report`, or `file:report`) searches files only. The lookup uses Spotlight on this Mac: nothing is sent online, and it can be switched off in Settings.
+
+### Keyboard
+- Home and End jump to the first or last tile of the section you are in, and Page Up / Page Down move a whole screen at a time.
+
+### Faster opening
+- App icons no longer hold up the panel: tiles draw at once, and their icons fill in as they are read, a batch at a time.
+
+### Bug reports
+- **Export Diagnostics…** in the Dock and menu bar menu writes a JSON report with versions, settings and counts, but no app names and no paths, so it can be attached to an issue.
+
+### Under the hood
+- The panel's keyboard handling moved out of `PanelController` into a tested router in `MenuFoldCore`, so every key, in every panel state, now has a test.
+- More tests for the app layer (Dock geometry, install location, preferences, the shortcut list): 74 tests, up from 28.
+- Swift 6: the app, the tests and the package build in language mode 6 with strict concurrency checking, without warnings.
+
 ## 0.9.0
 
 - **Clipboard tab with the keyboard**: ↑/↓ pick an entry, Return copies it and closes the panel, ⌘D pins it, ⌘⌫ deletes it. Typing in the search field now filters the history (Return copies the first match). The keys are listed in the ⌘/ help.

@@ -10,7 +10,7 @@ let selectedDeveloperDir = ProcessInfo.processInfo.environment["DEVELOPER_DIR"].
     ?? (try? FileManager.default.destinationOfSymbolicLink(atPath: "/var/db/xcode_select_link"))
     ?? ""
 let testingPluginDir = cltDir + "/usr/lib/swift/host/plugins/testing"
-var testSettings: [SwiftSetting] = [.swiftLanguageMode(.v5)]
+var testSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 if selectedDeveloperDir.hasPrefix(cltDir), FileManager.default.fileExists(atPath: testingPluginDir) {
     testSettings.append(.unsafeFlags(["-plugin-path", testingPluginDir]))
 }
@@ -20,7 +20,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [.library(name: "MenuFoldCore", targets: ["MenuFoldCore"])],
     targets: [
-        .target(name: "MenuFoldCore", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(name: "MenuFoldCore", swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "MenuFoldCoreTests", dependencies: ["MenuFoldCore"], swiftSettings: testSettings),
     ]
 )

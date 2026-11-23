@@ -89,13 +89,16 @@ struct SettingsView: View {
                 LabeledContent("Глобальне сполучення клавіш") {
                     HotKeyRecorder(hotKey: $prefs.hotKey)
                 }
+                LabeledContent("Сполучення буфера обміну") {
+                    HotKeyRecorder(hotKey: $prefs.clipboardHotKey)
+                }
                 Toggle("Показувати значок у рядку меню", isOn: $prefs.showsMenuBarIcon)
                 Toggle("Відкривати на останній вкладці", isOn: $prefs.rememberLastTab)
                 Toggle("Не ховати панель після запуску програми", isOn: $prefs.keepsPanelOpenAfterLaunch)
             } header: {
                 Label("Панель", systemImage: "rectangle.on.rectangle")
             } footer: {
-                Text("Сполучення відкриває й закриває панель з будь-якої програми; потрібен ⌘, ⌥ або ⌃ (або окрема клавіша F1–F12). Якщо панель не ховається, програми відкриваються у фоні, і можна запустити кілька поспіль.")
+                Text("Сполучення відкриває й закриває панель з будь-якої програми; потрібен ⌘, ⌥ або ⌃ (або окрема клавіша F1–F12). Друге сполучення відкриває відразу вкладку буфера обміну. Якщо панель не ховається, програми відкриваються у фоні, і можна запустити кілька поспіль.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -166,6 +169,8 @@ struct SettingsView: View {
             ShortcutsSettingsSection()
 
             SpotlightSettingsSection()
+
+            SearchSettingsSection()
 
             AppUpdatesSettingsSection(model: model)
 

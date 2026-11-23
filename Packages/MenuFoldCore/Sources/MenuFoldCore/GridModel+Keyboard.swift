@@ -61,7 +61,7 @@ extension GridModel {
 extension GridModel {
     /// Selection ids in navigation order, per section. Folder open → one section: its apps
     /// ("app:…"). Otherwise → [the "Закріплені" row ids, the "Часті" row ids, `visibleItems` ids,
-    /// the System Settings results ("pane:…", search only)].
+    /// the System Settings results ("pane:…", search only), the file rows ("file:…", search only)].
     public var navigableSections: [[String]] {
         if let id = openFolderID, let folder = folder(id: id) {
             return [apps(in: folder).map { "app:" + $0.id }]
@@ -70,7 +70,9 @@ extension GridModel {
         return calc + [pinnedApps.map { Self.pinnedSelectionID($0.id) },
                 frequentApps.map { Self.frequentSelectionID($0.id) },
                 visibleItems.map(\.id),
-                settingsPaneResults.map { Self.paneSelectionID($0.id) }]
+                settingsPaneResults.map { Self.paneSelectionID($0.id) },
+                // Files come last, below the panes, like their section in the panel.
+                fileResults.map { Self.fileSelectionID($0.id) }]
     }
 
     /// Selection id of a tile in the "Закріплені" row: "pinned:<bundle ID>".
@@ -107,7 +109,7 @@ extension GridModel {
         return installedVisibleApps.first { $0.id == appID }
     }
 
-    /// Enter: launches the selected app, opens the selected folder or System Settings pane.
+    /// Enter: launches the selected app, opens the selected folder, System Settings pane or file.
     /// False when nothing is selected.
     @discardableResult
     public func activateSelection() -> Bool {
@@ -127,6 +129,12 @@ extension GridModel {
         if let id = selectedItemID, id.hasPrefix("pane:"),
            let pane = settingsPaneResults.first(where: { Self.paneSelectionID($0.id) == id }) {
             openSettingsPane(pane)
+            return true
+        }
+        // A document opens in its own app, like a click on its tile (and with the same rule about
+        // closing the panel: see `openFile`).
+        if let file = selectedFile {
+            openFile(file)
             return true
         }
         return false

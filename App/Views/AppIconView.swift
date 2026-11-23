@@ -46,7 +46,10 @@ struct AppIconView: View {
         } label: {
             VStack(spacing: 6) {
                 AppIconArtwork(
-                    image: IconCache.shared.icon(for: app),
+                    // Cache only: loading is synchronous, so the tile must never do it in `body`.
+                    // A nil image draws a placeholder until the prefetch below fills the cache.
+                    image: IconCache.shared.cachedIcon(for: app),
+                    name: app.name,
                     isHovered: isHovered,
                     isSelected: isSelected,
                     isTargeted: isTargeted,
@@ -112,6 +115,10 @@ struct AppIconView: View {
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
+        // Ask for the icon off the render pass. Cheap when it is already cached, and dropped when
+        // the same app is already queued (the grid prefetches what is visible, see
+        // `IconCache.prefetchVisible`), so a lazily appearing tile catches up here.
+        .task { IconCache.shared.prefetch([app]) }
         .themedAnimation(Theme.snappy, value: isHovered)
         .themedAnimation(Theme.snappy, value: isTargeted)
         .themedAnimation(Theme.snappy, value: isSelected)
@@ -209,7 +216,11 @@ extension AppIconView {
 /// shadow, accent ring when selected with the keyboard, glass halo while an app is dragged over it,
 /// and a quick pulse on launch.
 private struct AppIconArtwork: View {
-    let image: NSImage
+    /// nil until `IconCache` has the icon: the placeholder (same square) shows instead, so the tile
+    /// appears at once and the artwork fades in without moving anything.
+    let image: NSImage?
+    /// Used for the placeholder's initial.
+    let name: String
     let isHovered: Bool
     let isSelected: Bool
     let isTargeted: Bool
@@ -230,9 +241,17 @@ private struct AppIconArtwork: View {
     var body: some View {
         let size = GridMetrics.iconSize
         let lifted = (isHovered || isSelected) && !isPressed
-        Image(nsImage: image)
-            .resizable()
-            .interpolation(.high)
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .transition(.opacity)
+            } else {
+                AppIconPlaceholder(name: name, size: size)
+                    .transition(.opacity)
+            }
+        }
             .frame(width: size, height: size)
             .shadow(
                 color: .black.opacity(lifted ? Theme.liftShadowOpacity : 0),
@@ -268,6 +287,8 @@ private struct AppIconArtwork: View {
             }
             .scaleEffect(scale)
             .themedAnimation(Theme.snappy, value: isPressed)
+            // Placeholder → real icon: a plain crossfade in the same square, so nothing jumps.
+            .themedAnimation(Theme.content, value: image != nil)
             .keyframeAnimator(initialValue: CGFloat(1), trigger: reduceMotion ? 0 : launchPulse) { content, pulse in
                 content.scaleEffect(pulse)
             } keyframes: { _ in

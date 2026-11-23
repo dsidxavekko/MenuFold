@@ -29,7 +29,7 @@ struct SearchField: View {
                 .focused($isFocused)
                 .disabled(isDisabled || isDraggingApp)
                 .onSubmit(launchFirst)
-                .accessibilityHint("Enter запускає перший результат. Префікси: > програми, / папки, @ категорія, ? налаштування")
+                .accessibilityHint("Enter запускає перший результат. Префікси: > програми, / папки, @ категорія, ? налаштування, ~ файли")
             if !model.query.isEmpty {
                 Button {
                     model.query = ""
@@ -100,6 +100,7 @@ struct SearchField: View {
 
     /// Enter acts on the first ranked result, like a click on it: an app launches, a folder opens
     /// (same morph as its tile), and with no app or folder the first System Settings pane opens.
+    /// Only when neither was found does the first matching document open.
     private func launchFirst() {
         guard model.openFolderID == nil else { return }
         if model.tab == .clipboard {
@@ -116,7 +117,10 @@ struct SearchField: View {
             withAnimation(reduceMotion ? Theme.crossfade : Theme.morph) { model.openFolderID = folder.id }
         case nil:
             if model.calculatorResult != nil { model.copyCalculatorResult(); return }
-            if let pane = model.settingsPaneResults.first { model.openSettingsPane(pane) }
+            if let pane = model.settingsPaneResults.first { model.openSettingsPane(pane); return }
+            // Apps, folders and panes had their turn: a document is the remaining result a Return
+            // can act on (a files-only query has nothing else at all).
+            if let file = model.fileResults.first { model.openFile(file) }
         }
     }
 }

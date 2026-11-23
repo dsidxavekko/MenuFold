@@ -76,6 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             historyStore: sharedStats.history
         )
         Self.applyPreferences(to: model)
+        // Files and documents under the search results: the provider only reads the local Spotlight
+        // index, and the switch decides whether it is asked at all (`searchesFiles`).
+        model.fileSearchProvider = SpotlightFileSearchProvider()
         model.showsFrequent = UserDefaults.standard.object(forKey: Self.showsFrequentKey) as? Bool ?? true
         model.showsRunningTab = UserDefaults.standard.object(forKey: Self.showsRunningTabKey) as? Bool ?? true
         let running = RunningAppsMonitor.shared
@@ -109,6 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClipboardMonitor.shared.attach(to: model)
         ClipboardMonitor.shared.setEnabled(prefs.showsClipboardTab)
         model.showsPinned = prefs.showsPinned
+        // Off stops every file query at once (the prefix included), so turning it off really does
+        // stop MenuFold from asking Spotlight anything.
+        model.searchesFiles = prefs.searchesFiles
         // The "Часті" row fills one grid row.
         model.frequentLimit = GridMetrics.columns
     }
@@ -119,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hotKeys = HotKeyManager.shared
         hotKeys.onPress = { [weak self] in self?.panel.toggle(bypassingDockGuard: true) }
         hotKeys.onTargetPress = { [weak self] key in self?.handleHotkey(key: key) }
+        hotKeys.onClipboardPress = { [weak self] in self?.panel.show(tab: .clipboard) }
         hotKeys.model = model
         SpotlightIndexer.shared.start(model: model)
         AppUpdateScheduler.shared.start(model: model)

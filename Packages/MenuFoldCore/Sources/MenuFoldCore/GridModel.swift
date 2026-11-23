@@ -70,11 +70,47 @@ public final class GridModel {
             // On the clipboard tab the search field filters the history; leaving it must not turn
             // that text into an app search.
             if oldValue == .clipboard, !query.isEmpty { query = "" }
+            // The files section never shows on the clipboard tab, so a query there starts no search.
+            fileQueryDidChange()
         }
     }
-    public var query: String = "" { didSet { if query != oldValue { selectedItemID = nil; clipboardSelectedID = nil } } }
+    public var query: String = "" {
+        didSet {
+            guard query != oldValue else { return }
+            selectedItemID = nil
+            clipboardSelectedID = nil
+            // The "Документи" section follows the field: re-plan its search for the new text.
+            fileQueryDidChange()
+        }
+    }
     /// Folder currently expanded over the grid.
-    public var openFolderID: UUID? { didSet { if openFolderID != oldValue { selectedItemID = nil } } }
+    public var openFolderID: UUID? {
+        didSet {
+            guard openFolderID != oldValue else { return }
+            selectedItemID = nil
+            // Files are a search result; nothing is searched while a folder covers the grid.
+            fileQueryDidChange()
+        }
+    }
+    /// Files the current query matched, best first (see GridModel+Files.swift). Empty unless the
+    /// query asks for files, so the "Документи" section only has rows when it belongs on screen.
+    public internal(set) var fileResults: [FileItem] = []
+    /// True while a file query is in flight: the panel keeps the rows it has (or an empty grid)
+    /// instead of announcing "нічого не знайдено" before the answer is in.
+    public internal(set) var isSearchingFiles = false
+    /// Answers file queries; nil in previews and in tests that do not care, where the section stays
+    /// empty. Set once by `AppDelegate` to `SpotlightFileSearchProvider`.
+    @ObservationIgnored public var fileSearchProvider: FileSearching? {
+        didSet { fileQueryDidChange() }
+    }
+    /// Pause before a file query starts, so typing does not start one per keystroke (250 ms).
+    @ObservationIgnored var fileSearchDelay: Duration = .milliseconds(250)
+    /// Text whose answer `fileResults` holds; nil when the rows belong to no query.
+    @ObservationIgnored var fileSearchText: String?
+    /// Bumped whenever a file query is planned: an answer from an older generation is dropped.
+    @ObservationIgnored var fileSearchGeneration = 0
+    /// The running (mostly sleeping) file query, cancelled when the query moves on.
+    @ObservationIgnored var fileSearchTask: Task<Void, Never>?
     /// Keyboard selection: a `GridItem.id` ("app:…" / "folder:…"), or `frequentSelectionID(_:)` for
     /// a tile of the "Часті" row. Inside an open folder it is the "app:…" id of one of its apps.
     /// Reset when `tab`, `query` or `openFolderID` change, and on `panelDidOpen`.
@@ -143,6 +179,12 @@ public final class GridModel {
     public var clipboardSelectedID: UUID?
     /// Shows the "Закріплені" row on "Все" (a Settings switch the app persists).
     public var showsPinned = true { didSet { if showsPinned != oldValue { clearSelectionIfGone() } } }
+    /// Offers files and documents under the search results (a Settings switch; the app defaults it
+    /// to on, here it is off like the other switches, so tests and previews never query the disk).
+    /// Off means no Spotlight query at all, the `~`/`file:` prefix included.
+    public var searchesFiles = false {
+        didSet { if searchesFiles != oldValue { fileQueryDidChange() } }
+    }
     /// `panelDidOpen` keeps the current tab instead of going back to "Все" (a Settings switch).
     public var rememberLastTab = false
     /// Launch apps in the background and don't close the panel (a Settings switch): for opening

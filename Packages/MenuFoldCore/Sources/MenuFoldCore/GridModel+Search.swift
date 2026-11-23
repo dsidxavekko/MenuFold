@@ -2,15 +2,20 @@ import AppKit
 import Foundation
 
 /// What a search query asks for, after its optional prefix: `>` apps only, `/` folders only,
-/// `@name rest` apps of the category matching "name" (narrowed by "rest"), `?` System Settings only.
+/// `@name rest` apps of the category matching "name" (narrowed by "rest"), `?` System Settings only,
+/// `~`/`file:` files and documents only (see `FileSearchQuery`).
 enum SearchScope: Equatable {
-    case everything, apps, folders, settings
+    case everything, apps, folders, settings, files
     case category(String)
 }
 
 extension GridModel {
     /// Splits a raw query into its scope and the text to match.
     static func parseSearch(_ raw: String) -> (scope: SearchScope, text: String) {
+        // The files prefix has its own parser (it also knows the readable "file:" form), so both
+        // spellings mean the same scope here as in the "Документи" section.
+        let fileQuery = FileSearchQuery.parse(raw)
+        if fileQuery.scope == .filesOnly { return (.files, fileQuery.text) }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         func rest(_ s: Substring) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
         switch trimmed.first {
@@ -56,7 +61,9 @@ extension GridModel {
     /// search field launches the first app, so the best match must come first.
     func searchItems(query: String) -> [GridItem] {
         let (scope, text) = Self.parseSearch(query)
-        if scope == .settings { return [] }
+        // Files and System Settings panes are sections of their own (see `fileResults` and
+        // `settingsPaneResults`); a files-only query shows no apps, folders or calculator either.
+        if scope == .settings || scope == .files { return [] }
         var categoryIDs: Set<String>?
         if case .category(let name) = scope {
             guard !name.isEmpty else { return [] }

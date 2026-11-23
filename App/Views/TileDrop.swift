@@ -65,7 +65,9 @@ final class FileDropProbe {
 enum SpringLoad {
     private static var timer: Timer?
 
-    static func schedule(_ action: @escaping @MainActor () -> Void) {
+    /// The action is `@Sendable` because it is handed to the timer's block, which is one; it stays on
+    /// the main actor (a `Timer` fires on the main run loop and the block calls it there).
+    static func schedule(_ action: @escaping @MainActor @Sendable () -> Void) {
         guard timer == nil else { return }
         let t = Timer(timeInterval: Theme.springLoadDelay, repeats: false) { _ in
             MainActor.assumeIsolated {
@@ -108,7 +110,7 @@ struct TileDropDelegate: DropDelegate {
     var setFileTarget: ((Bool) -> Void)?
     var probe: FileDropProbe?
     /// An app held over the center for `Theme.springLoadDelay` (opens a folder).
-    var springLoad: (() -> Void)?
+    var springLoad: (@MainActor @Sendable () -> Void)?
 
     private static let acceptedTypes: [UTType] = [.menuFoldAppID, .menuFoldFolderID, .fileURL]
 
@@ -269,7 +271,9 @@ struct TileDropDelegate: DropDelegate {
     private static func loadFileURLs(from providers: [NSItemProvider],
                                      completion: @escaping @MainActor ([URL]) -> Void) {
         let group = DispatchGroup()
-        var urls = [Int: URL]()
+        // `nonisolated(unsafe)`: `urls` is guarded by `lock` on every writer, and the reader runs in
+        // `group.notify`, i.e. only after all the providers left the group.
+        nonisolated(unsafe) var urls = [Int: URL]()
         let lock = NSLock()
         for (index, provider) in providers.enumerated() {
             group.enter()
@@ -302,7 +306,7 @@ private struct TileDropModifier: ViewModifier {
     var supportsFiles: (([URL]) -> Bool)?
     var openFiles: (([URL]) -> Void)?
     var fileTarget: ((Bool) -> Void)?
-    var springLoad: (() -> Void)?
+    var springLoad: (@MainActor @Sendable () -> Void)?
 
     @State private var probe = FileDropProbe()
 
@@ -336,7 +340,7 @@ extension View {
         supportsFiles: (([URL]) -> Bool)? = nil,
         openFiles: (([URL]) -> Void)? = nil,
         fileTarget: ((Bool) -> Void)? = nil,
-        springLoad: (() -> Void)? = nil
+        springLoad: (@MainActor @Sendable () -> Void)? = nil
     ) -> some View {
         modifier(TileDropModifier(
             allowsCenter: allowsCenter, allowsReorder: allowsReorder, width: width ?? GridMetrics.tileWidth,

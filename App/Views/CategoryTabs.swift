@@ -22,7 +22,7 @@ struct CategoryTabs: View {
     /// Category id of the tab an app is being dragged over (drop sets the app's category).
     @State private var dropTargetID: String?
 
-    private static let space = "category-tabs"
+    private nonisolated static let space = "category-tabs"
 
     var body: some View {
         ScrollViewReader { proxy in

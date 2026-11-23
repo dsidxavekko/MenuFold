@@ -19,6 +19,8 @@ enum PanelShortcuts {
                 ("⇥", String(localized: "Дії з програмою")),
                 ("⌘I", String(localized: "Інформація про програму")),
                 ("⌘⌫", String(localized: "Перемістити в Кошик")),
+                ("Home  End", String(localized: "Перший або останній у розділі")),
+                ("Page Up  Page Down", String(localized: "Сторінка вгору або вниз")),
             ]),
             Group(title: String(localized: "Порядок"), items: [
                 ("⌘D", String(localized: "Закріпити або відкріпити")),

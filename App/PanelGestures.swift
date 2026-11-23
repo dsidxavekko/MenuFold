@@ -9,7 +9,9 @@ final class PanelGestures {
     private let panel: NSPanel
     private var swipe = SwipeAccumulator()
     private var pinch = PinchAccumulator()
-    private var monitor: Any?
+    /// `nonisolated(unsafe)`: installed on the main actor, removed from the nonisolated `deinit`,
+    /// which runs only when the last reference is gone (so no other thread can be using the token).
+    private nonisolated(unsafe) var monitor: Any?
     /// True while the rest of a decided horizontal swipe is being swallowed.
     private var swallowing = false
 
