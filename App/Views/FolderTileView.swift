@@ -166,7 +166,7 @@ struct FolderTileView: View {
         .onHover { isHovered = $0 }
         // The mini-grid reads the cache only, so ask for its (at most nine) icons off the render
         // pass; the same queue the app tiles use.
-        .task { IconCache.shared.prefetch(Array(apps.prefix(9))) }
+        .task(id: IconCache.shared.version) { IconCache.shared.prefetch(Array(apps.prefix(9))) }
         .themedAnimation(Theme.snappy, value: isHovered)
         .themedAnimation(Theme.snappy, value: isTargeted)
         .themedAnimation(Theme.snappy, value: isSelected)

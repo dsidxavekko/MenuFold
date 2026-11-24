@@ -4,6 +4,11 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.9.2
+
+### Fixes
+- **App icons no longer disappear**: after the app list refreshed, tiles that were already on screen could stay on grey placeholders instead of their icons. They now reload their icons on their own.
+
 ## 0.9.1
 
 ### Search

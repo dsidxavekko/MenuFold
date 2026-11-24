@@ -118,7 +118,7 @@ struct AppIconView: View {
         // Ask for the icon off the render pass. Cheap when it is already cached, and dropped when
         // the same app is already queued (the grid prefetches what is visible, see
         // `IconCache.prefetchVisible`), so a lazily appearing tile catches up here.
-        .task { IconCache.shared.prefetch([app]) }
+        .task(id: IconCache.shared.version) { IconCache.shared.prefetch([app]) }
         .themedAnimation(Theme.snappy, value: isHovered)
         .themedAnimation(Theme.snappy, value: isTargeted)
         .themedAnimation(Theme.snappy, value: isSelected)
