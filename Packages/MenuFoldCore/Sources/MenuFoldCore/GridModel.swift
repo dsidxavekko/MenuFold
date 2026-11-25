@@ -209,8 +209,8 @@ public final class GridModel {
     /// scan, damaged bundle, …), with the system's error text. The panel is already closed by then.
     @ObservationIgnored public var onLaunchFailed: ((AppEntry, String) -> Void)?
 
-    @ObservationIgnored private let catalog: AppCatalogProviding
-    @ObservationIgnored private let store: LayoutStore?
+    @ObservationIgnored let catalog: AppCatalogProviding
+    @ObservationIgnored let store: LayoutStore?
     @ObservationIgnored let usageStore: UsageStore?
     @ObservationIgnored let historyStore: AppHistoryStore?
     /// The store, for the data features in GridModel+Data.swift (backups, reload, export).
@@ -218,16 +218,16 @@ public final class GridModel {
     /// Current time (injectable for tests).
     @ObservationIgnored var now: () -> Date = Date.init
     /// Home directory used to find ~/Applications (injectable for tests).
-    @ObservationIgnored private let homeDirectory: String
+    @ObservationIgnored let homeDirectory: String
     /// Finder folder path → display name (injectable for tests; results are cached).
-    @ObservationIgnored private let finderNameResolver: (String) -> String
-    @ObservationIgnored private var finderNameCache: [String: String] = [:]
+    @ObservationIgnored let finderNameResolver: (String) -> String
+    @ObservationIgnored var finderNameCache: [String: String] = [:]
 
     // Caches derived from `apps` and `layout`, dropped by `invalidateDerivedCaches` whenever either
     // changes (search runs on every keystroke and used to rebuild all of this each time).
-    @ObservationIgnored private var appsByIDCache: [String: AppEntry]?
-    @ObservationIgnored private var visibleAppsCache: [AppEntry]?
-    @ObservationIgnored private var finderFoldersCache: [Folder]?
+    @ObservationIgnored var appsByIDCache: [String: AppEntry]?
+    @ObservationIgnored var visibleAppsCache: [AppEntry]?
+    @ObservationIgnored var finderFoldersCache: [Folder]?
     /// Folded search data per app (see `SearchMatcher.Target`); rebuilt only when the catalog changes.
     @ObservationIgnored var searchTargetsCache: [String: SearchMatcher.Target]?
     /// Apps that matched the last search query, to narrow the next keystroke (GridModel+Search.swift).
@@ -239,12 +239,12 @@ public final class GridModel {
     /// A cache hit reads neither `apps` nor `layout`, so a SwiftUI body that only hits the cache would
     /// not be tracking them and never refresh when they change (the category tabs stayed as first
     /// drawn, without the system categories). Reading both registers the dependency.
-    private func trackCatalogAndLayout() {
+    func trackCatalogAndLayout() {
         _ = apps
         _ = layout
     }
 
-    private func invalidateDerivedCaches(catalogChanged: Bool) {
+    func invalidateDerivedCaches(catalogChanged: Bool) {
         appsByIDCache = nil
         visibleAppsCache = nil
         finderFoldersCache = nil
@@ -356,7 +356,7 @@ public final class GridModel {
     }
 
     /// Categories shown as tabs, in the default order (see `availableTabs`).
-    private var defaultCategoryOrder: [AppCategory] {
+    var defaultCategoryOrder: [AppCategory] {
         var seen = Set<String>()
         var cats: [AppCategory] = []
         var hasOther = false
@@ -453,60 +453,6 @@ public final class GridModel {
         Self.sorted(apps.filter { layout.hidden.contains($0.id) })
     }
 
-    // MARK: Finder folders
-
-    /// Manual folders followed by synthesized Finder folders.
-    var allFolders: [Folder] { layout.folders + finderFolders }
-
-    private func manualFolderContaining(appID: String) -> Folder? {
-        layout.folders.first { $0.appIDs.contains(appID) }
-    }
-
-    /// Synthesized Finder folders (not ignored), each with the installed apps that are in no manual
-    /// folder and either live there on disk (unless excluded) or were dropped into it in MenuFold.
-    /// `appIDs` may include hidden apps; `apps(in:)` filters them.
-    private var finderFolders: [Folder] {
-        if let cached = finderFoldersCache { trackCatalogAndLayout(); return cached }
-        let computed = computeFinderFolders()
-        finderFoldersCache = computed
-        return computed
-    }
-
-    private func computeFinderFolders() -> [Folder] {
-        let manual = Set(layout.folders.flatMap(\.appIDs))
-        var groups: [String: [String]] = [:]
-        var order: [String] = []
-        for app in apps where !manual.contains(app.id) {
-            guard let key = finderKey(for: app), !layout.ignoredFinderFolders.contains(key) else { continue }
-            if groups[key] == nil { order.append(key) }
-            groups[key, default: []].append(app.id)
-        }
-        return order.map { path in
-            let style = layout.finderStyles[path] ?? FinderFolderStyle()
-            return Folder(id: FinderFolders.folderID(forPath: path), name: finderName(path),
-                          color: style.color, symbol: style.symbol, appIDs: groups[path] ?? [], finderPath: path)
-        }
-    }
-
-    /// Effective Finder folder of an app: a MenuFold drop wins, else its real location unless excluded.
-    private func finderKey(for app: AppEntry) -> String? {
-        if let added = layout.finderAdditions[app.id] { return added }
-        if layout.finderExclusions.contains(app.id) { return nil }
-        return nativeFinderKey(app.id)
-    }
-
-    private func nativeFinderKey(_ appID: String) -> String? {
-        guard let app = appsByID[appID] else { return nil }
-        return FinderFolders.key(forAppPath: app.url.path, homeDirectory: homeDirectory)
-    }
-
-    private func finderName(_ path: String) -> String {
-        if let cached = finderNameCache[path] { return cached }
-        let name = finderNameResolver(path)
-        finderNameCache[path] = name
-        return name
-    }
-
     public var visibleApps: [AppEntry] {
         if let cached = visibleAppsCache { trackCatalogAndLayout(); return cached }
         let list = apps.filter { !layout.hidden.contains($0.id) && profileAllows($0) }
@@ -519,371 +465,6 @@ public final class GridModel {
             let r = lhs.name.localizedStandardCompare(rhs.name)
             return r == .orderedSame ? lhs.id < rhs.id : r == .orderedAscending
         }
-    }
-
-    // MARK: Intents
-
-    /// Drop app onto app → new folder "Нова папка" with both; sets `renamingFolderID`. nil if invalid (same app, etc.),
-    /// and every nil path also clears `renamingFolderID`, so a rejected drop can't leave a stale rename request behind.
-    /// If the target already sits in a manual folder, the dropped app joins that folder (its id is returned, no rename).
-    /// A target that is only in a Finder folder gets a new manual folder (manual wins over Finder).
-    ///
-    /// Dropping the app may dissolve the folder it left (≤1 app).
-    @discardableResult
-    public func createFolder(dropping appID: String, onto targetAppID: String) -> UUID? {
-        guard appID != targetAppID,
-              apps.contains(where: { $0.id == appID }),
-              apps.contains(where: { $0.id == targetAppID }) else { return rejectFolderDrop() }
-        if let existing = manualFolderContaining(appID: targetAppID) {
-            if existing.appIDs.contains(appID) { return rejectFolderDrop() }
-            add(appID, to: existing.id)
-            renamingFolderID = nil
-            return existing.id
-        }
-        var l = layout
-        let newID = UUID()
-        Self.detach(appID, from: &l)
-        // Exactly the two apps the user sees paired. The target sits in no manual folder here
-        // (that case joined above); the sweep below dissolves the folder the dragged app left
-        // if it now has ≤1 app.
-        l.folders.append(Folder(id: newID, name: L("Нова папка"), appIDs: [targetAppID, appID]))
-        Self.dissolveSingleAppFolders(&l)
-        // In a manual "Все" order the new folder takes the target app's place, where the user dropped.
-        if var order = l.manualOrder, let idx = order.firstIndex(of: "app:" + targetAppID) {
-            order.insert("folder:" + newID.uuidString, at: idx)
-            l.manualOrder = order
-        }
-        commit(l)
-        renamingFolderID = newID
-        return newID
-    }
-
-    /// Moves app into a folder (removing it from any manual one). For a Finder folder the app is
-    /// shown there in MenuFold only (`finderAdditions`); the file is not moved.
-    /// Only folders the app actually left can be dissolved; a move into a folder never dissolves it.
-    public func add(_ appID: String, to folderID: UUID) {
-        if let path = finderFolders.first(where: { $0.id == folderID })?.finderPath {
-            var l = layout
-            Self.detach(appID, from: &l)
-            l.finderAdditions[appID] = path
-            l.finderExclusions.remove(appID)
-            Self.dissolveSingleAppFolders(&l)
-            commit(l)
-            return
-        }
-        guard let target = layout.folders.first(where: { $0.id == folderID }), !target.appIDs.contains(appID) else { return }
-        var l = layout
-        Self.detach(appID, from: &l)
-        // Target can't have been dissolved by detach (app wasn't in it).
-        guard let idx = l.folders.firstIndex(where: { $0.id == folderID }) else { return }
-        l.folders[idx].appIDs.append(appID)
-        Self.dissolveSingleAppFolders(&l)
-        commit(l)
-    }
-
-    /// Removes app from its folder; a manual folder left with ≤1 app is dissolved.
-    /// From a Finder folder the app is excluded (shown at the top level); files are not touched.
-    public func removeFromFolder(_ appID: String) {
-        guard let current = folderContaining(appID: appID) else { return }
-        var l = layout
-        if current.isFinder {
-            l.finderAdditions.removeValue(forKey: appID)
-            // Without the exclusion it would fall back into the folder it lives in on disk.
-            if nativeFinderKey(appID) != nil { l.finderExclusions.insert(appID) }
-        } else {
-            Self.detach(appID, from: &l)
-            Self.dissolveSingleAppFolders(&l)
-        }
-        commit(l)
-        closeOpenFolderIfGone()
-    }
-
-    /// No-op for Finder folders (the name comes from Finder).
-    public func rename(folder folderID: UUID, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let idx = layout.folders.firstIndex(where: { $0.id == folderID }) else { return }
-        var l = layout
-        l.folders[idx].name = trimmed
-        commit(l)
-    }
-
-    public func setStyle(folder folderID: UUID, color: FolderColor, symbol: String?) {
-        let symbol = (symbol?.isEmpty ?? true) ? nil : symbol
-        var l = layout
-        if let idx = layout.folders.firstIndex(where: { $0.id == folderID }) {
-            l.folders[idx].color = color
-            l.folders[idx].symbol = symbol
-        } else if let path = finderFolders.first(where: { $0.id == folderID })?.finderPath {
-            l.finderStyles[path] = FinderFolderStyle(color: color, symbol: symbol)
-        } else {
-            return
-        }
-        commit(l)
-    }
-
-    /// Manual folder → deleted. Finder folder → ignored (restorable via `restoreFinderFolder`).
-    public func dissolve(folder folderID: UUID) {
-        guard let target = folder(id: folderID) else { return }
-        var l = layout
-        if let path = target.finderPath {
-            l.ignoredFinderFolders.insert(path)
-        } else {
-            l.folders.removeAll { $0.id == folderID }
-        }
-        commit(l)
-        closeOpenFolderIfGone()
-    }
-
-    /// nil → remove override. A no-op when there is nothing to remove (or the same value is set again),
-    /// so the UI can't persist overrides for apps that have none, or junk keys for unknown IDs.
-    public func setCategory(_ category: AppCategory?, for appID: String) {
-        var l = layout
-        if let category {
-            guard l.categoryOverrides[appID] != category.id else { return }
-            // A custom category must still exist (a stale menu could offer a deleted one).
-            if category.isCustom, !l.customCategories.contains(where: { $0.id == category.id }) { return }
-            l.categoryOverrides[appID] = category.id
-        } else {
-            guard l.categoryOverrides.removeValue(forKey: appID) != nil else { return }
-        }
-        commit(l)
-    }
-
-    /// `setCategory` for several apps as one change (one save, one ⌘Z step). nil → remove overrides.
-    public func setCategory(_ category: AppCategory?, for appIDs: [String]) {
-        var l = layout
-        if let category {
-            if category.isCustom, !l.customCategories.contains(where: { $0.id == category.id }) { return }
-            for id in appIDs where !id.isEmpty { l.categoryOverrides[id] = category.id }
-        } else {
-            for id in appIDs { l.categoryOverrides.removeValue(forKey: id) }
-        }
-        commit(l)
-    }
-
-    /// Creates a custom category. A blank name becomes "Нова категорія"; a name already used by
-    /// another custom category gets a number ("Нова категорія 2"), so tabs stay tellable apart.
-    /// With `appID`, that app is moved into it. Returns the new category.
-    @discardableResult
-    public func createCategory(named name: String = "", assigning appID: String? = nil) -> AppCategory {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let custom = CustomCategory(name: uniqueCategoryName(trimmed.isEmpty ? L("Нова категорія") : trimmed))
-        var l = layout
-        l.customCategories.append(custom)
-        if let appID { l.categoryOverrides[appID] = custom.id }
-        commit(l)
-        return custom.category
-    }
-
-    /// Renames a custom category; a blank name or a system category is a no-op.
-    public func renameCategory(id: String, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let idx = layout.customCategories.firstIndex(where: { $0.id == id }) else { return }
-        var l = layout
-        l.customCategories[idx].name = trimmed
-        // The tab value carries the display name: keep the selection on the renamed category.
-        // Read both before commit: commit's validateTab() sees the OLD name gone, resets `tab` to
-        // `.all` and its didSet clears the selection; restore both after the new tab is set.
-        let renamedOld = layout.customCategories[idx].category
-        let oldTab = tab
-        let selection = selectedItemID
-        commit(l)
-        if oldTab == .category(renamedOld) {
-            tab = .category(l.customCategories[idx].category)
-            selectedItemID = selection
-        }
-    }
-
-    /// Sets the tab order from category ids (as the tabs show them, without `.all`). Unknown ids and
-    /// repeats are ignored. Ids already in the saved order but not passed (a category with no visible
-    /// apps right now) are kept, after the passed ones.
-    public func setCategoryOrder(_ ids: [String]) {
-        let known = Set(defaultCategoryOrder.map(\.id))
-        var seen = Set<String>()
-        var order = ids.filter { known.contains($0) && seen.insert($0).inserted }
-        order += layout.categoryOrder.filter { seen.insert($0).inserted }
-        var l = layout
-        l.categoryOrder = order
-        commit(l)
-    }
-
-    /// Moves a category tab one step left (`offset` -1) or right (+1). `.all` stays first.
-    public func moveCategory(id: String, by offset: Int) {
-        var ids = availableTabs.compactMap { tab -> String? in
-            if case .category(let c) = tab { return c.id } else { return nil }
-        }
-        guard let from = ids.firstIndex(of: id) else { return }
-        let to = from + offset
-        guard ids.indices.contains(to) else { return }
-        ids.swapAt(from, to)
-        setCategoryOrder(ids)
-    }
-
-    /// Back to the default tab order.
-    public func resetCategoryOrder() {
-        var l = layout
-        l.categoryOrder = []
-        commit(l)
-    }
-
-    /// Deletes a custom category; its apps go back to their automatic category.
-    public func deleteCategory(id: String) {
-        guard layout.customCategories.contains(where: { $0.id == id }) else { return }
-        var l = layout
-        l.customCategories.removeAll { $0.id == id }
-        l.categoryOverrides = l.categoryOverrides.filter { $0.value != id }
-        l.categoryOrder.removeAll { $0 == id }
-        if renamingCategoryID == id { renamingCategoryID = nil }
-        commit(l)
-    }
-
-    /// Visible apps the user put into a custom category (for Settings).
-    public func apps(inCategory id: String) -> [AppEntry] {
-        Self.sorted(visibleApps.filter { layout.categoryOverrides[$0.id] == id })
-    }
-
-    private func uniqueCategoryName(_ base: String) -> String {
-        let taken = Set(layout.customCategories.map { $0.name.lowercased() })
-        guard taken.contains(base.lowercased()) else { return base }
-        var n = 2
-        while taken.contains("\(base) \(n)".lowercased()) { n += 1 }
-        return "\(base) \(n)"
-    }
-
-    public func hide(_ appID: String) {
-        var l = layout
-        guard l.hidden.insert(appID).inserted else { return }
-        commit(l)
-        closeOpenFolderIfGone()
-        if selectedItemID == "app:" + appID || selectedItemID == Self.frequentSelectionID(appID) {
-            selectedItemID = nil
-        }
-    }
-
-    public func unhide(_ appID: String) {
-        var l = layout
-        guard l.hidden.remove(appID) != nil else { return }
-        commit(l)
-    }
-
-    /// Finder folders the user turned off with `dissolve`, sorted by name.
-    public var ignoredFinderFolders: [FinderFolderRef] {
-        layout.ignoredFinderFolders
-            .map { FinderFolderRef(id: $0, name: finderName($0)) }
-            .sorted { lhs, rhs in
-                let r = lhs.name.localizedStandardCompare(rhs.name)
-                return r == .orderedSame ? lhs.id < rhs.id : r == .orderedAscending
-            }
-    }
-
-    /// Shows a previously dissolved Finder folder again.
-    public func restoreFinderFolder(path: String) {
-        var l = layout
-        guard l.ignoredFinderFolders.remove(path) != nil else { return }
-        commit(l)
-    }
-
-    /// Back to an empty layout (undoable). Icon files are not deleted here: undo can bring their
-    /// mappings back, and undo lives in memory only, so the next launch's cleanup removes the ones
-    /// nothing uses any more.
-    public func resetLayout() {
-        openFolderID = nil
-        renamingFolderID = nil
-        renamingCategoryID = nil
-        commit(Layout())
-    }
-
-    // MARK: Custom icons
-
-    /// The user's icon file for `appID`, or nil to use the app's own icon.
-    public func customIconURL(for appID: String) -> URL? {
-        layout.customIcons[appID].map { iconsDirectory.appendingPathComponent($0) }
-    }
-
-    /// Installed apps that have a custom icon, sorted by name (listed in Settings).
-    public var appsWithCustomIcons: [AppEntry] {
-        Self.sorted(apps.filter { layout.customIcons[$0.id] != nil })
-    }
-
-    /// Uses `source` as the icon of `appID`: an image file as is, any other file (e.g. another app)
-    /// by its Finder icon. The picture is copied as a PNG, so the original may be moved or deleted.
-    /// Each change gets a new file name, so caches keyed by the file never show the old picture.
-    /// The previous icon file is left on disk, so undo can bring it back; the next launch's cleanup
-    /// (`removeUnusedIconFiles`) deletes it once nothing points at it.
-    public func setCustomIcon(for appID: String, from source: URL) throws {
-        let data = try CustomIcons.pngData(from: source)
-        try FileManager.default.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
-        let name = UUID().uuidString + ".png"
-        try data.write(to: iconsDirectory.appendingPathComponent(name), options: .atomic)
-        var l = layout
-        l.customIcons[appID] = name
-        try commitPersisting(l)
-    }
-
-    /// Goes back to the app's own icon. The old file stays for undo (see `setCustomIcon`).
-    public func resetCustomIcon(for appID: String) {
-        var l = layout
-        guard l.customIcons.removeValue(forKey: appID) != nil else { return }
-        commit(l)
-    }
-
-    /// Deletes icon files that no layout entry points at (left over after a reset, an icon change
-    /// or a crash). Runs only at launch after a real load: undo lives in memory, so after a relaunch
-    /// nothing can bring an unreferenced file back.
-    ///
-    /// Only files MenuFold names itself (`<UUID>.png`) are touched, so anything else a user or
-    /// another tool put into the folder survives. Nothing runs for a shared (synced) folder:
-    /// another Mac's new icon may arrive before the layout.json that refers to it.
-    /// Files modified less than a minute ago are kept: another MenuFold instance (two copies can
-    /// run at once) may have just written an icon for a layout this process has not read yet.
-    func removeUnusedIconFiles() {
-        guard store?.isShared != true else { return }
-        // Icons named by the undo steps restored from the last launch stay too.
-        var used = Set(layout.customIcons.values).union(undoStack.flatMap { $0.customIcons.values })
-        used.formUnion(iconsReferencedByBackups())
-        let fresh = Date().addingTimeInterval(-60)
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: iconsDirectory.path)) ?? []
-        for file in files where Self.isOwnIconFileName(file) && !used.contains(file) {
-            let url = iconsDirectory.appendingPathComponent(file)
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-               let modified = attrs[.modificationDate] as? Date, modified > fresh { continue }
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
-
-    /// Icon file names named by Backups/layout-*.json, layout.bak/.bak2 and layout.corrupt-*: restoring
-    /// any of them must not find its icons gone. Reads only the `customIcons` field, and skips
-    /// files above the size limit.
-    func iconsReferencedByBackups() -> Set<String> {
-        guard let store = layoutStore else { return [] }
-        let fm = FileManager.default
-        let dir = store.fileURL.deletingLastPathComponent()
-        let stem = store.fileURL.deletingPathExtension().lastPathComponent
-        var urls: [URL] = []
-        for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
-        where name == stem + ".bak" || name == stem + ".bak2" || (name.hasPrefix(stem + ".corrupt-") && name.hasSuffix(".json")) {
-            urls.append(dir.appendingPathComponent(name))
-        }
-        if let backups = backupsDirectory {
-            for name in (try? fm.contentsOfDirectory(atPath: backups.path)) ?? []
-            where name.hasPrefix("layout-") && name.hasSuffix(".json") {
-                urls.append(backups.appendingPathComponent(name))
-            }
-        }
-        struct IconsOnly: Decodable { var customIcons: [String: String]? }
-        var result = Set<String>()
-        for url in urls {
-            guard let data = try? LayoutStore.readLimited(url),
-                  let icons = try? JSONDecoder().decode(IconsOnly.self, from: data).customIcons else { continue }
-            result.formUnion(icons.values)
-        }
-        return result
-    }
-
-    /// `<UUID>.png`: the only names `setCustomIcon` and imports ever write.
-    static func isOwnIconFileName(_ name: String) -> Bool {
-        guard name.hasSuffix(".png") else { return false }
-        return UUID(uuidString: String(name.dropLast(".png".count))) != nil
     }
 
     /// Opens app via NSWorkspace, then calls `onLaunched` right away (the panel closes without
@@ -966,7 +547,7 @@ public final class GridModel {
 
     /// Clears a pending inline rename and returns nil: the result of every rejected folder drop.
     @discardableResult
-    private func rejectFolderDrop() -> UUID? {
+    func rejectFolderDrop() -> UUID? {
         renamingFolderID = nil
         return nil
     }

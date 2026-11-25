@@ -50,8 +50,18 @@ Accessibility or Screen Recording permission.
   are found by name, and System Settings panes open right from the results.
 - **Files and documents.** From three letters on, the search also lists files and documents in a
   "Documents" section under the apps — Return opens one, ⌘R shows it in Finder. Type `~` (or `file:`)
-  to search files only. The lookup goes through Spotlight on this Mac, nothing is sent anywhere, and it
+  to search files only, and add `kind:pdf` (also image, doc, sheet, slides, text, audio, video, archive,
+  code) to narrow by type, as in `~kind:pdf report`. The lookup goes through Spotlight on this Mac, nothing is sent anywhere, and it
   can be switched off in Settings.
+- **Clipboard tab.** The first tab keeps what you copied since MenuFold started: texts and pictures, newest
+  first, with pins. Click or press Return to copy an entry back, ⌘D pins it and ⌘⌫ deletes it. It lives in
+  memory only, skips password-manager copies, and can have its own global shortcut or be switched off.
+- **Calculator and quick actions.** Type a sum or a unit conversion ("12*7", "5 km in mi") to get the answer
+  in the results. Press Tab on a selected app for its quick actions, and ⌘/ to see every shortcut.
+- **Smart categories and profiles.** Build tabs from rules (bundle ID, App Store or Homebrew install, size,
+  unused for N days), and switch profiles that hide apps or categories for work and home.
+- **Statistics.** Settings show your most opened apps and launches per weekday. The log stays on this Mac
+  and can be switched off or erased.
 - **Keyboard.** Use the arrow keys to move, Home/End to jump to the first or last tile and Page Up/Page
   Down to move a screen at a time, Return to launch, ⌘1…⌘9 or ⌃Tab to switch tabs, ⌘R to show in
   Finder and ⌘⌫ to move to the Trash. Esc closes a folder, then the panel.

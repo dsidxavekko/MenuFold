@@ -85,17 +85,37 @@ public enum FileSearchQuery {
     /// Readable form of the prefix, matched ignoring case.
     public static let wordPrefix = "file:"
 
-    /// Scope asked for by `raw` and the text left to match.
+    /// Word that introduces a kind filter after the prefix: `~kind:pdf report`.
+    public static let kindPrefix = "kind:"
+
+    /// Scope asked for by `raw` and the text left to match. A leading `kind:<name>` token is removed
+    /// from the text (see `parseDetailed` for the kind itself).
     public static func parse(_ raw: String) -> (scope: FileScope, text: String) {
+        let parsed = parseDetailed(raw)
+        return (parsed.scope, parsed.text)
+    }
+
+    /// Like `parse`, plus the kind filter. The filter only exists inside a files query, as the first
+    /// word after the prefix; an unknown kind name stays part of the text.
+    public static func parseDetailed(_ raw: String) -> (scope: FileScope, kind: FileKind?, text: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         func rest(_ s: Substring) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let body: String
         if trimmed.hasPrefix(prefix) {
-            return (.filesOnly, rest(trimmed.dropFirst(prefix.count)))
+            body = rest(trimmed.dropFirst(prefix.count))
+        } else if trimmed.lowercased().hasPrefix(wordPrefix) {
+            body = rest(trimmed.dropFirst(wordPrefix.count))
+        } else {
+            return (.everything, nil, trimmed)
         }
-        if trimmed.lowercased().hasPrefix(wordPrefix) {
-            return (.filesOnly, rest(trimmed.dropFirst(wordPrefix.count)))
+        if body.lowercased().hasPrefix(kindPrefix) {
+            let afterKind = body.dropFirst(kindPrefix.count)
+            let word = afterKind.prefix(while: { !$0.isWhitespace })
+            if let kind = FileKind(name: String(word)) {
+                return (.filesOnly, kind, rest(afterKind.dropFirst(word.count)))
+            }
         }
-        return (.everything, trimmed)
+        return (.filesOnly, nil, body)
     }
 }
 
@@ -122,7 +142,8 @@ public enum FileSearch {
     ///
     /// An empty query gives no results: the panel would be showing an arbitrary sample of the disk.
     /// Items are expected to have passed `isCandidate` (the provider filters while Spotlight streams).
-    public static func rank(_ items: [FileItem], query: String, limit: Int = FileSearch.defaultLimit) -> [FileItem] {
+    public static func rank(_ items: [FileItem], query: String, limit: Int = FileSearch.defaultLimit,
+                            kind: FileKind? = nil) -> [FileItem] {
         let room = min(max(limit, 0), maxLimit)
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard room > 0, !text.isEmpty else { return [] }
@@ -132,6 +153,7 @@ public enum FileSearch {
         var scored: [(item: FileItem, score: Double)] = []
         scored.reserveCapacity(items.count)
         for item in items {
+            if let kind, !kind.matches(item.url) { continue }
             guard let raw = SearchMatcher.score(item.name, prepared) else { continue }
             let boosted = raw + stemBonus(for: item.name, query: prepared.direct)
             scored.append((item, min(boosted, tierCeiling(raw))))

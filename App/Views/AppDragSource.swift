@@ -1,4 +1,5 @@
 import AppKit
+import MenuFoldCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -282,7 +283,7 @@ final class AppDragSourceView: NSView, NSDraggingSource {
             // Checked by hand on macOS 27: the Dock's Trash and folder stacks reject this mask
             // (nothing is moved, trashed or aliased), so .generic only enables pinning.
             let overDock = MainActor.assumeIsolated { AppDragSession.shared.isOverDock }
-            return overDock ? [.link, .generic] : [.link]
+            return DragMask.forOutside(overDock: overDock) == .outsideDock ? [.link, .generic] : [.link]
         @unknown default:
             return []
         }

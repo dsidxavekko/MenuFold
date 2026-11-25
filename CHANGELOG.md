@@ -4,6 +4,16 @@ Each `## <version>` section becomes the release notes: on the GitHub release pag
 window inside MenuFold (`scripts/release.sh` reads the section of the version it builds). Write for
 people who use the app, in English, as a `- ` list, with optional `### ` subheadings.
 
+## 0.9.3
+
+### Search
+- **Filter files by type**: add `kind:pdf` (also image, doc, sheet, slides, text, audio, video, archive, code) after `~` or `file:` to narrow file results, for example `~kind:pdf report`.
+
+### Under the hood
+- The panel's open/close animation, keyboard handling and drag handling moved out of `PanelController` into their own files, and `GridModel` was split the same way (Finder folders, folder and category changes, icons). Nothing changes for you.
+- Drag-and-drop zones, clipboard filtering and hotkey bookkeeping are now pure, tested code in `MenuFoldCore`: 454 core tests, up from 419, including edge cases of file search (stale answers, timeouts, fast typing).
+- README lists the clipboard tab, calculator, quick actions, smart categories, profiles and statistics.
+
 ## 0.9.2
 
 ### Fixes

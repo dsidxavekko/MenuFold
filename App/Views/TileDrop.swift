@@ -8,20 +8,13 @@ import UniformTypeIdentifiers
 // user's order through `GridModel.moveItem`). One delegate decides both, from the pointer position
 // inside the tile, so the two gestures never fight over the same drop.
 
-/// Where over a tile a drag currently is.
-enum TileDropZone: Equatable {
-    /// Insert the dragged item before (left of) the tile.
-    case before
-    /// Folder drop (make a folder / add to the folder).
-    case center
-    /// Insert the dragged item after (right of) the tile.
-    case after
-}
+/// Where over a tile a drag currently is (the pure rules live in `DropRules`, MenuFoldCore).
+typealias TileDropZone = DropZone
 
 /// Geometry and look of the reorder drop.
 enum TileReorder {
     /// Share of the tile's width on each side that means "insert here" instead of "make a folder".
-    static let edgeFraction: CGFloat = 0.22
+    static let edgeFraction: CGFloat = CGFloat(DropRules.edgeFraction)
     /// The insertion caret (a vertical accent capsule in the gap next to the tile).
     static let caretWidth: CGFloat = 3
     static let caretWidthHighContrast: CGFloat = 5
@@ -32,14 +25,7 @@ enum TileReorder {
     /// The zone for a pointer at `x` in a tile `width` wide. With `allowsReorder == false` only
     /// the center exists; with `allowsCenter == false` the nearer edge wins.
     static func zone(x: CGFloat, width: CGFloat, allowsCenter: Bool, allowsReorder: Bool) -> TileDropZone? {
-        guard width > 0 else { return allowsCenter ? .center : nil }
-        if allowsReorder {
-            let edge = width * edgeFraction
-            if x < edge { return .before }
-            if x > width - edge { return .after }
-            if !allowsCenter { return x < width / 2 ? .before : .after }
-        }
-        return allowsCenter ? .center : nil
+        DropRules.zone(x: Double(x), width: Double(width), allowsCenter: allowsCenter, allowsReorder: allowsReorder)
     }
 }
 
@@ -115,9 +101,11 @@ struct TileDropDelegate: DropDelegate {
     private static let acceptedTypes: [UTType] = [.menuFoldAppID, .menuFoldFolderID, .fileURL]
 
     func validateDrop(info: DropInfo) -> Bool {
-        if info.hasItemsConforming(to: [.menuFoldAppID]) { return allowsCenter || allowsReorder }
-        if info.hasItemsConforming(to: [.menuFoldFolderID]) { return allowsReorder && performItemReorder != nil }
-        return supportsFiles != nil && info.hasItemsConforming(to: [.fileURL])
+        let payload = DropRules.payload(hasApp: info.hasItemsConforming(to: [.menuFoldAppID]),
+                                        hasFolder: info.hasItemsConforming(to: [.menuFoldFolderID]),
+                                        hasFile: info.hasItemsConforming(to: [.fileURL]))
+        return DropRules.accepts(payload, allowsCenter: allowsCenter, allowsReorder: allowsReorder,
+                                 canReorderFolders: performItemReorder != nil, supportsFiles: supportsFiles != nil)
     }
 
     @MainActor
@@ -215,12 +203,13 @@ struct TileDropDelegate: DropDelegate {
 
     @MainActor
     private func apply(_ id: String, zone: TileDropZone) -> Bool {
-        guard isKnownApp(id) else { return false }
-        switch zone {
-        case .center:
-            return allowsCenter && performCenter(id)
-        case .before, .after:
-            return allowsReorder && canReorder(id) && performReorder(id, zone == .after)
+        let action = DropRules.appAction(zone: zone, isKnownApp: isKnownApp(id), allowsCenter: allowsCenter,
+                                         allowsReorder: allowsReorder,
+                                         canReorder: zone == .center ? false : canReorder(id))
+        switch action {
+        case .center: return performCenter(id)
+        case .reorder(let after): return performReorder(id, after)
+        case nil: return false
         }
     }
 
@@ -232,12 +221,13 @@ struct TileDropDelegate: DropDelegate {
             case .file:
                 return nil
             case .folder(let itemID):
-                let ok = allowsReorder && performItemReorder != nil && itemID != ownItemID
-                return TileReorder.zone(x: info.location.x, width: width, allowsCenter: false, allowsReorder: ok)
+                return DropRules.folderZone(x: Double(info.location.x), width: Double(width),
+                                            allowsReorder: allowsReorder, canReorderFolders: performItemReorder != nil,
+                                            isSelf: itemID == ownItemID)
             case .app(let id):
-                let reorder = allowsReorder && (id.map(canReorder) ?? true)
-                return TileReorder.zone(x: info.location.x, width: width,
-                                        allowsCenter: allowsCenter, allowsReorder: reorder)
+                return DropRules.appZone(x: Double(info.location.x), width: Double(width),
+                                         allowsCenter: allowsCenter, allowsReorder: allowsReorder,
+                                         canReorder: id.map(canReorder))
             }
         }
     }
@@ -468,17 +458,13 @@ struct ItemMoveMenuItems: View {
 @MainActor
 enum TileFileOpening {
     /// At most this many files are checked (and opened) per drop; LaunchServices queries are not free.
-    static let maxFiles = 20
-    private static let executableExtensions: Set<String> = [
-        "command", "terminal", "sh", "bash", "zsh", "csh", "tcsh", "ksh", "scpt", "scptd", "applescript",
-        "workflow", "action", "app", "pkg", "mpkg", "jar", "py", "pl", "rb", "tool", "osax", "dmg",
-    ]
+    static let maxFiles = DropRules.maxFiles
     /// Results for the current drag session (cleared after a drop is opened); bounded.
     private static var cache: [String: Bool] = [:]
 
     /// Files that run code when opened: never opened by a drop, whatever the app claims.
     static func isExecutable(_ url: URL) -> Bool {
-        if executableExtensions.contains(url.pathExtension.lowercased()) { return true }
+        if DropRules.isExecutableExtension(url.pathExtension) { return true }
         if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType {
             if type.conforms(to: .executable) || type.conforms(to: .unixExecutable)
                 || type.conforms(to: .application) || type.conforms(to: .applicationBundle) { return true }
@@ -488,7 +474,7 @@ enum TileFileOpening {
 
     /// Every file is one the app says it can open (and none is the app itself or something executable).
     static func canOpen(_ urls: [URL], with app: AppEntry) -> Bool {
-        guard !urls.isEmpty, urls.count <= maxFiles else { return false }
+        guard DropRules.isAcceptableFileCount(urls.count) else { return false }
         let appPath = app.url.resolvingSymlinksInPath().path
         return urls.allSatisfy { url in
             let key = appPath + "\n" + url.path

@@ -126,11 +126,13 @@ final class HotKeyManager {
     }
 
     private func pressed(_ id: UInt32) {
-        if id == Self.mainID { onPress?(); return }
-        guard let key = idToKey[id] else { return }
-        // The clipboard shortcut has its own handler; every other key here belongs to a layout entry.
-        if key == Self.clipboardKey { onClipboardPress?(); return }
-        onTargetPress?(key)
+        // The clipboard shortcut has its own handler; every other key belongs to a layout entry.
+        switch HotKeyPlanner.press(id: id, idToKey: idToKey, clipboardKey: Self.clipboardKey) {
+        case .main: onPress?()
+        case .clipboard: onClipboardPress?()
+        case .target(let key): onTargetPress?(key)
+        case .unknown: break
+        }
     }
 
     /// The shortcuts that should be registered now.
@@ -150,25 +152,21 @@ final class HotKeyManager {
     private func apply() {
         guard !isRecording else { return }
         let wanted = wanted
-        guard !hasApplied || wanted != registered || !conflicts.isEmpty else { return }
+        guard HotKeyPlanner.needsApply(hasApplied: hasApplied, wanted: wanted, registered: registered, conflicts: conflicts) else { return }
         hasApplied = true
         // Drop what is gone or changed.
-        for (id, key) in idToKey where wanted[key] != registered[key] {
+        let stale = Set(HotKeyPlanner.staleKeys(wanted: wanted, registered: registered))
+        for (id, key) in idToKey where stale.contains(key) {
             if let ref = refs[id] { UnregisterEventHotKey(ref) }
             refs[id] = nil
             idToKey[id] = nil
         }
-        for key in Array(conflicts.keys) where wanted[key] != conflicts[key] { conflicts[key] = nil }
+        for key in HotKeyPlanner.staleConflicts(wanted: wanted, conflicts: conflicts) { conflicts[key] = nil }
         registered = registered.filter { wanted[$0.key] == $0.value }
         // The main shortcut first, so it wins a clash with a per-app one stored by hand.
-        for (key, hotKey) in wanted.sorted(by: { ($0.key == Self.mainKey ? "" : $0.key) < ($1.key == Self.mainKey ? "" : $1.key) }) {
-            if registered[key] != nil { continue }
-            let id: UInt32
-            if key == Self.mainKey {
-                id = Self.mainID
-            } else {
-                id = (idToKey.keys.max() ?? Self.mainID) + 1
-            }
+        for key in HotKeyPlanner.registrationOrder(Array(wanted.keys)) {
+            guard let hotKey = wanted[key], registered[key] == nil else { continue }
+            let id = HotKeyPlanner.nextID(for: key, usedIDs: idToKey.keys)
             var ref: EventHotKeyRef?
             let status = RegisterEventHotKey(hotKey.keyCode, hotKey.carbonModifiers,
                                              EventHotKeyID(signature: Self.signature, id: id),

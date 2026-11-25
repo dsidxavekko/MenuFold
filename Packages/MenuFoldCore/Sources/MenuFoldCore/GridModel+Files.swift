@@ -78,6 +78,8 @@ extension GridModel {
             fileResults = []
             fileSearchText = text
         }
+        // A narrower kind drops the rows that no longer fit at once; the answer then refills them.
+        if let kind = FileSearchQuery.parseDetailed(query).kind { fileResults = fileResults.filter { kind.matches($0.url) } }
         fileSearchTask?.cancel()
         fileSearchTask = nil
         // Every plan retires the answers still in flight, even one for the same text.
@@ -87,6 +89,8 @@ extension GridModel {
             return
         }
         let generation = fileSearchGeneration
+        // A kind filter is applied after the fact, so the provider is asked for the most it may give.
+        let askLimit = FileSearchQuery.parseDetailed(query).kind == nil ? FileSearch.defaultLimit : FileSearch.maxLimit
         let delay = fileSearchDelay
         isSearchingFiles = true
         fileSearchTask = Task { @MainActor [weak self] in
@@ -95,7 +99,7 @@ extension GridModel {
                 try? await Task.sleep(for: delay)
                 guard !Task.isCancelled else { return }
             }
-            let items = await provider.searchFiles(matching: text, limit: FileSearch.defaultLimit)
+            let items = await provider.searchFiles(matching: text, limit: askLimit)
             guard !Task.isCancelled else { return }
             self?.applyFileResults(items, for: text, generation: generation)
         }
@@ -110,7 +114,8 @@ extension GridModel {
         guard generation == fileSearchGeneration, text == fileSearchText, text == fileQueryText else { return }
         isSearchingFiles = false
         fileResults = FileSearch.rank(items.filter(FileSearch.isCandidate), query: text,
-                                      limit: FileSearch.defaultLimit)
+                                      limit: FileSearch.defaultLimit,
+                                      kind: FileSearchQuery.parseDetailed(query).kind)
         clearSelectionIfGone()
     }
 }
